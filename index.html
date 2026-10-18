@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPX Library</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <style>
+    :root {
+      --bg: #f0f2f5; --sidebar: #fff; --border: #e2e8f0;
+      --header: #0f172a; --header-text: #f8fafc;
+      --text: #1e293b; --muted: #64748b; --accent: #3b82f6;
+      --hover-bg: rgba(59,130,246,.07); --active-bg: rgba(59,130,246,.12);
+      --filter-bg: #f8fafc; --pill-bg: #f1f5f9; --input-bg: #fff;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.4; }
+
+    /* ── Layout ─────────────────────────────────── */
+    #app  { display:flex; flex-direction:column; height:100vh; }
+    #header { flex-shrink:0; height:50px; background:var(--header); color:var(--header-text); display:flex; align-items:center; padding:0 16px; gap:12px; z-index:1000; box-shadow:0 2px 8px rgba(0,0,0,.3); }
+    #header-title { font-size:16px; font-weight:700; display:flex; align-items:center; gap:7px; }
+    #header-stats { margin-left:auto; font-size:12px; color:#94a3b8; display:flex; gap:14px; }
+    .hstat { display:flex; align-items:center; gap:4px; }
+    .hstat-val { color:#e2e8f0; font-weight:600; }
+    #sidebar-toggle { display:none; background:none; border:none; color:#94a3b8; cursor:pointer; padding:4px; border-radius:4px; }
+    #sidebar-toggle:hover { color:white; }
+    #main { display:flex; flex:1; overflow:hidden; }
+
+    /* ── Sidebar ────────────────────────────────── */
+    #sidebar { width:360px; flex-shrink:0; background:var(--sidebar); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+    #sidebar.collapsed { width:0; }
+    #main.sidebar-right #sidebar { border-right:none; border-left:1px solid var(--border); order:2; }
+    #main.sidebar-right #right-col { order:1; }
+    #main.sidebar-right #resize-handle { order:2; }
+    #resize-handle {
+      width:5px; flex-shrink:0; cursor:col-resize; background:transparent; position:relative; z-index:10;
+      transition:background .15s;
+    }
+    #resize-handle:hover, #resize-handle.dragging { background:var(--accent); }
+    #resize-handle::after {
+      content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      width:2px; height:32px; background:var(--border); border-radius:2px;
+    }
+    #resize-handle:hover::after, #resize-handle.dragging::after { background:var(--accent); }
+
+    /* ── Sidebar tabs ───────────────────────────── */
+    #sidebar-tabs { display:flex; flex-shrink:0; border-bottom:2px solid var(--border); background:var(--filter-bg); }
+    .stab { flex:1; padding:10px 4px; background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-2px; cursor:pointer; font-size:12px; font-weight:600; color:var(--muted); display:flex; align-items:center; justify-content:center; gap:5px; transition:color .12s; }
+    .stab:hover  { color:var(--text); }
+    .stab.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .tab-panel   { display:none; flex:1; flex-direction:column; overflow:hidden; min-height:0; }
+    .tab-panel.active { display:flex; }
+
+    /* ── Right col ──────────────────────────────── */
+    #right-col { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+    #map { flex:1; min-height:0; z-index:1; }
+
+    /* ── Profile panel ──────────────────────────── */
+    #profile { flex-shrink:0; height:230px; background:var(--sidebar); border-top:1px solid var(--border); display:none; flex-direction:column; }
+    #profile.visible { display:flex; }
+    #pd-row1 { flex-shrink:0; height:30px; padding:0 8px 0 10px; display:flex; align-items:center; gap:7px; background:var(--filter-bg); border-bottom:1px solid var(--border); }
+    #pd-color-swatch { width:12px; height:12px; border-radius:50%; border:1.5px solid rgba(0,0,0,.18); cursor:pointer; flex-shrink:0; transition:transform .15s; }
+    #pd-color-swatch:hover { transform:scale(1.3); }
+    #pd-name { font-size:12.5px; font-weight:600; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #pd-cat  { font-size:10px; padding:1px 7px; border-radius:8px; font-weight:600; background:color-mix(in srgb,var(--pc) 15%,white); color:color-mix(in srgb,var(--pc) 75%,#111); flex-shrink:0; white-space:nowrap; cursor:pointer; border:1px solid transparent; transition:border-color .12s; }
+    #pd-cat:hover { border-color:var(--pc); }
+    #pd-detail { font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,white); border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border)); text-decoration:none; flex-shrink:0; white-space:nowrap; transition:background .12s; }
+    #pd-detail:hover { background:color-mix(in srgb,var(--accent) 18%,white); }
+    #profile-close { background:none; border:none; cursor:pointer; color:var(--muted); font-size:18px; line-height:1; padding:0 2px; flex-shrink:0; }
+    #profile-close:hover { color:var(--text); }
+    #pd-row2 { flex-shrink:0; height:26px; padding:0 12px; display:flex; align-items:center; gap:14px; border-bottom:1px solid var(--border); font-size:11px; color:var(--muted); background:var(--filter-bg); }
+    .pd-stat strong { font-weight:600; color:var(--text); }
+    #profile-svg-wrap { flex:1; position:relative; overflow:hidden; min-height:0; }
+    #profile-svg { display:block; width:100%; height:100%; }
+    #profile-tooltip { position:absolute; pointer-events:none; background:rgba(15,23,42,.88); color:white; font-size:11px; padding:3px 8px; border-radius:4px; white-space:nowrap; display:none; z-index:10; }
+    #no-elevation { flex:1; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:12px; }
+    #sel-bar { flex-shrink:0; height:26px; padding:0 10px; display:none; align-items:center; gap:10px; background:#eff6ff; border-top:1px solid #bfdbfe; font-size:11px; color:var(--muted); }
+    #sel-bar.visible { display:flex; }
+    .sel-stat strong { font-weight:700; color:var(--text); }
+    #sel-hint { color:#94a3b8; font-size:10px; margin-left:auto; }
+    #sel-clear { background:none; border:none; cursor:pointer; color:#93c5fd; font-size:14px; line-height:1; padding:0 2px; }
+    #sel-clear:hover { color:var(--accent); }
+
+    /* ── Filters (tab Rutas) ─────────────────────── */
+    #filters {
+      flex-shrink:0; background:var(--filter-bg); border-bottom:1px solid var(--border);
+      overflow:hidden; max-height:600px; transition:max-height .25s ease, padding .25s ease;
+      padding:14px;
+    }
+    #filters.collapsed { max-height:0; padding-top:0; padding-bottom:0; border-bottom:none; }
+    .filter-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .filter-header-title { font-weight:700; font-size:13px; display:flex; align-items:center; gap:7px; }
+    .filter-header-actions { display:flex; align-items:center; gap:6px; }
+    #reset-btn { font-size:11px; color:var(--accent); background:none; border:none; cursor:pointer; padding:2px 6px; border-radius:4px; }
+    #reset-btn:hover { background:var(--hover-bg); }
+    #filter-close-btn { background:none; border:none; cursor:pointer; color:var(--muted); font-size:16px; line-height:1; padding:0 2px; }
+    #filter-close-btn:hover { color:var(--text); }
+    .fsec { margin-bottom:12px; }
+    .fsec:last-child { margin-bottom:0; }
+    .flabel { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:6px; }
+    .cat-pills { display:flex; flex-wrap:wrap; gap:4px; }
+    .cat-pill { display:inline-flex; align-items:center; gap:5px; padding:3px 9px 3px 6px; border-radius:999px; font-size:11px; cursor:pointer; border:1.5px solid var(--border); background:var(--pill-bg); color:var(--text); transition:border-color .12s,background .12s; user-select:none; white-space:nowrap; }
+    .cat-pill:hover { border-color:var(--c,var(--accent)); }
+    .cat-pill.active { border-color:var(--c,var(--accent)); background:color-mix(in srgb,var(--c,var(--accent)) 13%,white); color:color-mix(in srgb,var(--c,var(--accent)) 70%,#111); }
+    .cat-dot { width:8px; height:8px; border-radius:50%; background:var(--c); flex-shrink:0; cursor:pointer; border:1px solid rgba(0,0,0,.12); transition:transform .12s; }
+    .cat-dot:hover { transform:scale(1.4); }
+    .cat-count { color:var(--muted); font-size:10px; }
+    .cat-pill.active .cat-count { color:color-mix(in srgb,var(--c,var(--accent)) 60%,#555); }
+    .range-row { display:flex; align-items:center; gap:6px; }
+    .range-input { width:74px; padding:5px 7px; border:1px solid var(--border); border-radius:5px; font-size:12px; background:var(--input-bg); color:var(--text); outline:none; }
+    .range-input:focus { border-color:var(--accent); }
+    .range-sep { color:var(--muted); font-size:11px; }
+
+    /* ── Dual range slider ──────────────────── */
+    .dual-range-outer { padding:4px 0 2px; }
+    .dual-range-track { position:relative; height:5px; background:var(--border); border-radius:3px; margin:8px 0; }
+    .dual-range-fill  { position:absolute; top:0; height:100%; background:#f59e0b; border-radius:3px; pointer-events:none; }
+    .dual-range-inputs { position:relative; height:22px; margin:-18px 0 0; }
+    .dual-range-inputs input[type=range] {
+      position:absolute; left:0; width:100%; height:22px; margin:0;
+      pointer-events:none;
+      -webkit-appearance:none; appearance:none;
+      background:transparent; outline:none;
+    }
+    .dual-range-inputs input[type=range]::-webkit-slider-thumb {
+      pointer-events:all; -webkit-appearance:none;
+      width:17px; height:17px; border-radius:50%;
+      background:#16a34a; border:2.5px solid #fff;
+      box-shadow:0 1px 4px rgba(0,0,0,.3);
+      cursor:pointer; transition:transform .1s;
+    }
+    .dual-range-inputs input[type=range]::-webkit-slider-thumb:hover { transform:scale(1.15); }
+    .dual-range-inputs input[type=range]::-moz-range-thumb {
+      pointer-events:all; width:17px; height:17px; border-radius:50%;
+      background:#16a34a; border:2.5px solid #fff;
+      box-shadow:0 1px 4px rgba(0,0,0,.3); cursor:pointer;
+    }
+    .dual-range-inputs input[type=range]::-webkit-slider-runnable-track,
+    .dual-range-inputs input[type=range]::-moz-range-track { background:transparent; }
+    .rs-val-label { font-weight:600; color:var(--text); text-transform:none; letter-spacing:0; font-size:11px; margin-left:4px; }
+    /* ── Filter footer ──────────────────────── */
+    .filter-footer { display:flex; gap:8px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
+    #clear-filters-btn { flex:1; padding:7px 10px; border-radius:6px; font-size:12px; font-weight:500; cursor:pointer; border:1.5px solid var(--border); background:transparent; color:var(--muted); transition:border-color .12s,color .12s; }
+    #clear-filters-btn:hover { border-color:var(--text); color:var(--text); }
+    #apply-filters-btn { flex:2; padding:7px 10px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:none; background:var(--accent); color:#fff; transition:background .12s; }
+    #apply-filters-btn:hover { background:#2563eb; }
+    .filter-select { padding:5px 7px; border:1px solid var(--border); border-radius:5px; font-size:12px; background:var(--input-bg); color:var(--text); outline:none; cursor:pointer; width:100%; }
+    .filter-select:focus { border-color:var(--accent); }
+    /* Filter open button in list-header */
+    #filter-open-btn { display:none; font-size:11px; padding:3px 9px; border-radius:10px; border:1.5px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; white-space:nowrap; transition:all .12s; gap:4px; align-items:center; }
+    #filter-open-btn:hover { border-color:var(--accent); color:var(--accent); }
+    #filter-open-btn.visible { display:flex; }
+    #filter-open-btn.has-active { background:color-mix(in srgb,var(--accent) 12%,white); color:var(--accent); border-color:var(--accent); }
+    /* Side-toggle button */
+    #side-toggle { background:none; border:none; color:#94a3b8; cursor:pointer; padding:4px 6px; border-radius:4px; display:flex; align-items:center; }
+    #side-toggle:hover { color:white; }
+    #editor-link:hover { background:#1e293b; color:white; }
+    #list-header { flex-shrink:0; padding:8px 12px 6px; font-size:11px; color:var(--muted); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:6px; }
+    #list-count { flex:1; }
+    #vp-filter-btn { font-size:10px; padding:2px 7px; border-radius:10px; border:1.5px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; white-space:nowrap; transition:background .12s,color .12s,border-color .12s; }
+    #vp-filter-btn:hover { border-color:var(--accent); color:var(--accent); }
+    #vp-filter-btn.active { background:color-mix(in srgb,var(--accent) 12%,white); color:var(--accent); border-color:var(--accent); }
+    #tracklist { flex:1; overflow-y:auto; padding:6px; }
+    #tracklist::-webkit-scrollbar { width:5px; }
+    #tracklist::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+    .track-item { display:flex; align-items:flex-start; gap:8px; padding:8px 8px 8px 10px; border-radius:6px; cursor:pointer; border-left:3px solid transparent; margin-bottom:3px; transition:background .1s; }
+    .track-item:hover  { background:var(--hover-bg); border-left-color:var(--c); }
+    .track-item.active { background:var(--active-bg); border-left-color:var(--c); }
+    .ti-color { width:10px; height:10px; border-radius:50%; background:var(--c); flex-shrink:0; margin-top:3px; cursor:pointer; border:1.5px solid rgba(0,0,0,.15); transition:transform .12s; }
+    .ti-color:hover { transform:scale(1.4); }
+    .ti-body { flex:1; min-width:0; }
+    .track-name { font-size:13.5px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:4px; }
+    .track-detail-link { color:inherit; text-decoration:none; }
+    .track-detail-link:hover { text-decoration:underline; }
+    .track-meta { display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
+    .track-badge { font-size:10px; padding:1px 6px; border-radius:8px; font-weight:500; background:color-mix(in srgb,var(--c) 15%,white); color:color-mix(in srgb,var(--c) 75%,#111); }
+    .tstat { font-size:11px; color:var(--muted); }
+    .empty-state { padding:32px 16px; text-align:center; color:var(--muted); font-size:13px; }
+    .empty-state p { margin-top:6px; font-size:12px; }
+
+    /* ── DB tab ─────────────────────────────────── */
+    #tab-db-inner { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:12px; }
+    #tab-db-inner::-webkit-scrollbar { width:5px; }
+    #tab-db-inner::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+    .db-section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:6px; display:flex; align-items:center; justify-content:space-between; }
+    .db-refresh { background:none; border:none; cursor:pointer; color:var(--muted); font-size:14px; padding:0 2px; transition:transform .3s; }
+    .db-refresh:hover { color:var(--accent); }
+    .db-refresh.spinning { animation:spin .7s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    .db-cards { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .db-card { background:var(--filter-bg); border:1px solid var(--border); border-radius:8px; padding:8px 10px; }
+    .db-card-val { font-size:20px; font-weight:700; color:var(--text); line-height:1.1; }
+    .db-card-lbl { font-size:10px; color:var(--muted); margin-top:2px; }
+    .db-card.accent-card { background:color-mix(in srgb,var(--accent) 8%,white); border-color:color-mix(in srgb,var(--accent) 25%,var(--border)); }
+    .db-card.accent-card .db-card-val { color:var(--accent); }
+
+    .db-table { width:100%; border-collapse:collapse; font-size:11px; }
+    .db-table th { padding:4px 6px; font-weight:600; color:var(--muted); border-bottom:1px solid var(--border); text-align:left; }
+    .db-table th:not(:first-child) { text-align:right; }
+    .db-table td { padding:5px 6px; border-bottom:1px solid var(--border); }
+    .db-table td:not(:first-child) { text-align:right; }
+    .db-table tr:last-child td { border-bottom:none; }
+    .db-reduc { font-weight:600; color:#16a34a; }
+    .db-reduc.none { color:var(--muted); font-weight:400; }
+
+    .db-actions { display:flex; flex-direction:column; gap:7px; }
+    .db-btn-row { display:flex; gap:7px; }
+    .db-btn { flex:1; padding:8px 10px; border-radius:6px; font-size:12px; font-weight:500; cursor:pointer; border:1.5px solid; display:flex; align-items:center; justify-content:center; gap:5px; transition:background .12s,opacity .12s; }
+    .db-btn:disabled { opacity:.5; cursor:not-allowed; }
+    .db-btn-primary   { background:var(--accent); color:white; border-color:var(--accent); }
+    .db-btn-primary:not(:disabled):hover   { background:#2563eb; }
+    .db-btn-secondary { background:var(--filter-bg); color:var(--text); border-color:var(--border); }
+    .db-btn-secondary:not(:disabled):hover { background:var(--hover-bg); }
+    .db-btn-success   { background:#16a34a; color:white; border-color:#16a34a; }
+    .db-btn-success:not(:disabled):hover   { background:#15803d; }
+
+    .db-clean-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; background:var(--filter-bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px; }
+    .db-clean-row label { font-size:11px; color:var(--muted); white-space:nowrap; }
+    .db-num { width:60px; padding:4px 6px; border:1px solid var(--border); border-radius:4px; font-size:12px; background:var(--input-bg); color:var(--text); outline:none; }
+    .db-num:focus { border-color:var(--accent); }
+    .db-clean-sep { font-size:11px; color:var(--border); }
+
+    #db-log { background:#0f172a; color:#e2e8f0; border-radius:6px; padding:8px 10px; font-size:11px; font-family:'Cascadia Code',Consolas,monospace; max-height:220px; overflow-y:auto; display:none; }
+    #db-log.visible { display:block; }
+    #db-log::-webkit-scrollbar { width:4px; }
+    #db-log::-webkit-scrollbar-thumb { background:#334155; }
+    .log-line { line-height:1.5; }
+    .log-error { color:#f87171; }
+    .log-warn  { color:#fbbf24; }
+    .log-ok    { color:#34d399; }
+    .log-muted { color:#64748b; }
+    .log-progress { color:#7dd3fc; }
+
+    .db-no-api { color:var(--muted); font-size:12px; padding:16px; line-height:1.8; text-align:center; }
+    .db-no-api code { background:var(--filter-bg); border:1px solid var(--border); padding:1px 5px; border-radius:3px; font-size:11px; }
+
+    /* ── Leaflet layer control ──────────────────── */
+    .leaflet-control-layers { font-size:12px; }
+    .leaflet-control-layers-list label { padding:2px 0; }
+
+    /* ── Activity markers ───────────────────────────────────────── */
+    .act-marker-wrap { background:transparent !important; border:none !important; box-shadow:none !important; }
+    .act-marker {
+      width:32px; height:32px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      border:2.5px solid #fff;
+      box-shadow:0 2px 8px rgba(0,0,0,.45);
+      cursor:pointer;
+      transition:transform .15s, box-shadow .15s;
+    }
+    .act-marker:hover { transform:scale(1.25); box-shadow:0 4px 14px rgba(0,0,0,.55); }
+    .act-marker.active-marker { transform:scale(1.3); box-shadow:0 4px 16px rgba(0,0,0,.6); outline:3px solid white; }
+    .act-marker svg { width:17px; height:17px; stroke:white; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+
+    @media (max-width:700px) {
+      #sidebar { position:absolute; top:50px; bottom:0; left:0; z-index:500; box-shadow:0 2px 16px rgba(0,0,0,.15); }
+      #main.sidebar-right #sidebar { left:auto; right:0; }
+      #sidebar-toggle { display:block; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header id="header">
+    <div id="header-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      GPX Library
+    </div>
+    <div id="header-stats">
+      <span class="hstat">Tracks: <span class="hstat-val" id="stat-count">—</span></span>
+      <span class="hstat">Dist.: <span class="hstat-val" id="stat-dist">—</span></span>
+      <span class="hstat">Desnivel+: <span class="hstat-val" id="stat-ele">—</span></span>
+    </div>
+    <a href="/editor" id="editor-link" title="Gestión de tracks" style="color:#94a3b8;text-decoration:none;font-size:12px;display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:4px;border:1px solid #334155;transition:background .12s;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Gestión
+    </a>
+    <button id="side-toggle" title="Mover panel izquierda/derecha">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+    </button>
+    <button id="sidebar-toggle" aria-label="Toggle sidebar">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </header>
+
+  <div id="main">
+    <aside id="sidebar">
+      <!-- Tab buttons -->
+      <div id="sidebar-tabs">
+        <button class="stab active" data-tab="routes">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          Rutas
+        </button>
+        <button class="stab" data-tab="db">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          Base de datos
+        </button>
+      </div>
+
+      <!-- Tab: Rutas -->
+      <div id="tab-routes" class="tab-panel active">
+        <div id="filters">
+          <div class="filter-header">
+            <span class="filter-header-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              Filtros
+            </span>
+            <div class="filter-header-actions">
+              <button id="filter-close-btn" title="Cerrar filtros">×</button>
+            </div>
+          </div>
+          <div class="fsec">
+            <div class="flabel">Actividad <span style="font-weight:400;text-transform:none;font-size:9px">(● = color)</span></div>
+            <div class="cat-pills" id="cat-filters"></div>
+          </div>
+          <div class="fsec" id="fsec-activity" style="display:none">
+            <div class="cat-pills" id="activity-filters"></div>
+          </div>
+          <div class="fsec" id="fsec-sierra" style="display:none">
+            <div class="flabel">Zona montañosa</div>
+            <div class="cat-pills" id="sierra-filters"></div>
+          </div>
+          <div class="fsec" id="fsec-region" style="display:none">
+            <div class="flabel">Región / CCAA</div>
+            <select class="filter-select" id="region-filter"><option value="">Todas</option></select>
+          </div>
+          <div class="fsec" id="fsec-tags" style="display:none">
+            <div class="flabel">Etiquetas</div>
+            <div class="cat-pills" id="tag-filters"></div>
+          </div>
+          <div class="fsec">
+            <div class="flabel">Distancia (km) <span id="dist-rs-label" class="rs-val-label"></span></div>
+            <div class="dual-range-outer">
+              <div class="dual-range-track"><div class="dual-range-fill" id="dist-rs-fill"></div></div>
+              <div class="dual-range-inputs">
+                <input type="range" id="dist-rs-min">
+                <input type="range" id="dist-rs-max">
+              </div>
+            </div>
+          </div>
+          <div class="fsec">
+            <div class="flabel">Desnivel + (m) <span id="ele-rs-label" class="rs-val-label"></span></div>
+            <div class="dual-range-outer">
+              <div class="dual-range-track"><div class="dual-range-fill" id="ele-rs-fill"></div></div>
+              <div class="dual-range-inputs">
+                <input type="range" id="ele-rs-min">
+                <input type="range" id="ele-rs-max">
+              </div>
+            </div>
+          </div>
+          <div class="fsec">
+            <div class="flabel">Año</div>
+            <select class="filter-select" id="year-filter"><option value="">Todos</option></select>
+          </div>
+          <div class="filter-footer">
+            <button id="clear-filters-btn">Limpiar filtros</button>
+            <button id="apply-filters-btn">Aplicar filtros</button>
+          </div>
+        </div>
+        <div id="list-header">
+          <span id="list-count">—</span>
+          <button id="filter-open-btn" title="Abrir filtros">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            <span id="filter-open-label">Filtros</span>
+          </button>
+          <button id="vp-filter-btn" title="Mostrar solo tracks visibles en el mapa actual">📍 Solo mapa</button>
+        </div>
+        <div id="tracklist"><div class="empty-state">Cargando...</div></div>
+      </div>
+
+      <!-- Tab: Base de datos -->
+      <div id="tab-db" class="tab-panel">
+        <div id="tab-db-inner">
+          <!-- Stats section -->
+          <div>
+            <div class="db-section-title">
+              Estadísticas
+              <button class="db-refresh" id="db-refresh-btn" title="Actualizar">↻</button>
+            </div>
+            <div id="db-stats-content">
+              <div class="db-no-api">Cargando estadísticas…</div>
+            </div>
+          </div>
+
+          <!-- Actions section -->
+          <div>
+            <div class="db-section-title">Acciones</div>
+            <div class="db-actions">
+
+              <!-- Import -->
+              <div class="db-btn-row">
+                <button class="db-btn db-btn-primary" id="btn-import">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Importar tracks
+                </button>
+                <button class="db-btn db-btn-secondary" id="btn-import-force" title="Reimportar aunque ya existan">
+                  ↻ Force
+                </button>
+              </div>
+
+              <!-- Clean -->
+              <div class="db-clean-row">
+                <label>min-dist</label>
+                <input type="number" class="db-num" id="inp-mindist" value="5" min="0" max="100" title="Eliminar puntos a menos de N metros (0 = off)">
+                <span style="font-size:10px;color:var(--muted)">m</span>
+                <span class="db-clean-sep">·</span>
+                <label>RDP</label>
+                <input type="number" class="db-num" id="inp-rdp" value="8" min="0" max="50" title="Douglas-Peucker epsilon en metros (0 = off)">
+                <span style="font-size:10px;color:var(--muted)">m</span>
+                <button class="db-btn db-btn-secondary" id="btn-clean" style="flex:0 0 auto;padding:5px 10px;" title="Limpiar tracks">
+                  Limpiar
+                </button>
+              </div>
+
+              <!-- Enrich -->
+              <div class="db-btn-row">
+                <button class="db-btn db-btn-secondary" id="btn-enrich">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                  Enriquecer datos
+                </button>
+                <button class="db-btn db-btn-secondary" id="btn-enrich-force" title="Enriquecer todos (incluye ya procesados)" style="flex:0 0 auto;padding:5px 10px;">↻ Todos</button>
+              </div>
+
+              <!-- Export -->
+              <div class="db-btn-row">
+                <button class="db-btn db-btn-success" id="btn-export">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  Exportar catálogo
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Log -->
+          <div id="db-log"></div>
+        </div>
+      </div>
+    </aside>
+
+    <div id="resize-handle" title="Arrastrar para redimensionar"></div>
+
+    <div id="right-col">
+      <div id="map"></div>
+
+      <div id="profile">
+        <div id="pd-row1">
+          <span id="pd-color-swatch" title="Color de esta ruta (clic para cambiar)"></span>
+          <span id="pd-name"></span>
+          <span id="pd-cat" title="Color de categoría (clic para cambiar)"></span>
+          <a id="pd-detail" href="#" target="_blank" title="Ver página de detalle">Ver detalle →</a>
+          <button id="profile-close" title="Cerrar">×</button>
+        </div>
+        <div id="pd-row2">
+          <span class="pd-stat" id="pd-dist"></span>
+          <span class="pd-stat" id="pd-gain"></span>
+          <span class="pd-stat" id="pd-loss"></span>
+          <span class="pd-stat" id="pd-alt"></span>
+          <span class="pd-stat" id="pd-date"></span>
+        </div>
+        <div id="profile-svg-wrap">
+          <svg id="profile-svg" preserveAspectRatio="none"></svg>
+          <div id="profile-tooltip"></div>
+          <div id="no-elevation">Sin datos de altitud</div>
+        </div>
+        <div id="sel-bar">
+          <span class="sel-stat" id="sel-dist"></span>
+          <span class="sel-stat" id="sel-gain"></span>
+          <span class="sel-stat" id="sel-loss"></span>
+          <span id="sel-hint">Arrastra en el perfil para seleccionar tramo</span>
+          <button id="sel-clear" title="Limpiar selección">×</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="catalog-data.js"></script>
+<script>
+(function(){
+'use strict';
+
+if (typeof CATALOG === 'undefined') {
+  document.getElementById('tracklist').innerHTML =
+    '<div class="empty-state">⚠ catalog-data.js no encontrado.<p>Ejecuta: node scripts/build-catalog.js</p></div>';
+  return;
+}
+
+// ── Color system (activity-based) ───────────────────────────────────
+const ACT_COLORS = {
+  'Mtb':                   '#7c3aed',
+  'Gravel':                '#b45309',
+  'Bikepacking':           '#92400e',
+  'Ciclismo de carretera': '#0369a1',
+  'Trail Running':         '#0284c7',
+  'Running':               '#0ea5e9',
+  'Senderismo':            '#16a34a',
+  'Montañismo':            '#15803d',
+  'Escalada':              '#dc2626',
+  'Esquí de montaña':      '#0e7490',
+  'Kayak':                 '#0891b2',
+  'Otro':                  '#64748b',
+};
+
+// ── Activity icons (SVG paths, 24x24 viewBox) ────────────────────────
+const ACT_ICONS = {
+  'Mtb':                   '<circle cx="6" cy="16" r="3" stroke-width="2"/><circle cx="18" cy="16" r="3" stroke-width="2"/><path stroke-width="2" d="M9 16 L12 7h4l1.5 3M12 7 l6 9M9 16 l4-9"/>',
+  'Gravel':                '<circle cx="6" cy="16" r="3" stroke-width="2"/><circle cx="18" cy="16" r="3" stroke-width="2"/><path stroke-width="2" d="M9 16 L12 7h4l1.5 3M12 7 l6 9M9 16 l4-9"/>',
+  'Bikepacking':           '<circle cx="6" cy="16" r="2.5" stroke-width="2"/><circle cx="18" cy="16" r="2.5" stroke-width="2"/><path stroke-width="2" d="M9 16 L12 7h4l1.5 3M12 7 l6 9M9 16 l4-9"/><rect x="11" y="8.5" width="3.5" height="3" rx="0.5" stroke-width="1.5"/>',
+  'Ciclismo de carretera': '<circle cx="6" cy="16" r="3" stroke-width="2"/><circle cx="18" cy="16" r="3" stroke-width="2"/><path stroke-width="2" d="M9 16 l3-9h3l3 9M12 7 l-2 4M12 7 h3"/>',
+  'Trail Running':         '<circle cx="13" cy="4" r="2" stroke-width="2"/><path stroke-width="2" d="M13 6 l-1 4-3 6M12 10 l3-2 2 4M12 10 l1 10"/>',
+  'Running':               '<circle cx="14" cy="4" r="2" stroke-width="2"/><path stroke-width="2" d="M14 6 l-1 4-4 4M13 10 l3-2 1 3M9 10 l-1 7M13 10 l1 8"/>',
+  'Senderismo':            '<circle cx="11" cy="4" r="2" stroke-width="2"/><path stroke-width="2" d="M11 6 v4M9 10 l-2 8M11 10 l2 8M11 10 l-3-3M16 8 l-2 2-3-2"/>',
+  'Montañismo':            '<path stroke-width="2" d="M3 20 L9 9 L14 16 L17 11 L21 20z"/>',
+  'Escalada':              '<path stroke-width="2" d="M5 20 l4-8 4 3 4-10"/><circle cx="17" cy="5" r="1.5" stroke-width="2"/><path stroke-width="2" d="M13 15 l5 2M9 12 l-3 2"/>',
+  'Esquí de montaña':      '<circle cx="12" cy="4" r="2" stroke-width="2"/><path stroke-width="2" d="M12 6 l-2 5-4 6M10 11 l6-3M6 17 l12-1"/>',
+  'Kayak':                 '<path stroke-width="2" d="M12 3 v18M3 12 Q7.5 7 12 8 Q16.5 7 21 12M3 12 Q7.5 17 12 16 Q16.5 17 21 12"/>',
+  'Otro':                  '<path stroke-width="2" d="M12 2a6 6 0 0 1 6 7c0 5-6 13-6 13S6 14 6 9a6 6 0 0 1 6-7z"/><circle cx="12" cy="9" r="2" stroke-width="2"/>',
+};
+
+function makeActivityIcon(act, color) {
+  const paths = ACT_ICONS[act] || ACT_ICONS['Otro'];
+  return L.divIcon({
+    html: `<div class="act-marker" style="background:${color}"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round">${paths}</svg></div>`,
+    className: 'act-marker-wrap',
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -18],
+  });
+}
+const PALETTE = ['#e67e22','#27ae60','#8e44ad','#2980b9','#e74c3c','#16a085','#f39c12','#c0392b','#1abc9c','#d35400','#2c3e50','#7f8c8d'];
+let actColorIdx = 0;
+let actColorsCustom = {};
+let trackColors = {};
+
+function loadColors() {
+  try { actColorsCustom = JSON.parse(localStorage.getItem('gpx-act-colors') || '{}'); } catch {}
+  try { trackColors     = JSON.parse(localStorage.getItem('gpx-track-colors') || '{}'); } catch {}
+}
+function saveActColors()   { try { localStorage.setItem('gpx-act-colors',   JSON.stringify(actColorsCustom));  } catch {} }
+function saveTrackColors() { try { localStorage.setItem('gpx-track-colors', JSON.stringify(trackColors)); } catch {} }
+
+function actColor(act) {
+  if (actColorsCustom[act]) return actColorsCustom[act];
+  if (ACT_COLORS[act]) return ACT_COLORS[act];
+  if (!actColorsCustom[act]) actColorsCustom[act] = PALETTE[actColorIdx++ % PALETTE.length];
+  return actColorsCustom[act];
+}
+function getTrackColor(track) { return trackColors[track.file] || actColor(track.activity || 'Otro'); }
+
+loadColors();
+
+// ── Color picker ─────────────────────────────────────────────────
+function pickColor(currentColor, onInput, onFinal) {
+  const inp = document.createElement('input');
+  inp.type = 'color'; inp.value = currentColor;
+  Object.assign(inp.style, { position:'fixed', opacity:'0', pointerEvents:'none', width:'1px', height:'1px', top:'0', left:'0' });
+  document.body.appendChild(inp);
+  if (onInput)  inp.addEventListener('input',  e => onInput(e.target.value));
+  if (onFinal)  inp.addEventListener('change', e => { onFinal(e.target.value); setTimeout(() => inp.remove(), 100); });
+  inp.click();
+}
+
+function setActivityColor(act, color, save) {
+  actColorsCustom[act] = color;
+  if (save) saveActColors();
+  items.forEach(({ track, layer }) => {
+    if ((track.activity||'Otro') === act && !trackColors[track.file]) layer.setStyle({ color });
+  });
+  document.querySelectorAll('.cat-pill[data-activity]').forEach(p => {
+    if (p.dataset.activity === act) { p.style.setProperty('--c', color); const dot = p.querySelector('.cat-dot'); if(dot) dot.style.background = color; }
+  });
+  renderList();
+  if (activeIdx !== null) {
+    const tr = items[activeIdx].track;
+    if ((tr.activity||'Otro') === act && !trackColors[tr.file]) fillDetailHeader(tr, color);
+  }
+}
+
+function setTrackColor(track, color, save) {
+  trackColors[track.file] = color;
+  if (save) saveTrackColors();
+  const item = items.find(it => it.track === track);
+  if (item) item.layer.setStyle({ color });
+  renderList();
+  if (activeIdx !== null && items[activeIdx].track === track) fillDetailHeader(track, color);
+}
+
+// ── Haversine ────────────────────────────────────────────────────
+function hav(lat1, lon1, lat2, lon2) {
+  const R = 6371, D = Math.PI/180;
+  const dl = (lat2-lat1)*D, dn = (lon2-lon1)*D;
+  const a = Math.sin(dl/2)**2 + Math.cos(lat1*D)*Math.cos(lat2*D)*Math.sin(dn/2)**2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Map + tile layers ────────────────────────────────────────────
+const map = L.map('map', { center:[40.4,-3.7], zoom:7, renderer:L.canvas({ tolerance:4 }) });
+
+const tileLayers = {
+  'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19 }),
+  'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',   { attribution:'© OpenTopoMap', maxZoom:17 }),
+  'Satélite (Esri)': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'Tiles © Esri', maxZoom:19 }),
+  'Google Maps':     L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
+  'Google Satélite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
+  'Google Híbrido':  L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
+  'CartoDB Claro':   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',  { attribution:'© CartoDB', maxZoom:19 }),
+  'CartoDB Oscuro':  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',   { attribution:'© CartoDB', maxZoom:19 }),
+};
+tileLayers['OpenStreetMap'].addTo(map);
+L.control.layers(tileLayers, null, { position:'topright', collapsed:true }).addTo(map);
+
+// ── Segment highlight ────────────────────────────────────────────
+const segHL = {
+  _layers: [],
+  show(latlngs, color) {
+    this.hide();
+    if (activeIdx !== null && items[activeIdx]) items[activeIdx].layer.setStyle({ opacity:0.1 });
+    this._layers.push(
+      L.polyline(latlngs, { color:'#111827', weight:8, opacity:0.55, interactive:false, lineCap:'round', lineJoin:'round' }).addTo(map),
+      L.polyline(latlngs, { color,           weight:4, opacity:1,    interactive:false, lineCap:'round', lineJoin:'round' }).addTo(map)
+    );
+    this._layers.forEach(l => l.bringToFront());
+  },
+  hide() {
+    this._layers.forEach(l => l.remove()); this._layers = [];
+    if (activeIdx !== null && items[activeIdx]) items[activeIdx].layer.setStyle({ weight:4, opacity:1 });
+  }
+};
+
+const hoverMarker = L.circleMarker([0,0], { radius:7, color:'white', weight:2.5, fillOpacity:1, interactive:false, pane:'shadowPane' });
+
+let PS = null;
+let activeIdx = null;
+let sliders = {};
+
+function initDualSlider(minId, maxId, fillId, labelId, lo, hi, step, unit) {
+  const minR  = document.getElementById(minId);
+  const maxR  = document.getElementById(maxId);
+  const fill  = document.getElementById(fillId);
+  const label = document.getElementById(labelId);
+  minR.min = maxR.min = lo; minR.max = maxR.max = hi;
+  minR.step = maxR.step = step;
+  minR.value = lo; maxR.value = hi;
+  function syncFill() {
+    const p1 = (minR.value - lo) / (hi - lo) * 100;
+    const p2 = (maxR.value - lo) / (hi - lo) * 100;
+    fill.style.left  = p1 + '%';
+    fill.style.width = (p2 - p1) + '%';
+    label.textContent = `${Math.round(minR.value)} — ${Math.round(maxR.value)} ${unit}`;
+  }
+  minR.addEventListener('input', () => { if (+minR.value > +maxR.value) minR.value = maxR.value; syncFill(); });
+  maxR.addEventListener('input', () => { if (+maxR.value < +minR.value) maxR.value = minR.value; syncFill(); });
+  syncFill();
+  return {
+    getMin:   () => +minR.value,
+    getMax:   () => +maxR.value >= hi ? Infinity : +maxR.value,
+    isActive: () => +minR.value > lo || +maxR.value < hi,
+    reset:    () => { minR.value = lo; maxR.value = hi; syncFill(); },
+  };
+}
+
+// ── Polylines ────────────────────────────────────────────────────
+const items = CATALOG.map((track, i) => {
+  const color = getTrackColor(track);
+  const layer = L.polyline(track.points.map(p=>[p[0],p[1]]), { color, weight:2, opacity:0.65 }).addTo(map);
+  layer.on('mouseover', () => { if (activeIdx!==i) layer.setStyle({ weight:3.5, opacity:1 }); });
+  layer.on('mouseout',  () => { if (activeIdx!==i) layer.setStyle({ weight:2, opacity:0.65 }); });
+  layer.on('click',     () => activateTrack(i, true));
+  layer.on('mousemove', e => {
+    if (activeIdx!==i || !PS?.geom) return;
+    const { geom } = PS;
+    let ci=0, best=Infinity;
+    geom.pts.forEach((p,idx) => { const d=e.latlng.distanceTo(L.latLng(p[0],p[1])); if(d<best){best=d;ci=idx;} });
+    syncCursorSvg(ci);
+  });
+  layer.on('mouseout', () => { if (activeIdx===i) hideCursor(); });
+  return { track, layer, visible:true };
+});
+
+// ── Activate / deactivate ────────────────────────────────────────
+function activateTrack(i, fitMap) {
+  if (activeIdx!==null && items[activeIdx]) items[activeIdx].layer.setStyle({ weight:2, opacity:0.65 });
+  activeIdx = i;
+  const { track, layer } = items[i];
+  layer.setStyle({ weight:4, opacity:1 });
+  layer.bringToFront();
+  if (fitMap) map.fitBounds(L.latLngBounds(track.bounds[0], track.bounds[1]), { padding:[40,40], maxZoom:16 });
+  fillDetailHeader(track, getTrackColor(track));
+  showProfile(track, getTrackColor(track));
+  document.querySelectorAll('.track-item').forEach(el => el.classList.remove('active'));
+  const el = document.querySelector(`.track-item[data-idx="${i}"]`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({ behavior:'smooth', block:'nearest' }); }
+}
+
+function deactivateTrack() {
+  if (activeIdx!==null && items[activeIdx]) items[activeIdx].layer.setStyle({ weight:2, opacity:0.65 });
+  activeIdx = null;
+  document.querySelectorAll('.track-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('profile').classList.remove('visible');
+  document.getElementById('sel-bar').classList.remove('visible');
+  map.invalidateSize();
+  hoverMarker.remove();
+  segHL.hide();
+  PS = null;
+}
+
+// ── Detail header ────────────────────────────────────────────────
+function fillDetailHeader(track, color) {
+  const swatch = document.getElementById('pd-color-swatch');
+  swatch.style.background = color;
+  swatch.onclick = () => pickColor(getTrackColor(track),
+    c => setTrackColor(track, c, false), c => setTrackColor(track, c, true));
+
+  document.getElementById('pd-name').textContent = track.name;
+
+  const catEl = document.getElementById('pd-cat');
+  catEl.textContent = track.activity || '—';
+  catEl.style.setProperty('--pc', actColor(track.activity || 'Otro'));
+  catEl.onclick = () => pickColor(actColor(track.activity || 'Otro'),
+    c => setActivityColor(track.activity || 'Otro', c, false),
+    c => setActivityColor(track.activity || 'Otro', c, true));
+
+  document.getElementById('pd-dist').innerHTML = `📏 <strong>${track.distance} km</strong>`;
+  document.getElementById('pd-gain').innerHTML = `⬆ <strong>${track.elevationGain} m</strong>`;
+  document.getElementById('pd-loss').innerHTML = `⬇ <strong>${track.elevationLoss} m</strong>`;
+  const alt = track.minElevation!=null ? `${track.minElevation}–${track.maxElevation} m` : '—';
+  document.getElementById('pd-alt').innerHTML  = `⛰ <strong>${alt}</strong>`;
+  document.getElementById('pd-date').innerHTML = track.date ? `📅 <strong>${track.date}</strong>` : '';
+
+  const detailEl = document.getElementById('pd-detail');
+  if (track.id) { detailEl.href = `/track?id=${track.id}`; detailEl.style.display = ''; }
+  else detailEl.style.display = 'none';
+}
+
+// ── Elevation profile ─────────────────────────────────────────────
+function showProfile(track, color) {
+  const panel   = document.getElementById('profile');
+  const svgEl   = document.getElementById('profile-svg');
+  const noEleEl = document.getElementById('no-elevation');
+  const wasHidden = !panel.classList.contains('visible');
+  panel.classList.add('visible');
+  if (wasHidden) map.invalidateSize();
+  document.getElementById('sel-bar').classList.remove('visible');
+  segHL.hide(); hoverMarker.remove(); PS = null;
+
+  const pts = track.points.filter(p => p.length===3 && p[2]!=null);
+  if (pts.length < 2) { svgEl.style.display='none'; noEleEl.style.display='flex'; return; }
+  svgEl.style.display='block'; noEleEl.style.display='none';
+
+  const dists = [0];
+  for (let i=1; i<pts.length; i++) dists.push(dists[i-1]+hav(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]));
+  const totalDist = dists[dists.length-1] || 1;
+  const eles = pts.map(p=>p[2]);
+  const minEle = Math.min(...eles), maxEle = Math.max(...eles), eleRange = (maxEle-minEle) || 1;
+
+  requestAnimationFrame(() => {
+    const rect = svgEl.getBoundingClientRect();
+    const W = rect.width||600, H = rect.height||130;
+    const P = { t:12, r:16, b:26, l:50 };
+    const CW = W-P.l-P.r, CH = H-P.t-P.b;
+    const toX = d => P.l+(d/totalDist)*CW;
+    const toY = e => P.t+(1-(e-minEle)/eleRange)*CH;
+    const coords = eles.map((e,i) => [toX(dists[i]), toY(e)]);
+    const lineD  = 'M'+coords.map(p=>p.join(',')).join(' L');
+    const areaD  = `M${P.l},${P.t+CH} L${coords.map(p=>p.join(',')).join(' L')} L${P.l+CW},${P.t+CH} Z`;
+    const yTicks = [0,.5,1].map(f=>({ y:toY(minEle+f*eleRange), val:Math.round(minEle+f*eleRange) }));
+    const rawStep = totalDist/5;
+    const xStep   = rawStep>=20?Math.ceil(rawStep/10)*10:rawStep>=5?5:rawStep>=2?2:1;
+    const xTicks  = [];
+    for (let d=0; d<=totalDist+.001; d+=xStep) if(toX(d)<=P.l+CW+1) xTicks.push({x:toX(d),val:+d.toFixed(1)});
+
+    const gid = 'g'+Math.random().toString(36).slice(2,6);
+    svgEl.innerHTML = `
+      <defs>
+        <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity=".4"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity=".05"/>
+        </linearGradient>
+        <clipPath id="cp${gid}"><rect x="${P.l}" y="${P.t}" width="${CW}" height="${CH}"/></clipPath>
+      </defs>
+      <rect x="${P.l}" y="${P.t}" width="${CW}" height="${CH}" fill="#f8fafc" rx="1"/>
+      ${yTicks.map(t=>`<line x1="${P.l}" y1="${t.y}" x2="${P.l+CW}" y2="${t.y}" stroke="#e2e8f0" stroke-width="1"/>
+        <text x="${P.l-5}" y="${t.y+3.5}" text-anchor="end" font-size="10" fill="#94a3b8">${t.val}</text>`).join('')}
+      ${xTicks.map(t=>`<text x="${t.x}" y="${P.t+CH+17}" text-anchor="middle" font-size="10" fill="#94a3b8">${t.val}km</text>`).join('')}
+      <line x1="${P.l}" y1="${P.t}" x2="${P.l}" y2="${P.t+CH}" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="${P.l}" y1="${P.t+CH}" x2="${P.l+CW}" y2="${P.t+CH}" stroke="#e2e8f0" stroke-width="1"/>
+      <path d="${areaD}" fill="url(#${gid})"/>
+      <path d="${lineD}" fill="none" stroke="${color}" stroke-width="1.5"/>
+      <rect id="sel-rect" x="0" y="${P.t}" width="0" height="${CH}" fill="${color}" fill-opacity=".18"
+            stroke="${color}" stroke-opacity=".5" stroke-width="1" clip-path="url(#cp${gid})" style="display:none"/>
+      <line id="sel-s" x1="0" y1="${P.t}" x2="0" y2="${P.t+CH}" stroke="${color}" stroke-width="2" style="display:none"/>
+      <line id="sel-e" x1="0" y1="${P.t}" x2="0" y2="${P.t+CH}" stroke="${color}" stroke-width="2" style="display:none"/>
+      <line id="phl" x1="0" y1="${P.t}" x2="0" y2="${P.t+CH}" stroke="#475569" stroke-width="1" stroke-dasharray="3,2" opacity="0" pointer-events="none"/>
+      <circle id="phd" r="4" fill="${color}" stroke="white" stroke-width="2" opacity="0" pointer-events="none"/>
+      <rect id="pho" x="${P.l}" y="${P.t}" width="${CW}" height="${CH}" fill="transparent" style="cursor:crosshair"/>
+    `;
+    svgEl.setAttribute('viewBox',`0 0 ${W} ${H}`);
+
+    const hLine=svgEl.querySelector('#phl'), hDot=svgEl.querySelector('#phd');
+    const selRect=svgEl.querySelector('#sel-rect');
+    const selS=svgEl.querySelector('#sel-s'), selE=svgEl.querySelector('#sel-e');
+    const overlay=svgEl.querySelector('#pho');
+    const tooltip=document.getElementById('profile-tooltip');
+    const wrap=document.getElementById('profile-svg-wrap');
+
+    const geom = { pts, dists, eles, totalDist, minEle, maxEle, eleRange, W, H, P, CW, CH, toX, toY };
+    PS = { geom, hLine, hDot };
+
+    function svgMx(e) { const r=svgEl.getBoundingClientRect(); return (e.clientX-r.left)*(W/r.width); }
+    function closestIdx(sx) {
+      const td=((sx-P.l)/CW)*totalDist;
+      let ci=0, best=Infinity;
+      dists.forEach((d,i)=>{ const dd=Math.abs(d-td); if(dd<best){best=dd;ci=i;} });
+      return Math.max(0,Math.min(pts.length-1,ci));
+    }
+    function moveCursorAt(ci) {
+      const cx=toX(dists[ci]),cy=toY(eles[ci]);
+      hLine.setAttribute('x1',cx);hLine.setAttribute('x2',cx);hLine.setAttribute('opacity','1');
+      hDot.setAttribute('cx',cx);hDot.setAttribute('cy',cy);hDot.setAttribute('opacity','1');
+    }
+    function showTip(e, ci) {
+      tooltip.style.display='block';
+      tooltip.textContent=`${eles[ci]} m · ${dists[ci].toFixed(2)} km`;
+      const wr=wrap.getBoundingClientRect(),sr=svgEl.getBoundingClientRect();
+      const px=sr.left+toX(dists[ci])*(sr.width/W)-wr.left;
+      const py=sr.top+toY(eles[ci])*(sr.height/H)-wr.top;
+      tooltip.style.left=Math.max(0,px-tooltip.offsetWidth/2)+'px';
+      tooltip.style.top=Math.max(2,py-30)+'px';
+    }
+    function moveMapMark(ci) {
+      hoverMarker.options.fillColor=color;
+      hoverMarker.setLatLng([pts[ci][0],pts[ci][1]]).addTo(map);
+    }
+
+    let drag = { active:false, s:null, e:null };
+
+    function drawSel(i0,i1) {
+      const x0=toX(dists[i0]),x1=toX(dists[i1]),sw=Math.max(1,x1-x0);
+      selRect.setAttribute('x',x0);selRect.setAttribute('width',sw);selRect.style.display='';
+      selS.setAttribute('x1',x0);selS.setAttribute('x2',x0);selS.style.display='';
+      selE.setAttribute('x1',x1);selE.setAttribute('x2',x1);selE.style.display='';
+      let segDist=dists[i1]-dists[i0],segGain=0,segLoss=0;
+      for(let k=i0+1;k<=i1;k++){const diff=eles[k]-eles[k-1];if(diff>0)segGain+=diff;else segLoss-=diff;}
+      document.getElementById('sel-dist').innerHTML=`📏 <strong>${segDist.toFixed(2)} km</strong>`;
+      document.getElementById('sel-gain').innerHTML=`⬆ <strong>${Math.round(segGain)} m</strong>`;
+      document.getElementById('sel-loss').innerHTML=`⬇ <strong>${Math.round(segLoss)} m</strong>`;
+      document.getElementById('sel-bar').classList.add('visible');
+      segHL.show(pts.slice(i0,i1+1).map(p=>[p[0],p[1]]), color);
+    }
+    function clearSel() {
+      selRect.style.display='none';selS.style.display='none';selE.style.display='none';
+      document.getElementById('sel-bar').classList.remove('visible');
+      segHL.hide(); drag={active:false,s:null,e:null};
+    }
+
+    overlay.addEventListener('mousedown', e => {
+      e.preventDefault();
+      drag={active:true,s:closestIdx(svgMx(e)),e:closestIdx(svgMx(e))};
+      selRect.style.display='none';selS.style.display='none';selE.style.display='none';
+      document.getElementById('sel-bar').classList.remove('visible');
+      segHL.hide();
+      document.addEventListener('mousemove',onDrag);
+      document.addEventListener('mouseup',onDrop);
+    });
+    function onDrag(e) {
+      if(!drag.active) return;
+      const ci=closestIdx(svgMx(e)); drag.e=ci;
+      moveCursorAt(ci); moveMapMark(ci); showTip(e,ci);
+      const i0=Math.min(drag.s,drag.e),i1=Math.max(drag.s,drag.e);
+      if(i1>i0) drawSel(i0,i1);
+    }
+    function onDrop() {
+      drag.active=false;
+      document.removeEventListener('mousemove',onDrag);
+      document.removeEventListener('mouseup',onDrop);
+      if(drag.s!==null&&drag.e!==null&&Math.abs(drag.s-drag.e)<2) clearSel();
+    }
+    overlay.addEventListener('mousemove', e => {
+      if(drag.active) return;
+      const ci=closestIdx(svgMx(e));
+      moveCursorAt(ci); moveMapMark(ci); showTip(e,ci);
+    });
+    overlay.addEventListener('mouseleave', () => {
+      if(drag.active) return;
+      hLine.setAttribute('opacity','0'); hDot.setAttribute('opacity','0');
+      tooltip.style.display='none'; hoverMarker.remove();
+    });
+    document.getElementById('sel-clear').onclick = clearSel;
+  });
+}
+
+function syncCursorSvg(ci) {
+  if (!PS?.hLine) return;
+  const { geom, hLine, hDot } = PS;
+  const cx=geom.toX(geom.dists[ci]), cy=geom.toY(geom.eles[ci]);
+  hLine.setAttribute('x1',cx);hLine.setAttribute('x2',cx);hLine.setAttribute('opacity','1');
+  hDot.setAttribute('cx',cx);hDot.setAttribute('cy',cy);hDot.setAttribute('opacity','1');
+}
+function hideCursor() {
+  if (!PS?.hLine) return;
+  PS.hLine.setAttribute('opacity','0'); PS.hDot.setAttribute('opacity','0');
+  hoverMarker.remove();
+  document.getElementById('profile-tooltip').style.display='none';
+}
+
+// ── Viewport filter ───────────────────────────────────────────────
+let vpFilterActive = false;
+document.getElementById('vp-filter-btn').addEventListener('click', () => {
+  vpFilterActive = !vpFilterActive;
+  document.getElementById('vp-filter-btn').classList.toggle('active', vpFilterActive);
+  applyFilters();
+});
+map.on('moveend zoomend', () => { if (vpFilterActive) applyFilters(); });
+
+// ── Filtering ────────────────────────────────────────────────────
+function applyFilters() {
+  const activeActs    = new Set([...document.querySelectorAll('#cat-filters .cat-pill.active')].map(el=>el.dataset.activity));
+  const activeSierras = new Set([...document.querySelectorAll('#sierra-filters .cat-pill.active')].map(el=>el.dataset.sierra));
+  const activeTags    = new Set([...document.querySelectorAll('#tag-filters .cat-pill.active')].map(el=>el.dataset.tag));
+  const distMin = sliders.dist?.getMin() ?? 0;
+  const distMax = sliders.dist?.getMax() ?? Infinity;
+  const eleMin  = sliders.ele?.getMin()  ?? 0;
+  const eleMax  = sliders.ele?.getMax()  ?? Infinity;
+  const year    = document.getElementById('year-filter').value;
+  const region  = document.getElementById('region-filter')?.value || '';
+  const vb      = vpFilterActive ? map.getBounds() : null;
+  let totalDist=0, totalEle=0, visCount=0;
+  updateFilterBadge();
+  items.forEach(({track,layer},i)=>{
+    const inViewport = !vb || vb.intersects(L.latLngBounds(track.bounds[0], track.bounds[1]));
+    const ok=(activeActs.size===0||activeActs.has(track.activity||'Sin clasificar'))&&
+      (activeSierras.size===0||activeSierras.has(track.sierra))&&
+      (activeTags.size===0||[...(track.tags||[])].some(t=>activeTags.has(t)))&&
+      (!region||(track.ccaa===region))&&
+      track.distance>=distMin&&track.distance<=distMax&&
+      track.elevationGain>=eleMin&&track.elevationGain<=eleMax&&
+      (!year||(track.date&&track.date.startsWith(year))) &&
+      inViewport;
+    if(ok){layer.addTo(map);items[i].visible=true;visCount++;totalDist+=track.distance;totalEle+=track.elevationGain;}
+    else  {layer.remove();items[i].visible=false;}
+  });
+  renderList();
+  document.getElementById('stat-count').textContent=visCount;
+  document.getElementById('stat-dist').textContent=Math.round(totalDist)+' km';
+  document.getElementById('stat-ele').textContent=Math.round(totalEle/1000)+' km';
+  document.getElementById('list-count').textContent=`${visCount} de ${CATALOG.length} tracks`;
+}
+
+function renderList() {
+  const list = document.getElementById('tracklist');
+  const visible = items.filter(it=>it.visible);
+  if(!visible.length){list.innerHTML='<div class="empty-state">Sin resultados<p>Ajusta los filtros.</p></div>';return;}
+  list.innerHTML = visible.map(({track})=>{
+    const ri=items.findIndex(it=>it.track===track), c=getTrackColor(track);
+    return `<div class="track-item" data-idx="${ri}" style="--c:${c}">
+      <span class="ti-color" data-idx="${ri}" title="Color de esta ruta"></span>
+      <div class="ti-body">
+        <div class="track-name">${track.id?`<a href="/track?id=${track.id}" class="track-detail-link" target="_blank" title="Ver detalle">${escHtml(track.name)}</a>`:escHtml(track.name)}</div>
+        <div class="track-meta">
+          ${track.activity?`<span class="track-badge" style="--c:${c}">${escHtml(track.activity)}</span>`:''}
+          <span class="tstat">📏 ${track.distance} km</span>
+          <span class="tstat">⛰ ${track.elevationGain} m</span>
+          ${track.date?`<span class="tstat">📅 ${track.date.substring(0,7)}</span>`:''}
+        </div>
+      </div></div>`;
+  }).join('');
+  list.querySelectorAll('.track-item').forEach(el=>{
+    el.addEventListener('click', e=>{
+      if(e.target.classList.contains('ti-color')) return;
+      if(e.target.classList.contains('track-detail-link') || e.target.closest('.track-detail-link')) return;
+      activateTrack(+el.dataset.idx, true);
+    });
+  });
+  list.querySelectorAll('.ti-color').forEach(dot=>{
+    dot.addEventListener('click', e=>{
+      e.stopPropagation();
+      const track = items[+dot.dataset.idx].track;
+      pickColor(getTrackColor(track), c=>setTrackColor(track,c,false), c=>setTrackColor(track,c,true));
+    });
+  });
+}
+
+// ── Build filter UI ──────────────────────────────────────────────
+function buildFilters() {
+  // Activity pills (now main filter, with color dots)
+  const acts={};
+  CATALOG.forEach(t=>{ const a=t.activity||'Sin clasificar'; acts[a]=(acts[a]||0)+1; });
+  const catEl=document.getElementById('cat-filters');
+  catEl.innerHTML=Object.entries(acts).sort((a,b)=>b[1]-a[1]).map(([act,n])=>{
+    const c=actColor(act);
+    return `<div class="cat-pill" data-activity="${escHtml(act)}" style="--c:${c}">
+      <span class="cat-dot" title="Color" style="background:${c}"></span>
+      ${escHtml(act)}<span class="cat-count">${n}</span></div>`;
+  }).join('');
+  catEl.addEventListener('click', e=>{
+    const dot=e.target.closest('.cat-dot'), pill=e.target.closest('.cat-pill');
+    if(!pill) return;
+    if(dot){
+      const act=pill.dataset.activity;
+      pickColor(actColor(act), c=>setActivityColor(act,c,false), c=>setActivityColor(act,c,true));
+    } else { pill.classList.toggle('active'); }
+  });
+
+  // Hide activity section (merged into main filter above)
+  document.getElementById('fsec-activity').style.display='none';
+
+  // Sierra pills
+  const sierras={};
+  CATALOG.forEach(t=>{ if(t.sierra) sierras[t.sierra]=(sierras[t.sierra]||0)+1; });
+  if(Object.keys(sierras).length){
+    document.getElementById('fsec-sierra').style.display='';
+    const sEl=document.getElementById('sierra-filters');
+    sEl.innerHTML=Object.entries(sierras).sort((a,b)=>b[1]-a[1]).map(([s,n])=>
+      `<div class="cat-pill" data-sierra="${escHtml(s)}">${escHtml(s)}<span class="cat-count">${n}</span></div>`
+    ).join('');
+    sEl.addEventListener('click', e=>{
+      const pill=e.target.closest('.cat-pill'); if(!pill) return;
+      pill.classList.toggle('active');
+    });
+  }
+
+  // Region select
+  const regions=[...new Set(CATALOG.map(t=>t.ccaa).filter(Boolean))].sort();
+  if(regions.length){
+    document.getElementById('fsec-region').style.display='';
+    const rSel=document.getElementById('region-filter');
+    regions.forEach(r=>{const o=document.createElement('option');o.value=o.textContent=r;rSel.appendChild(o);});
+    // region applied on button click
+  }
+
+  // Tag pills
+  const tagMap={};
+  CATALOG.forEach(t=>{ (t.tags||[]).forEach(tag=>{ tagMap[tag]=(tagMap[tag]||0)+1; }); });
+  if(Object.keys(tagMap).length){
+    document.getElementById('fsec-tags').style.display='';
+    const tEl=document.getElementById('tag-filters');
+    tEl.innerHTML=Object.entries(tagMap).sort((a,b)=>b[1]-a[1]).map(([tag,n])=>
+      `<div class="cat-pill" data-tag="${escHtml(tag)}">#${escHtml(tag)}<span class="cat-count">${n}</span></div>`
+    ).join('');
+    tEl.addEventListener('click', e=>{
+      const pill=e.target.closest('.cat-pill'); if(!pill) return;
+      pill.classList.toggle('active');
+    });
+  }
+
+  // Year select
+  const years=[...new Set(CATALOG.map(t=>t.date?t.date.substring(0,4):null).filter(Boolean))].sort().reverse();
+  const sel=document.getElementById('year-filter');
+  years.forEach(y=>{const o=document.createElement('option');o.value=o.textContent=y;sel.appendChild(o);});
+
+  // Range sliders — init with catalog-derived bounds
+  const maxDist = Math.max(Math.ceil(Math.max(...CATALOG.map(t=>t.distance||0)) / 10) * 10, 50);
+  const maxEle  = Math.max(Math.ceil(Math.max(...CATALOG.map(t=>t.elevationGain||0)) / 500) * 500, 1000);
+  sliders.dist = initDualSlider('dist-rs-min','dist-rs-max','dist-rs-fill','dist-rs-label', 0, maxDist, 5, 'km');
+  sliders.ele  = initDualSlider('ele-rs-min', 'ele-rs-max', 'ele-rs-fill', 'ele-rs-label',  0, maxEle,  100, 'm');
+}
+
+// ── Filter panel show/hide ────────────────────────────────────────
+let filtersOpen = true;
+function setFiltersOpen(open) {
+  filtersOpen = open;
+  document.getElementById('filters').classList.toggle('collapsed', !open);
+  const btn = document.getElementById('filter-open-btn');
+  btn.classList.toggle('visible', !open);
+  updateFilterBadge();
+}
+function countActiveFilters() {
+  let n = 0;
+  n += document.querySelectorAll('#cat-filters .cat-pill.active').length;
+  n += document.querySelectorAll('#sierra-filters .cat-pill.active').length;
+  n += document.querySelectorAll('#tag-filters .cat-pill.active').length;
+  if(document.getElementById('region-filter')?.value) n++;
+  if(sliders.dist?.isActive()) n++;
+  if(sliders.ele?.isActive()) n++;
+  if(document.getElementById('year-filter')?.value) n++;
+  return n;
+}
+function updateFilterBadge() {
+  const n = countActiveFilters();
+  const btn = document.getElementById('filter-open-btn');
+  btn.classList.toggle('has-active', n > 0);
+  document.getElementById('filter-open-label').textContent = n > 0 ? `Filtros (${n})` : 'Filtros';
+}
+
+// ── Wire controls ────────────────────────────────────────────────
+document.getElementById('year-filter').addEventListener('change', () => {});
+document.getElementById('apply-filters-btn').addEventListener('click', () => {
+  applyFilters();
+  setFiltersOpen(false);
+});
+document.getElementById('clear-filters-btn').addEventListener('click', () => {
+  document.querySelectorAll('.cat-pill.active').forEach(el=>el.classList.remove('active'));
+  sliders.dist?.reset();
+  sliders.ele?.reset();
+  document.getElementById('year-filter').value='';
+  const rf=document.getElementById('region-filter'); if(rf) rf.value='';
+  applyFilters();
+});
+document.getElementById('filter-close-btn').addEventListener('click',()=>setFiltersOpen(false));
+document.getElementById('filter-open-btn').addEventListener('click',()=>setFiltersOpen(true));
+document.getElementById('profile-close').addEventListener('click', deactivateTrack);
+document.getElementById('sidebar-toggle').addEventListener('click',()=>{
+  document.getElementById('sidebar').classList.toggle('collapsed');
+  setTimeout(()=>map.invalidateSize(),210);
+});
+document.getElementById('side-toggle').addEventListener('click',()=>{
+  document.getElementById('main').classList.toggle('sidebar-right');
+  setTimeout(()=>map.invalidateSize(),10);
+});
+
+// ── Sidebar tabs ─────────────────────────────────────────────────
+document.querySelectorAll('.stab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.stab').forEach(b => b.classList.toggle('active', b===btn));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id===`tab-${tab}`));
+    if (tab === 'db') loadDbStats();
+  });
+});
+
+// ── DB Tab ───────────────────────────────────────────────────────
+function fmtN(n) { return n==null ? '—' : Number(n).toLocaleString('es'); }
+
+async function loadDbStats() {
+  const el  = document.getElementById('db-stats-content');
+  const btn = document.getElementById('db-refresh-btn');
+  btn.classList.add('spinning');
+  try {
+    const r = await fetch('/api/db/stats');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    renderDbStats(d, el);
+  } catch (e) {
+    el.innerHTML = `<div class="db-no-api">
+      ⚠ API no disponible.<br>
+      Usa <code>node server.js</code> (o <code>npm start</code>)<br>
+      en lugar de <code>http-server</code>.<br><br>
+      <small style="color:#94a3b8">${escHtml(e.message)}</small>
+    </div>`;
+  } finally {
+    btn.classList.remove('spinning');
+  }
+}
+
+function renderDbStats(d, el) {
+  const rawPts   = d.rawPoints   || 0;
+  const cleanPts = d.cleanPoints || 0;
+  const pct = rawPts ? ((1 - cleanPts / rawPts) * 100).toFixed(1) + '%' : '—';
+  const dbMb = d.dbSize ? (d.dbSize / 1024 / 1024).toFixed(1) + ' MB' : '—';
+
+  el.innerHTML = `
+    <div class="db-cards">
+      <div class="db-card">
+        <div class="db-card-val">${fmtN(d.tracks)}</div>
+        <div class="db-card-lbl">Tracks en BD</div>
+      </div>
+      <div class="db-card">
+        <div class="db-card-val">${fmtN(d.cleanedTracks)}</div>
+        <div class="db-card-lbl">Limpios</div>
+      </div>
+      <div class="db-card accent-card">
+        <div class="db-card-val">${pct}</div>
+        <div class="db-card-lbl">Reducción pts</div>
+      </div>
+      <div class="db-card">
+        <div class="db-card-val">${dbMb}</div>
+        <div class="db-card-lbl">Tamaño BD · ${fmtN(d.gpxCount)} GPX</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="flabel" style="margin-top:2px;margin-bottom:5px">Por actividad</div>
+      <table class="db-table">
+        <thead><tr><th>Actividad</th><th>Tracks</th><th>Puntos</th><th>Reduc.</th></tr></thead>
+        <tbody>
+          ${(d.cats||[]).map(c => {
+            const hasCln = c.cleanPoints > 0;
+            const red = hasCln ? ((1-c.cleanPoints/c.rawPoints)*100).toFixed(0)+'%' : '—';
+            const redClass = hasCln ? 'db-reduc' : 'db-reduc none';
+            return `<tr>
+              <td>${escHtml(c.category||'Sin clasificar')}</td>
+              <td>${c.count}</td>
+              <td>${fmtN(c.rawPoints)}</td>
+              <td class="${redClass}">${red}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="font-size:10px;color:var(--muted)">
+      ${d.lastImport ? 'Actualizado: ' + d.lastImport.substring(0,16).replace('T',' ') : 'Sin importaciones'}
+    </div>
+  `;
+}
+
+// SSE helper: consume fetch response como stream SSE
+async function runWithSseLog(url, method, body, onDone) {
+  const log = document.getElementById('db-log');
+  log.innerHTML = '';
+  log.classList.add('visible');
+
+  const resp = await fetch(url, {
+    method,
+    headers: body ? { 'Content-Type':'application/json' } : {},
+    body:    body ? JSON.stringify(body) : undefined,
+  });
+
+  const reader  = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const events = buf.split('\n\n');
+    buf = events.pop();
+    for (const ev of events) {
+      const m = ev.match(/^data: (.+)$/m);
+      if (!m) continue;
+      let obj;
+      try { obj = JSON.parse(m[1]); } catch { continue; }
+      appendLog(obj, log);
+      if (obj.type === 'done') { onDone?.(obj.code); return; }
+    }
+  }
+}
+
+function appendLog(obj, log) {
+  if (obj.type === 'start') return;
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  if (obj.type === 'error')    line.classList.add('log-error');
+  else if (obj.type === 'warn') line.classList.add('log-warn');
+  else if (obj.type === 'progress') line.classList.add('log-progress');
+  else if (obj.text?.startsWith('✓')) line.classList.add('log-ok');
+  line.textContent = obj.text || '';
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function setDbBusy(busy) {
+  ['btn-import','btn-import-force','btn-clean','btn-export','btn-enrich','btn-enrich-force'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = busy;
+  });
+}
+
+document.getElementById('btn-import').addEventListener('click', async () => {
+  setDbBusy(true);
+  document.getElementById('btn-import').textContent = '⏳ Importando…';
+  await runWithSseLog('/api/db/import', 'POST', null, () => {
+    setDbBusy(false);
+    document.getElementById('btn-import').innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Importar tracks`;
+    loadDbStats();
+  });
+});
+
+document.getElementById('btn-import-force').addEventListener('click', async () => {
+  if (!confirm('¿Reimportar TODOS los tracks aunque ya existan? Esto borra los puntos limpios.')) return;
+  setDbBusy(true);
+  document.getElementById('btn-import-force').textContent = '⏳ Reimportando…';
+  await runWithSseLog('/api/db/import?force=1', 'POST', null, () => {
+    setDbBusy(false);
+    document.getElementById('btn-import-force').textContent = '↻ Force';
+    loadDbStats();
+  });
+});
+
+document.getElementById('btn-clean').addEventListener('click', async () => {
+  const minDist = parseFloat(document.getElementById('inp-mindist').value) || 0;
+  const rdp     = parseFloat(document.getElementById('inp-rdp').value)     || 0;
+  if (!minDist && !rdp) { alert('Introduce al menos un valor de min-dist o RDP mayor que 0.'); return; }
+  setDbBusy(true);
+  document.getElementById('btn-clean').textContent = '⏳';
+  await runWithSseLog('/api/db/clean', 'POST', { minDist, rdp }, () => {
+    setDbBusy(false);
+    document.getElementById('btn-clean').textContent = 'Limpiar';
+    loadDbStats();
+  });
+});
+
+document.getElementById('btn-export').addEventListener('click', async () => {
+  setDbBusy(true);
+  document.getElementById('btn-export').innerHTML = '⏳ Exportando…';
+  await runWithSseLog('/api/db/export', 'POST', null, code => {
+    setDbBusy(false);
+    document.getElementById('btn-export').innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Exportar catálogo`;
+    if (code === 0) {
+      const line = document.createElement('div');
+      line.className = 'log-line log-ok';
+      line.textContent = '↻ Recarga la página para ver el catálogo actualizado.';
+      document.getElementById('db-log').appendChild(line);
+    }
+  });
+});
+
+document.getElementById('btn-enrich').addEventListener('click', async () => {
+  setDbBusy(true);
+  document.getElementById('btn-enrich').textContent = '⏳ Enriqueciendo…';
+  await runWithSseLog('/api/db/enrich', 'POST', null, () => {
+    setDbBusy(false);
+    document.getElementById('btn-enrich').innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Enriquecer datos`;
+    loadDbStats();
+  });
+});
+
+document.getElementById('btn-enrich-force').addEventListener('click', async () => {
+  if (!confirm('¿Enriquecer TODOS los tracks, incluso los que ya tienen datos?')) return;
+  setDbBusy(true);
+  document.getElementById('btn-enrich-force').textContent = '⏳';
+  await runWithSseLog('/api/db/enrich?force=1', 'POST', null, () => {
+    setDbBusy(false);
+    document.getElementById('btn-enrich-force').textContent = '↻ Todos';
+    loadDbStats();
+  });
+});
+
+document.getElementById('db-refresh-btn').addEventListener('click', loadDbStats);
+
+// ── Init ──────────────────────────────────────────────────────────
+buildFilters();
+applyFilters();
+if(CATALOG.length>0) map.fitBounds(L.latLngBounds(CATALOG.flatMap(t=>t.bounds)),{padding:[20,20]});
+
+// Abrir track concreto si viene de ?file= (desde editor)
+const _openFile = new URLSearchParams(location.search).get('file');
+if (_openFile) {
+  const _idx = items.findIndex(it => it.track.file === _openFile);
+  if (_idx >= 0) {
+    setTimeout(() => activateTrack(_idx, true), 400);
+  }
+}
+
+// ── Resize handle ─────────────────────────────────────────────────
+(function() {
+  const handle = document.getElementById('resize-handle');
+  const sidebar = document.getElementById('sidebar');
+  const main = document.getElementById('main');
+  let dragging = false, startX = 0, startW = 0;
+
+  handle.addEventListener('mousedown', e => {
+    if (sidebar.classList.contains('collapsed')) return;
+    dragging = true;
+    startX = e.clientX;
+    startW = sidebar.offsetWidth;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const sideRight = main.classList.contains('sidebar-right');
+    const delta = sideRight ? (startX - e.clientX) : (e.clientX - startX);
+    const newW = Math.max(240, Math.min(600, startW + delta));
+    sidebar.style.width = newW + 'px';
+    map.invalidateSize();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    try { localStorage.setItem('sidebar-width', sidebar.offsetWidth); } catch {}
+  });
+
+  // Restore saved width
+  try {
+    const saved = parseInt(localStorage.getItem('sidebar-width'));
+    if (saved >= 240 && saved <= 600) sidebar.style.width = saved + 'px';
+  } catch {}
+})();
+
+})();
+
+// ── Notificación de catálogo actualizado ──────────────────────────
+window.addEventListener('storage', e => {
+  if (e.key !== 'catalog_ts') return;
+  if (document.getElementById('catalog-reload-banner')) return; // ya existe
+  const banner = document.createElement('div');
+  banner.id = 'catalog-reload-banner';
+  banner.style.cssText = [
+    'position:fixed','bottom:24px','right:24px','z-index:9999',
+    'background:#1e293b','color:white','padding:12px 18px',
+    'border-radius:9px','font-size:13px','cursor:pointer',
+    'box-shadow:0 4px 20px rgba(0,0,0,.4)','display:flex',
+    'align-items:center','gap:10px','border:1px solid #334155',
+    'animation:fadeIn .2s ease',
+  ].join(';');
+  banner.innerHTML = `
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    <span>Catálogo actualizado</span>
+    <button onclick="location.reload()" style="background:#3b82f6;color:white;border:none;border-radius:5px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:600">Recargar</button>
+    <button onclick="this.closest('#catalog-reload-banner').remove()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>
+  `;
+  document.body.appendChild(banner);
+});
+</script>
+</body>
+</html>

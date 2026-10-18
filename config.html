@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GPX Library — Configuración</title>
+<style>
+:root {
+  --bg:      #0f172a;
+  --bg2:     #1e293b;
+  --bg3:     #334155;
+  --border:  #334155;
+  --text:    #e2e8f0;
+  --text2:   #94a3b8;
+  --accent:  #3b82f6;
+  --danger:  #ef4444;
+  --success: #22c55e;
+  --radius:  8px;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+/* Header */
+#header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+#header-title { display:flex; align-items:center; gap:8px; font-weight:600; font-size:15px; }
+#header-actions { display:flex; gap:8px; }
+.hbtn {
+  display: inline-flex; align-items: center; gap:5px;
+  padding: 5px 12px; border-radius:6px; font-size:12px; font-weight:500;
+  border: 1px solid var(--border); cursor: pointer;
+  background: transparent; color: var(--text); text-decoration:none;
+  transition: background .15s;
+}
+.hbtn:hover { background: var(--bg3); }
+.hbtn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.hbtn-primary:hover { background: #2563eb; }
+/* Tabs */
+#tabs { display:flex; gap:2px; padding:12px 18px 0; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--bg2); }
+.tab {
+  padding: 8px 18px; cursor:pointer; font-size:13px; font-weight:500;
+  border-radius:6px 6px 0 0; color:var(--text2);
+  border: 1px solid transparent; border-bottom:none;
+  margin-bottom: -1px;
+  transition: color .15s;
+}
+.tab.active { background:var(--bg); border-color:var(--border); color:var(--text); }
+.tab:not(.active):hover { color:var(--text); }
+/* Content */
+#content { flex:1; overflow-y:auto; padding:20px 18px; }
+.panel { display:none; }
+.panel.active { display:block; }
+/* Section header */
+.section-header { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+.section-header h2 { font-size:15px; font-weight:600; }
+.section-desc { color:var(--text2); font-size:12px; margin-bottom:16px; }
+/* Table */
+.cfg-table { width:100%; border-collapse:collapse; font-size:13px; }
+.cfg-table th {
+  text-align:left; padding:8px 10px; font-size:11px; font-weight:600;
+  color:var(--text2); text-transform:uppercase; letter-spacing:.05em;
+  border-bottom: 1px solid var(--border);
+}
+.cfg-table td { padding:8px 10px; border-bottom:1px solid #1e293b; vertical-align:middle; }
+.cfg-table tr:hover td { background: rgba(255,255,255,.02); }
+.cfg-table tr.editing td { background: rgba(59,130,246,.06); }
+/* Badge */
+.badge-act {
+  display:inline-block; padding:2px 8px; border-radius:99px;
+  font-size:11px; font-weight:600; color:#fff;
+}
+/* Inactive row */
+tr.inactive td { opacity: .4; }
+/* Actions */
+.row-actions { display:flex; gap:6px; }
+.btn-sm {
+  padding:3px 9px; border-radius:5px; font-size:11px; font-weight:500;
+  border:1px solid var(--border); cursor:pointer; background:transparent; color:var(--text);
+  transition: background .12s;
+}
+.btn-sm:hover { background:var(--bg3); }
+.btn-sm.danger { color:var(--danger); border-color:var(--danger); }
+.btn-sm.danger:hover { background:rgba(239,68,68,.1); }
+.btn-sm.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn-sm.primary:hover { background:#2563eb; }
+/* Inline edit form */
+.edit-row td { padding:4px 10px 10px !important; }
+.edit-form { display:grid; gap:8px; background:var(--bg2); padding:12px 14px; border-radius:var(--radius); border:1px solid var(--border); }
+.edit-form label { font-size:11px; color:var(--text2); font-weight:600; }
+.edit-form input[type=text], .edit-form input[type=number] {
+  width:100%; background:var(--bg); border:1px solid var(--border); border-radius:5px;
+  color:var(--text); padding:6px 9px; font-size:13px; outline:none;
+}
+.edit-form input:focus { border-color:var(--accent); }
+.form-row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+.form-row .f-field { flex:1; min-width:120px; }
+.form-row .f-field label { display:block; margin-bottom:3px; }
+/* Color picker */
+.color-pick-wrap { display:flex; flex-direction:column; gap:5px; }
+.color-swatches { display:flex; flex-wrap:wrap; gap:5px; }
+.swatch {
+  width:22px; height:22px; border-radius:50%; cursor:pointer;
+  border:2px solid transparent; transition:border-color .12s, transform .12s;
+  flex-shrink:0;
+}
+.swatch:hover { transform:scale(1.15); }
+.swatch.selected { border-color:#fff; }
+.color-input-row { display:flex; align-items:center; gap:6px; }
+.color-input-row input[type=color] { width:30px; height:26px; border:none; background:none; cursor:pointer; padding:0; }
+.color-input-row input[type=text] { width:90px; }
+/* Keywords */
+.kw-help { font-size:10px; color:var(--text2); }
+/* Bbox */
+.bbox-grid { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; }
+.bbox-grid .f-field label { display:block; margin-bottom:3px; }
+/* Toggle active */
+.toggle-active { cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
+.toggle-active input { accent-color:var(--accent); width:15px; height:15px; cursor:pointer; }
+/* Add row */
+.add-row { margin-top:16px; }
+/* Empty */
+.empty-msg { text-align:center; padding:32px; color:var(--text2); font-size:13px; }
+/* Province chips */
+.chip-grid { display:flex; flex-wrap:wrap; gap:6px; }
+.chip {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:99px; padding:3px 12px; font-size:12px; color:var(--text2);
+}
+/* Toast */
+#toast {
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:#1e40af; color:#fff; padding:8px 18px; border-radius:8px;
+  font-size:13px; opacity:0; pointer-events:none;
+  transition: opacity .2s, transform .2s;
+  z-index:999;
+}
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="header-title">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    GPX Library — Configuración
+  </div>
+  <div id="header-actions">
+    <a href="/editor" class="hbtn" style="text-decoration:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Editor
+    </a>
+    <a href="/" class="hbtn" style="text-decoration:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      Mapa
+    </a>
+  </div>
+</div>
+
+<div id="tabs">
+  <div class="tab active" data-tab="activities">Actividades</div>
+  <div class="tab" data-tab="sierras">Sierras / Zonas</div>
+  <div class="tab" data-tab="geo">Provincias &amp; CCAA</div>
+</div>
+
+<div id="content">
+
+  <!-- ── Actividades ── -->
+  <div id="panel-activities" class="panel active">
+    <div class="section-header">
+      <h2>Actividades</h2>
+      <button class="hbtn hbtn-primary" id="btn-add-act">+ Nueva actividad</button>
+    </div>
+    <p class="section-desc">Lista de tipos de actividad. Las <strong>palabras clave</strong> se usan para clasificar automáticamente los tracks durante la importación (separadas por comas, se comparan en minúsculas).</p>
+    <div id="act-loading" style="color:var(--text2);padding:20px">Cargando…</div>
+    <table class="cfg-table" id="act-table" style="display:none">
+      <thead>
+        <tr>
+          <th style="width:28px">#</th>
+          <th>Nombre</th>
+          <th style="width:70px">Color</th>
+          <th>Palabras clave</th>
+          <th style="width:70px">Activa</th>
+          <th style="width:110px"></th>
+        </tr>
+      </thead>
+      <tbody id="act-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ── Sierras ── -->
+  <div id="panel-sierras" class="panel">
+    <div class="section-header">
+      <h2>Sierras / Zonas geográficas</h2>
+      <button class="hbtn hbtn-primary" id="btn-add-sierra">+ Nueva sierra</button>
+    </div>
+    <p class="section-desc">Bounding boxes de respaldo para la clasificación geográfica cuando Nominatim no devuelve un nombre de sierra. Coordenadas en grados decimales.</p>
+    <div id="sie-loading" style="color:var(--text2);padding:20px">Cargando…</div>
+    <table class="cfg-table" id="sie-table" style="display:none">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>SO lat</th>
+          <th>SO lon</th>
+          <th>NE lat</th>
+          <th>NE lon</th>
+          <th style="width:70px">Activa</th>
+          <th style="width:110px"></th>
+        </tr>
+      </thead>
+      <tbody id="sie-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ── Geo ── -->
+  <div id="panel-geo" class="panel">
+    <div class="section-header"><h2>Provincias en la BD</h2></div>
+    <p class="section-desc">Provincias detectadas en los tracks (via Nominatim). Solo lectura — se actualizan al importar.</p>
+    <div id="geo-provinces" class="chip-grid" style="margin-bottom:24px"></div>
+    <div class="section-header"><h2>Comunidades Autónomas en la BD</h2></div>
+    <div id="geo-ccaa" class="chip-grid" style="margin-bottom:24px"></div>
+    <div class="section-header"><h2>Sierras en uso</h2></div>
+    <div id="geo-zones" class="chip-grid"></div>
+  </div>
+
+</div><!-- #content -->
+
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+// ── Paleta de swatches rápidos ──────────────────────────────────────
+const QUICK_COLORS = [
+  '#ef4444','#f97316','#eab308','#22c55e','#14b8a6','#06b6d4',
+  '#3b82f6','#6366f1','#8b5cf6','#a855f7','#ec4899','#64748b',
+  '#7c3aed','#b45309','#0369a1','#0284c7','#0e7490','#dc2626',
+  '#16a34a','#0891b2','#92400e','#155e75','#a16207','#1e293b',
+];
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function showToast(msg, ms=2200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ── Tabs ────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'geo') loadGeo();
+  });
+});
+
+// ── Color picker helper ─────────────────────────────────────────────
+function buildColorPicker(currentColor) {
+  const wrap = document.createElement('div');
+  wrap.className = 'color-pick-wrap';
+
+  const swatchRow = document.createElement('div');
+  swatchRow.className = 'color-swatches';
+
+  let selectedSwatch = null;
+  const updateSelected = (color) => {
+    wrap.dataset.color = color;
+    swatchRow.querySelectorAll('.swatch').forEach(s => {
+      s.classList.toggle('selected', s.dataset.c === color);
+    });
+    if (hexInput) hexInput.value = color;
+    if (colorEl) colorEl.value = color;
+  };
+
+  QUICK_COLORS.forEach(c => {
+    const s = document.createElement('div');
+    s.className = 'swatch' + (c === currentColor ? ' selected' : '');
+    s.style.background = c;
+    s.dataset.c = c;
+    s.title = c;
+    s.addEventListener('click', () => updateSelected(c));
+    swatchRow.appendChild(s);
+  });
+
+  wrap.appendChild(swatchRow);
+
+  const row = document.createElement('div');
+  row.className = 'color-input-row';
+
+  const colorEl = document.createElement('input');
+  colorEl.type = 'color';
+  colorEl.value = currentColor || '#6b7280';
+  colorEl.addEventListener('input', () => {
+    wrap.dataset.color = colorEl.value;
+    hexInput.value = colorEl.value;
+    swatchRow.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+  });
+
+  const hexInput = document.createElement('input');
+  hexInput.type = 'text';
+  hexInput.value = currentColor || '';
+  hexInput.placeholder = '#rrggbb';
+  hexInput.maxLength = 7;
+  hexInput.addEventListener('input', () => {
+    const v = hexInput.value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+      colorEl.value = v;
+      wrap.dataset.color = v;
+      swatchRow.querySelectorAll('.swatch').forEach(s => {
+        s.classList.toggle('selected', s.dataset.c === v);
+      });
+    }
+  });
+
+  row.appendChild(colorEl);
+  row.appendChild(hexInput);
+  wrap.appendChild(row);
+
+  wrap.dataset.color = currentColor || '';
+  wrap.getValue = () => wrap.dataset.color || hexInput.value;
+
+  return wrap;
+}
+
+// ── ACTIVIDADES ─────────────────────────────────────────────────────
+let activities = [];
+let editingActId = null;
+
+async function loadActivities() {
+  const tbody = document.getElementById('act-tbody');
+  try {
+    const r = await fetch('/api/config/activities');
+    activities = await r.json();
+    renderActivities();
+    document.getElementById('act-loading').style.display = 'none';
+    document.getElementById('act-table').style.display = '';
+  } catch(e) {
+    document.getElementById('act-loading').textContent = '⚠ Error: ' + e.message;
+  }
+}
+
+function renderActivities() {
+  const tbody = document.getElementById('act-tbody');
+  if (editingActId !== null && editingActId !== 'new') {
+    // preserve editing row after re-render
+  }
+  tbody.innerHTML = '';
+
+  if (activities.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-msg">Sin actividades definidas</td></tr>`;
+    return;
+  }
+
+  activities.forEach((a, idx) => {
+    const tr = document.createElement('tr');
+    if (!a.active) tr.classList.add('inactive');
+    if (editingActId === a.id) tr.classList.add('editing');
+
+    tr.innerHTML = `
+      <td style="color:var(--text2);font-size:11px">${a.sort_order || idx+1}</td>
+      <td>
+        <span class="badge-act" style="background:${escHtml(a.color||'#64748b')}">${escHtml(a.name)}</span>
+      </td>
+      <td>
+        <div style="width:22px;height:22px;border-radius:50%;background:${escHtml(a.color||'#64748b')};border:2px solid rgba(255,255,255,.15)"></div>
+      </td>
+      <td style="color:var(--text2);font-size:11px">${escHtml(a.keywords||'—')}</td>
+      <td><span style="color:${a.active?'var(--success)':'var(--text2)'}">${a.active?'✓':'—'}</span></td>
+      <td class="row-actions">
+        <button class="btn-sm primary" data-act-edit="${a.id}">Editar</button>
+        <button class="btn-sm danger" data-act-del="${a.id}">✕</button>
+      </td>
+    `;
+
+    if (editingActId === a.id) {
+      const editTr = document.createElement('tr');
+      editTr.className = 'edit-row';
+      editTr.innerHTML = `<td colspan="6"></td>`;
+      const cell = editTr.querySelector('td');
+      cell.appendChild(buildActForm(a));
+      tbody.appendChild(tr);
+      tbody.appendChild(editTr);
+    } else {
+      tbody.appendChild(tr);
+    }
+  });
+
+  // New activity form row
+  if (editingActId === 'new') {
+    const newTr = document.createElement('tr');
+    newTr.className = 'edit-row';
+    newTr.innerHTML = `<td colspan="6"></td>`;
+    newTr.querySelector('td').appendChild(buildActForm(null));
+    tbody.appendChild(newTr);
+  }
+
+  // Bind events
+  tbody.querySelectorAll('[data-act-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.actEdit);
+      editingActId = (editingActId === id) ? null : id;
+      renderActivities();
+    });
+  });
+  tbody.querySelectorAll('[data-act-del]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.dataset.actDel);
+      const act = activities.find(a => a.id === id);
+      if (!confirm(`¿Eliminar la actividad "${act?.name}"?`)) return;
+      await fetch(`/api/config/activities/${id}`, { method:'DELETE' });
+      await loadActivities();
+      showToast('Actividad eliminada');
+    });
+  });
+}
+
+function buildActForm(act) {
+  const isNew = !act;
+  const wrap = document.createElement('div');
+  wrap.className = 'edit-form';
+
+  // Row 1: nombre + orden + activa
+  const row1 = document.createElement('div');
+  row1.className = 'form-row';
+  row1.innerHTML = `
+    <div class="f-field" style="flex:2">
+      <label>Nombre</label>
+      <input type="text" name="name" value="${escHtml(act?.name||'')}" placeholder="Ej: Senderismo">
+    </div>
+    <div class="f-field" style="flex:0 0 80px">
+      <label>Orden</label>
+      <input type="number" name="sort_order" value="${act?.sort_order??99}" min="1" max="999">
+    </div>
+    <div class="f-field" style="flex:0 0 80px; padding-top:18px">
+      <label class="toggle-active">
+        <input type="checkbox" name="active" ${act?.active!==0?'checked':''}>
+        Activa
+      </label>
+    </div>
+  `;
+  wrap.appendChild(row1);
+
+  // Row 2: color picker
+  const row2 = document.createElement('div');
+  row2.className = 'form-row';
+  const colorField = document.createElement('div');
+  colorField.className = 'f-field';
+  colorField.innerHTML = '<label>Color</label>';
+  const picker = buildColorPicker(act?.color || '#64748b');
+  colorField.appendChild(picker);
+  row2.appendChild(colorField);
+  wrap.appendChild(row2);
+
+  // Row 3: keywords
+  const row3 = document.createElement('div');
+  row3.innerHTML = `
+    <label>Palabras clave para auto-clasificación</label>
+    <input type="text" name="keywords" value="${escHtml(act?.keywords||'')}" placeholder="Ej: mtb,mountain bike,btt" style="width:100%;margin-top:4px">
+    <div class="kw-help" style="margin-top:3px">Separadas por comas. Se buscan en el nombre del track (sin distinción de mayúsculas).</div>
+  `;
+  wrap.appendChild(row3);
+
+  // Buttons
+  const btns = document.createElement('div');
+  btns.style.cssText = 'display:flex;gap:8px;margin-top:4px';
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn-sm primary';
+  saveBtn.textContent = isNew ? 'Crear' : 'Guardar';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-sm';
+  cancelBtn.textContent = 'Cancelar';
+  btns.appendChild(saveBtn);
+  btns.appendChild(cancelBtn);
+  wrap.appendChild(btns);
+
+  cancelBtn.addEventListener('click', () => {
+    editingActId = null;
+    renderActivities();
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    const name = wrap.querySelector('[name=name]').value.trim();
+    if (!name) { showToast('El nombre es obligatorio'); return; }
+    const body = {
+      name,
+      color: picker.getValue() || null,
+      keywords: wrap.querySelector('[name=keywords]').value.trim(),
+      sort_order: parseInt(wrap.querySelector('[name=sort_order]').value) || 0,
+      active: wrap.querySelector('[name=active]').checked ? 1 : 0,
+    };
+    try {
+      if (isNew) {
+        await fetch('/api/config/activities', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+        });
+        showToast('Actividad creada');
+      } else {
+        await fetch(`/api/config/activities/${act.id}`, {
+          method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+        });
+        showToast('Actividad guardada');
+      }
+      editingActId = null;
+      await loadActivities();
+    } catch(e) {
+      showToast('Error: ' + e.message);
+    }
+  });
+
+  return wrap;
+}
+
+document.getElementById('btn-add-act').addEventListener('click', () => {
+  editingActId = 'new';
+  renderActivities();
+  // Scroll to bottom
+  setTimeout(() => document.getElementById('content').scrollTo({ top: 99999, behavior:'smooth' }), 50);
+});
+
+// ── SIERRAS ─────────────────────────────────────────────────────────
+let sierras = [];
+let editingSieId = null;
+
+async function loadSierras() {
+  try {
+    const r = await fetch('/api/config/sierras');
+    sierras = await r.json();
+    renderSierras();
+    document.getElementById('sie-loading').style.display = 'none';
+    document.getElementById('sie-table').style.display = '';
+  } catch(e) {
+    document.getElementById('sie-loading').textContent = '⚠ Error: ' + e.message;
+  }
+}
+
+function fmt(n) { return n != null ? Number(n).toFixed(4) : '—'; }
+
+function renderSierras() {
+  const tbody = document.getElementById('sie-tbody');
+  tbody.innerHTML = '';
+
+  if (sierras.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-msg">Sin sierras definidas</td></tr>`;
+    return;
+  }
+
+  sierras.forEach(s => {
+    const tr = document.createElement('tr');
+    if (!s.active) tr.classList.add('inactive');
+    if (editingSieId === s.id) tr.classList.add('editing');
+
+    tr.innerHTML = `
+      <td><strong>${escHtml(s.name)}</strong></td>
+      <td style="font-size:11px;color:var(--text2)">${fmt(s.sw_lat)}</td>
+      <td style="font-size:11px;color:var(--text2)">${fmt(s.sw_lon)}</td>
+      <td style="font-size:11px;color:var(--text2)">${fmt(s.ne_lat)}</td>
+      <td style="font-size:11px;color:var(--text2)">${fmt(s.ne_lon)}</td>
+      <td><span style="color:${s.active?'var(--success)':'var(--text2)'}">${s.active?'✓':'—'}</span></td>
+      <td class="row-actions">
+        <button class="btn-sm primary" data-sie-edit="${s.id}">Editar</button>
+        <button class="btn-sm danger" data-sie-del="${s.id}">✕</button>
+      </td>
+    `;
+
+    if (editingSieId === s.id) {
+      const editTr = document.createElement('tr');
+      editTr.className = 'edit-row';
+      editTr.innerHTML = `<td colspan="7"></td>`;
+      editTr.querySelector('td').appendChild(buildSieForm(s));
+      tbody.appendChild(tr);
+      tbody.appendChild(editTr);
+    } else {
+      tbody.appendChild(tr);
+    }
+  });
+
+  if (editingSieId === 'new') {
+    const newTr = document.createElement('tr');
+    newTr.className = 'edit-row';
+    newTr.innerHTML = `<td colspan="7"></td>`;
+    newTr.querySelector('td').appendChild(buildSieForm(null));
+    tbody.appendChild(newTr);
+  }
+
+  tbody.querySelectorAll('[data-sie-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.sieEdit);
+      editingSieId = (editingSieId === id) ? null : id;
+      renderSierras();
+    });
+  });
+  tbody.querySelectorAll('[data-sie-del]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.dataset.sieDel);
+      const sie = sierras.find(s => s.id === id);
+      if (!confirm(`¿Eliminar "${sie?.name}"?`)) return;
+      await fetch(`/api/config/sierras/${id}`, { method:'DELETE' });
+      await loadSierras();
+      showToast('Sierra eliminada');
+    });
+  });
+}
+
+function buildSieForm(sie) {
+  const isNew = !sie;
+  const wrap = document.createElement('div');
+  wrap.className = 'edit-form';
+
+  const row1 = document.createElement('div');
+  row1.className = 'form-row';
+  row1.innerHTML = `
+    <div class="f-field" style="flex:3">
+      <label>Nombre</label>
+      <input type="text" name="name" value="${escHtml(sie?.name||'')}" placeholder="Ej: Sierra de Gredos">
+    </div>
+    <div class="f-field" style="flex:0 0 80px;padding-top:18px">
+      <label class="toggle-active">
+        <input type="checkbox" name="active" ${sie?.active!==0?'checked':''}>
+        Activa
+      </label>
+    </div>
+  `;
+  wrap.appendChild(row1);
+
+  const row2 = document.createElement('div');
+  row2.innerHTML = `<label style="display:block;margin-bottom:6px">Bounding box (SO → NE)</label>`;
+  const bboxGrid = document.createElement('div');
+  bboxGrid.className = 'bbox-grid';
+  bboxGrid.innerHTML = `
+    <div class="f-field"><label>SW lat</label><input type="number" name="sw_lat" value="${sie?.sw_lat??''}" step="0.0001" placeholder="39.75"></div>
+    <div class="f-field"><label>SW lon</label><input type="number" name="sw_lon" value="${sie?.sw_lon??''}" step="0.0001" placeholder="-6.1"></div>
+    <div class="f-field"><label>NE lat</label><input type="number" name="ne_lat" value="${sie?.ne_lat??''}" step="0.0001" placeholder="40.65"></div>
+    <div class="f-field"><label>NE lon</label><input type="number" name="ne_lon" value="${sie?.ne_lon??''}" step="0.0001" placeholder="-4.3"></div>
+  `;
+  row2.appendChild(bboxGrid);
+  wrap.appendChild(row2);
+
+  const btns = document.createElement('div');
+  btns.style.cssText = 'display:flex;gap:8px;margin-top:4px';
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn-sm primary';
+  saveBtn.textContent = isNew ? 'Crear' : 'Guardar';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-sm';
+  cancelBtn.textContent = 'Cancelar';
+  btns.appendChild(saveBtn);
+  btns.appendChild(cancelBtn);
+  wrap.appendChild(btns);
+
+  cancelBtn.addEventListener('click', () => {
+    editingSieId = null;
+    renderSierras();
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    const name = wrap.querySelector('[name=name]').value.trim();
+    if (!name) { showToast('El nombre es obligatorio'); return; }
+    const body = {
+      name,
+      sw_lat: parseFloat(wrap.querySelector('[name=sw_lat]').value) || null,
+      sw_lon: parseFloat(wrap.querySelector('[name=sw_lon]').value) || null,
+      ne_lat: parseFloat(wrap.querySelector('[name=ne_lat]').value) || null,
+      ne_lon: parseFloat(wrap.querySelector('[name=ne_lon]').value) || null,
+      active: wrap.querySelector('[name=active]').checked ? 1 : 0,
+    };
+    try {
+      if (isNew) {
+        await fetch('/api/config/sierras', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+        });
+        showToast('Sierra creada');
+      } else {
+        await fetch(`/api/config/sierras/${sie.id}`, {
+          method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+        });
+        showToast('Sierra guardada');
+      }
+      editingSieId = null;
+      await loadSierras();
+    } catch(e) {
+      showToast('Error: ' + e.message);
+    }
+  });
+
+  return wrap;
+}
+
+document.getElementById('btn-add-sierra').addEventListener('click', () => {
+  editingSieId = 'new';
+  renderSierras();
+  setTimeout(() => document.getElementById('content').scrollTo({ top: 99999, behavior:'smooth' }), 50);
+});
+
+// ── GEO (provincias/ccaa) ────────────────────────────────────────────
+let geoLoaded = false;
+async function loadGeo() {
+  if (geoLoaded) return;
+  try {
+    const r = await fetch('/api/config/provinces');
+    const d = await r.json();
+    const render = (id, items) => {
+      const el = document.getElementById(id);
+      if (!items.length) { el.innerHTML = `<span style="color:var(--text2);font-size:12px">Sin datos</span>`; return; }
+      el.innerHTML = items.map(v => `<span class="chip">${escHtml(v)}</span>`).join('');
+    };
+    render('geo-provinces', d.provinces);
+    render('geo-ccaa', d.ccaa);
+    render('geo-zones', d.zones);
+    geoLoaded = true;
+  } catch(e) { console.error(e); }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────
+loadActivities();
+loadSierras();
+
+})();
+</script>
+</body>
+</html>

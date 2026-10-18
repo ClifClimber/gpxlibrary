@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPX Library — Gestión</title>
+  <style>
+    :root {
+      --bg:#f0f2f5; --surface:#fff; --border:#e2e8f0;
+      --header:#0f172a; --header-text:#f8fafc;
+      --text:#1e293b; --muted:#64748b; --accent:#3b82f6;
+      --hover-bg:rgba(59,130,246,.07); --active-bg:rgba(59,130,246,.12);
+      --filter-bg:#f8fafc; --input-bg:#fff;
+      --success:#16a34a; --danger:#dc2626; --warn:#d97706;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    html, body { height:100%; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); font-size:14px; line-height:1.4; display:flex; flex-direction:column; overflow:hidden; }
+
+    /* ── Sticky top block ──────────────────── */
+    #sticky-top { flex-shrink:0; }
+
+    /* ── Header ────────────────────────────── */
+    #header { height:50px; background:var(--header); color:var(--header-text); display:flex; align-items:center; padding:0 16px; gap:12px; box-shadow:0 2px 8px rgba(0,0,0,.3); z-index:200; }
+    #header-title { font-size:16px; font-weight:700; display:flex; align-items:center; gap:7px; }
+    #header-title svg { opacity:.7; }
+    #header-actions { margin-left:auto; display:flex; gap:8px; align-items:center; }
+    .hbtn { padding:5px 12px; border-radius:5px; font-size:12px; font-weight:500; cursor:pointer; border:1.5px solid; display:flex; align-items:center; gap:5px; transition:background .12s; }
+    .hbtn-outline { background:transparent; color:#94a3b8; border-color:#334155; }
+    .hbtn-outline:hover { background:#1e293b; color:white; }
+    .hbtn-primary { background:var(--accent); color:white; border-color:var(--accent); }
+    .hbtn-primary:hover { background:#2563eb; }
+    .hbtn-danger { background:transparent; color:#f87171; border-color:#7f1d1d; }
+    .hbtn-danger:hover { background:#450a0a; }
+
+    /* ── Toolbar / filters ─────────────────── */
+    #toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:10px 16px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; z-index:100; }
+    .tb-search { flex:1; min-width:160px; max-width:280px; position:relative; }
+    .tb-search input { width:100%; padding:6px 10px 6px 30px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--input-bg); color:var(--text); outline:none; }
+    .tb-search input:focus { border-color:var(--accent); }
+    .tb-search svg { position:absolute; left:8px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none; }
+    .tb-select { padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--input-bg); color:var(--text); outline:none; cursor:pointer; min-width:110px; }
+    .tb-select:focus { border-color:var(--accent); }
+    #tb-count { font-size:12px; color:var(--muted); margin-left:4px; white-space:nowrap; }
+    #tb-clear { font-size:12px; color:var(--accent); background:none; border:none; cursor:pointer; padding:2px 4px; border-radius:3px; }
+    #tb-clear:hover { background:var(--hover-bg); }
+
+    /* ── Selection bar ─────────────────────── */
+    #sel-bar { background:#eff6ff; border-bottom:1px solid #bfdbfe; padding:8px 16px; display:none; align-items:center; gap:10px; font-size:13px; z-index:99; }
+    #sel-bar.visible { display:flex; }
+    #sel-count-label { font-weight:600; color:var(--accent); }
+    #btn-bulk-edit { padding:5px 14px; background:var(--accent); color:white; border:none; border-radius:5px; font-size:12px; font-weight:500; cursor:pointer; }
+    #btn-bulk-edit:hover { background:#2563eb; }
+    #btn-deselect { padding:5px 10px; background:none; border:1.5px solid var(--border); border-radius:5px; font-size:12px; cursor:pointer; }
+    #btn-deselect:hover { background:var(--hover-bg); }
+    #btn-select-all-filter { padding:5px 10px; background:none; border:1.5px solid var(--border); border-radius:5px; font-size:12px; cursor:pointer; }
+    #btn-select-all-filter:hover { background:var(--hover-bg); }
+
+    /* ── Table ─────────────────────────────── */
+    #table-wrap { flex:1; overflow-y:auto; overflow-x:auto; padding:0 0 20px; }
+    table { width:100%; border-collapse:collapse; min-width:900px; }
+    thead { background:var(--filter-bg); position:sticky; top:0; z-index:50; }
+    thead th { padding:9px 10px; font-size:11px; font-weight:600; color:var(--muted); text-align:left; border-bottom:2px solid var(--border); white-space:nowrap; user-select:none; }
+    thead th.sortable { cursor:pointer; }
+    thead th.sortable:hover { color:var(--text); }
+    thead th.sorted-asc::after  { content:' ↑'; color:var(--accent); }
+    thead th.sorted-desc::after { content:' ↓'; color:var(--accent); }
+    th.col-cb  { width:36px; }
+    th.col-act { width:36px; }
+    th.col-cat { width:90px; }
+    th.col-activ { width:110px; }
+    th.col-prov  { width:115px; }
+    th.col-ccaa  { width:130px; }
+    th.col-sierra{ width:150px; }
+    th.col-dist  { width:65px; text-align:right; }
+    th.col-gain  { width:65px; text-align:right; }
+    th.col-date  { width:88px; }
+    th.col-notes { width:80px; }
+
+    tbody tr { border-bottom:1px solid var(--border); transition:background .08s; }
+    tbody tr:hover { background:var(--hover-bg); }
+    tbody tr.selected { background:var(--active-bg); }
+    tbody tr.editing-row { background:#fffbeb; }
+    td { padding:7px 10px; font-size:12px; vertical-align:top; }
+    td.col-name { font-weight:500; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    td.col-dist, td.col-gain { text-align:right; color:var(--muted); }
+    td.col-notes { max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-style:italic; }
+    .url-link { color:var(--accent); text-decoration:none; font-size:11px; display:inline-flex; align-items:center; gap:2px; }
+    .url-link:hover { text-decoration:underline; }
+    .map-link { color:#16a34a; text-decoration:none; font-size:11px; display:inline-flex; align-items:center; gap:2px; }
+    .map-link:hover { text-decoration:underline; }
+    .cb { cursor:pointer; width:15px; height:15px; }
+    .cat-badge { display:inline-block; padding:1px 7px; border-radius:8px; font-size:10px; font-weight:600; }
+    .act-btn { background:none; border:none; cursor:pointer; color:var(--muted); padding:1px 3px; border-radius:3px; font-size:13px; line-height:1; }
+    .act-btn:hover { color:var(--accent); background:var(--hover-bg); }
+    .empty-td { padding:40px 20px; text-align:center; color:var(--muted); font-size:13px; }
+
+    /* ── Inline edit row ───────────────────── */
+    tr.inline-edit-row td { background:#f0f9ff; padding:12px 16px; }
+    .edit-form { display:flex; flex-direction:column; gap:10px; }
+    .edit-grid  { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+    .edit-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .ef-group { display:flex; flex-direction:column; gap:3px; }
+    .ef-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+    .ef-input, .ef-select { width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:5px; font-size:12px; background:var(--input-bg); color:var(--text); outline:none; }
+    .ef-input:focus, .ef-select:focus { border-color:var(--accent); }
+    .ef-textarea { width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:5px; font-size:12px; background:var(--input-bg); color:var(--text); outline:none; resize:vertical; min-height:56px; }
+    .ef-textarea:focus { border-color:var(--accent); }
+    .ef-actions { display:flex; gap:8px; }
+    .btn-save   { padding:6px 18px; background:var(--success); color:white; border:none; border-radius:5px; font-size:12px; font-weight:600; cursor:pointer; }
+    .btn-save:hover   { background:#15803d; }
+    .btn-cancel { padding:6px 12px; background:var(--filter-bg); color:var(--text); border:1.5px solid var(--border); border-radius:5px; font-size:12px; cursor:pointer; }
+    .btn-cancel:hover { background:var(--hover-bg); }
+    .btn-save:disabled { opacity:.5; cursor:not-allowed; }
+
+    /* ── Bulk edit panel ───────────────────── */
+    #bulk-panel { position:fixed; right:0; top:0; bottom:0; width:360px; background:var(--surface); border-left:1px solid var(--border); box-shadow:-4px 0 20px rgba(0,0,0,.12); z-index:300; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .2s; }
+    #bulk-panel.open { transform:none; }
+    #bulk-header { flex-shrink:0; padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
+    #bulk-header h3 { flex:1; font-size:14px; font-weight:600; }
+    #bulk-close { background:none; border:none; cursor:pointer; color:var(--muted); font-size:20px; line-height:1; padding:0 3px; }
+    #bulk-close:hover { color:var(--text); }
+    #bulk-body { flex:1; overflow-y:auto; padding:14px 16px; display:flex; flex-direction:column; gap:12px; }
+    .bulk-field { display:flex; flex-direction:column; gap:5px; border:1px solid var(--border); border-radius:6px; padding:10px; background:var(--filter-bg); transition:border-color .12s; }
+    .bulk-field.active { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 4%,white); }
+    .bulk-field-header { display:flex; align-items:center; gap:7px; }
+    .bulk-chk { width:14px; height:14px; cursor:pointer; }
+    .bulk-lbl { font-size:12px; font-weight:600; cursor:pointer; }
+    .bulk-field input[type=text], .bulk-field select, .bulk-field textarea { width:100%; padding:5px 8px; border:1px solid var(--border); border-radius:5px; font-size:12px; background:var(--input-bg); color:var(--text); outline:none; margin-top:2px; }
+    .bulk-field input[type=text]:focus, .bulk-field select:focus, .bulk-field textarea:focus { border-color:var(--accent); }
+    .bulk-field textarea { resize:vertical; min-height:50px; }
+    .bulk-field .notes-mode { display:flex; gap:12px; font-size:11px; color:var(--muted); margin-top:4px; }
+    .bulk-field .notes-mode label { display:flex; align-items:center; gap:4px; cursor:pointer; }
+    #bulk-footer { flex-shrink:0; padding:12px 16px; border-top:1px solid var(--border); display:flex; gap:8px; }
+    #btn-bulk-apply { flex:1; padding:8px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; }
+    #btn-bulk-apply:hover { background:#2563eb; }
+    #btn-bulk-apply:disabled { opacity:.5; cursor:not-allowed; }
+    #btn-bulk-cancel { padding:8px 14px; background:var(--filter-bg); color:var(--text); border:1.5px solid var(--border); border-radius:6px; font-size:13px; cursor:pointer; }
+    #btn-bulk-cancel:hover { background:var(--hover-bg); }
+
+    /* ── Enrich overlay ────────────────────── */
+    #enrich-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:400; display:none; align-items:center; justify-content:center; }
+    #enrich-overlay.open { display:flex; }
+    #enrich-modal { background:var(--surface); border-radius:10px; padding:20px; width:520px; max-width:95vw; display:flex; flex-direction:column; gap:12px; box-shadow:0 8px 40px rgba(0,0,0,.25); }
+    #enrich-modal h3 { font-size:15px; font-weight:600; }
+    #enrich-log { background:#0f172a; color:#e2e8f0; border-radius:6px; padding:10px 12px; font-size:11px; font-family:'Cascadia Code',Consolas,monospace; height:240px; overflow-y:auto; }
+    #enrich-log .ll { line-height:1.55; }
+    #enrich-log .le { color:#f87171; }
+    #enrich-log .lp { color:#7dd3fc; }
+    #enrich-log .lo { color:#34d399; }
+    #enrich-actions { display:flex; gap:8px; }
+    #btn-enrich-start  { padding:7px 16px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; }
+    #btn-enrich-start:hover  { background:#2563eb; }
+    #btn-enrich-start:disabled { opacity:.5; cursor:not-allowed; }
+    #btn-enrich-force { padding:7px 12px; background:var(--filter-bg); color:var(--text); border:1.5px solid var(--border); border-radius:6px; font-size:12px; cursor:pointer; }
+    #btn-enrich-force:hover { background:var(--hover-bg); }
+    #btn-enrich-close { padding:7px 12px; background:var(--filter-bg); color:var(--text); border:1.5px solid var(--border); border-radius:6px; font-size:12px; cursor:pointer; margin-left:auto; }
+    #btn-enrich-close:hover { background:var(--hover-bg); }
+
+    /* ── Stats bar ──────────────────────────── */
+    #stats-bar { display:flex; gap:10px; padding:10px 16px; background:var(--surface); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+    .stat-chip { display:flex; align-items:center; gap:7px; padding:7px 14px; background:var(--bg); border:1px solid var(--border); border-radius:9px; font-size:12px; }
+    .stat-chip svg { opacity:.5; flex-shrink:0; }
+    .stat-chip-val { font-weight:700; color:var(--text); }
+    .stat-chip-lbl { color:var(--muted); }
+    .stat-chip.warn .stat-chip-val { color:var(--warn); }
+    .stat-chip.ok   .stat-chip-val { color:var(--success); }
+
+    /* ── Activity badge ─────────────────────── */
+    .act-badge { display:inline-block; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:700; white-space:nowrap; }
+    .sierra-chip { font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; display:block; }
+    .tags-chip { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:999px; font-size:10px; background:#eff6ff; color:#2563eb; border:1px solid #bfdbfe; }
+
+    /* ── Import modal ──────────────────────────── */
+    #import-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:400; display:none; align-items:center; justify-content:center; }
+    #import-overlay.open { display:flex; }
+    #import-modal { background:var(--surface); border-radius:10px; padding:20px; width:580px; max-width:96vw; display:flex; flex-direction:column; gap:12px; box-shadow:0 8px 40px rgba(0,0,0,.25); }
+    #import-modal h3 { font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; }
+    #import-log { background:#0f172a; color:#e2e8f0; border-radius:6px; padding:10px 12px; font-size:11px; font-family:'Cascadia Code',Consolas,monospace; height:280px; overflow-y:auto; }
+    #import-log .ll { line-height:1.6; display:block; }
+    #import-log .le { color:#f87171; }
+    #import-log .lw { color:#fbbf24; }
+    #import-log .lo { color:#34d399; }
+    #import-log .lp { color:#7dd3fc; }
+    #import-options { display:flex; align-items:center; gap:16px; font-size:12px; }
+    #import-options label { display:flex; align-items:center; gap:5px; cursor:pointer; color:var(--muted); }
+    #import-actions { display:flex; gap:8px; align-items:center; }
+    #btn-import-start { padding:7px 16px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; }
+    #btn-import-start:hover { background:#2563eb; }
+    #btn-import-start:disabled { opacity:.5; cursor:not-allowed; }
+    #btn-organize-files { }
+    #org-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:400; display:none; align-items:center; justify-content:center; }
+    #org-overlay.open { display:flex; }
+    #org-modal { background:var(--surface); border-radius:10px; padding:20px; width:520px; max-width:96vw; display:flex; flex-direction:column; gap:12px; box-shadow:0 8px 40px rgba(0,0,0,.25); }
+    #org-modal h3 { font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; }
+    #org-log { background:#0f172a; color:#e2e8f0; border-radius:6px; padding:10px 12px; font-size:11px; font-family:'Cascadia Code',Consolas,monospace; height:220px; overflow-y:auto; }
+    #org-log .ll { line-height:1.6; display:block; }
+    #org-actions { display:flex; gap:8px; }
+    #btn-org-start { padding:7px 16px; background:#7c3aed; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; }
+    #btn-org-start:hover { background:#6d28d9; }
+    #btn-org-start:disabled { opacity:.5; cursor:not-allowed; }
+    #btn-org-close { padding:7px 12px; background:var(--filter-bg); color:var(--text); border:1.5px solid var(--border); border-radius:6px; font-size:12px; cursor:pointer; margin-left:auto; }
+    #btn-org-close:hover { background:var(--hover-bg); }
+    #btn-import-delete-all { padding:7px 14px; background:transparent; color:#f87171; border:1.5px solid #7f1d1d; border-radius:6px; font-size:12px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:6px; }
+    #btn-import-delete-all:hover { background:#450a0a; color:white; }
+    #btn-import-close { padding:7px 12px; background:var(--filter-bg); color:var(--text); border:1.5px solid var(--border); border-radius:6px; font-size:12px; cursor:pointer; margin-left:auto; }
+    #btn-import-close:hover { background:var(--hover-bg); }
+
+    /* ── Delete-all confirm modal ───────────────── */
+    #da-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:500; display:none; align-items:center; justify-content:center; }
+    #da-overlay.open { display:flex; }
+    #da-modal { background:var(--surface); border-radius:12px; padding:24px; width:420px; max-width:95vw; box-shadow:0 8px 40px rgba(0,0,0,.4); }
+    #da-modal h3 { font-size:16px; font-weight:700; color:var(--danger); margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+    #da-modal p { font-size:13px; color:var(--muted); line-height:1.6; margin-bottom:18px; }
+    #da-actions { display:flex; gap:10px; justify-content:flex-end; }
+
+    /* ── Delete confirm modal ───────────────── */
+    #del-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:600; display:none; align-items:center; justify-content:center; }
+    #del-overlay.open { display:flex; }
+    #del-modal { background:var(--surface); border-radius:12px; padding:24px; width:420px; max-width:95vw; box-shadow:0 8px 40px rgba(0,0,0,.3); }
+    #del-modal h3 { font-size:16px; font-weight:700; margin-bottom:8px; color:var(--danger); display:flex; align-items:center; gap:8px; }
+    #del-modal p { font-size:13px; color:var(--muted); line-height:1.6; margin-bottom:18px; }
+    #del-modal strong { color:var(--text); }
+    .del-actions { display:flex; gap:10px; justify-content:flex-end; }
+    .btn-del-confirm { padding:8px 20px; background:var(--danger); color:white; border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; }
+    .btn-del-confirm:hover { background:#b91c1c; }
+    .btn-del-cancel  { padding:8px 16px; background:var(--filter-bg); color:var(--text); border:1.5px solid var(--border); border-radius:7px; font-size:13px; cursor:pointer; }
+    .btn-del-cancel:hover { background:var(--hover-bg); }
+
+    /* ── Bulk delete button ─────────────────── */
+    #btn-bulk-delete { padding:5px 14px; background:transparent; color:#f87171; border:1.5px solid #7f1d1d; border-radius:5px; font-size:12px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:5px; }
+    #btn-bulk-delete:hover { background:#450a0a; color:white; }
+
+    /* ── Toast ──────────────────────────────── */
+    #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#1e293b; color:white; padding:9px 18px; border-radius:7px; font-size:13px; z-index:500; opacity:0; transition:opacity .2s; pointer-events:none; white-space:nowrap; }
+    #toast.show { opacity:1; }
+
+    @media (max-width:700px) {
+      .edit-grid  { grid-template-columns:1fr 1fr; }
+      .edit-grid2 { grid-template-columns:1fr; }
+      #bulk-panel { width:100%; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="sticky-top">
+<header id="header">
+  <div id="header-title">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+    GPX Library — Gestión
+  </div>
+  <div id="header-actions">
+    <button class="hbtn hbtn-outline" id="btn-last-import" title="Filtrar por última importación" style="display:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Última importación
+    </button>
+    <button class="hbtn hbtn-outline" id="btn-organize-files">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      Reorganizar carpetas
+    </button>
+    <button class="hbtn hbtn-primary" id="btn-open-import">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Importar _TEMP_
+    </button>
+    <button class="hbtn hbtn-primary" id="btn-open-enrich">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+      Enriquecer datos
+    </button>
+    <a href="/config" class="hbtn hbtn-outline" style="text-decoration:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Configuración
+    </a>
+    <a href="/" class="hbtn hbtn-outline" style="text-decoration:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      Mapa
+    </a>
+  </div>
+</header>
+
+<!-- Toolbar -->
+<div id="toolbar">
+  <div class="tb-search">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" id="search-input" placeholder="Buscar nombre...">
+  </div>
+  <select class="tb-select" id="f-activity"><option value="">Todas las actividades</option></select>
+  <select class="tb-select" id="f-province"><option value="">Todas las provincias</option></select>
+  <select class="tb-select" id="f-ccaa"><option value="">Todas las CCAA</option></select>
+  <select class="tb-select" id="f-sierra"><option value="">Todas las sierras</option></select>
+  <button id="tb-clear">× Limpiar</button>
+  <span id="tb-count"></span>
+</div>
+
+<!-- Stats bar -->
+<div id="stats-bar">
+  <div class="stat-chip">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    <span class="stat-chip-val" id="st-total">—</span><span class="stat-chip-lbl">tracks</span>
+  </div>
+  <div class="stat-chip">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <span class="stat-chip-val" id="st-dist">—</span><span class="stat-chip-lbl">km totales</span>
+  </div>
+  <div class="stat-chip">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/></svg>
+    <span class="stat-chip-val" id="st-gain">—</span><span class="stat-chip-lbl">m desnivel+</span>
+  </div>
+  <div class="stat-chip" id="st-pending-chip">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span class="stat-chip-val" id="st-pending">—</span><span class="stat-chip-lbl">sin clasificar</span>
+  </div>
+</div>
+
+<!-- Selection bar -->
+<div id="sel-bar">
+  <span id="sel-count-label">0 seleccionados</span>
+  <button id="btn-bulk-edit">Editar seleccionados</button>
+  <button id="btn-bulk-delete">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+    Borrar seleccionados
+  </button>
+  <button id="btn-select-all-filter">Sel. todos los filtrados</button>
+  <button id="btn-deselect">Deseleccionar</button>
+</div>
+
+</div><!-- /sticky-top -->
+
+<!-- Reorganizar carpetas modal -->
+<div id="org-overlay">
+  <div id="org-modal">
+    <h3>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      Reorganizar carpetas
+    </h3>
+    <p style="font-size:12px;color:var(--muted);margin:0">Mueve cada GPX a <code>TracksGps/&lt;Actividad&gt;/&lt;Sierra&gt;/</code> según los valores de la base de datos, y regenera el catálogo.</p>
+    <div id="org-log"><span class="ll" style="color:#475569">Pulsa "Iniciar" para reorganizar...</span></div>
+    <div id="org-actions">
+      <button id="btn-org-start">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Iniciar
+      </button>
+      <button id="btn-org-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import from _TEMP_ modal -->
+<div id="import-overlay">
+  <div id="import-modal">
+    <h3>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Importar desde TracksGps/_TEMP_
+    </h3>
+    <div id="import-log"><span class="ll" style="color:#64748b">Pulsa "Iniciar" para comenzar la importación...</span></div>
+    <div id="import-options">
+      <label><input type="checkbox" id="import-force"> Reimportar aunque ya existan (--force)</label>
+    </div>
+    <div id="import-actions">
+      <button id="btn-import-start">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Iniciar importación
+      </button>
+      <button id="btn-import-delete-all">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        Borrar todo
+      </button>
+      <button id="btn-import-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete-all confirm modal -->
+<div id="da-overlay">
+  <div id="da-modal">
+    <h3>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Borrar TODOS los tracks
+    </h3>
+    <p>Esto eliminará <strong>todos los tracks</strong> de la base de datos y borrará los archivos GPX del disco (salvo los de <code>_TEMP_</code>).<br><br>Esta acción <strong>no se puede deshacer</strong>.</p>
+    <div id="da-actions">
+      <button class="btn-del-cancel" id="da-cancel">Cancelar</button>
+      <button class="btn-del-confirm" id="da-confirm">Sí, borrar todo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div id="del-overlay">
+  <div id="del-modal">
+    <h3>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Borrar track
+    </h3>
+    <p id="del-msg">¿Seguro que quieres borrar este track?</p>
+    <div class="del-actions">
+      <button class="btn-del-cancel" id="del-cancel">Cancelar</button>
+      <button class="btn-del-confirm" id="del-confirm">Sí, borrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Table -->
+<div id="table-wrap">
+  <table id="tracks-table">
+    <thead>
+      <tr>
+        <th class="col-cb"><input type="checkbox" id="cb-all" class="cb"></th>
+        <th class="sortable" data-col="name">Nombre</th>
+        <th class="col-activ sortable" data-col="activity">Actividad</th>
+        <th class="col-prov sortable" data-col="province">Provincia</th>
+        <th class="col-ccaa sortable" data-col="ccaa">CCAA</th>
+        <th class="col-sierra sortable" data-col="sierra">Sierra / Zona</th>
+        <th class="col-dist sortable" data-col="distance" style="text-align:right">Dist.</th>
+        <th class="col-gain sortable" data-col="elevation_gain" style="text-align:right">D+</th>
+        <th class="col-date sortable" data-col="date">Fecha</th>
+        <th class="col-notes">Notas</th>
+        <th style="width:50px">URL</th>
+        <th style="width:30px">Tags</th>
+        <th class="col-act" style="width:72px"></th>
+      </tr>
+    </thead>
+    <tbody id="tracks-body">
+      <tr><td colspan="13" class="empty-td">Cargando...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Bulk edit panel -->
+<div id="bulk-panel">
+  <div id="bulk-header">
+    <h3 id="bulk-title">Editar seleccionados</h3>
+    <button id="bulk-close">×</button>
+  </div>
+  <div id="bulk-body">
+    <div class="bulk-field" id="bf-activity">
+      <div class="bulk-field-header"><input type="checkbox" class="bulk-chk" id="bc-activity"><label class="bulk-lbl" for="bc-activity">Actividad</label></div>
+      <select id="bv-activity" class="bf-ctrl" disabled></select>
+    </div>
+    <div class="bulk-field" id="bf-province">
+      <div class="bulk-field-header"><input type="checkbox" class="bulk-chk" id="bc-province"><label class="bulk-lbl" for="bc-province">Provincia</label></div>
+      <input type="text" id="bv-province" class="bf-ctrl" placeholder="Ej: Ávila" disabled>
+    </div>
+    <div class="bulk-field" id="bf-ccaa">
+      <div class="bulk-field-header"><input type="checkbox" class="bulk-chk" id="bc-ccaa"><label class="bulk-lbl" for="bc-ccaa">CCAA</label></div>
+      <select id="bv-ccaa" class="bf-ctrl" disabled></select>
+    </div>
+    <div class="bulk-field" id="bf-sierra">
+      <div class="bulk-field-header"><input type="checkbox" class="bulk-chk" id="bc-sierra"><label class="bulk-lbl" for="bc-sierra">Sierra / Zona</label></div>
+      <input type="text" id="bv-sierra" class="bf-ctrl" placeholder="Ej: Sierra de Gredos" disabled>
+    </div>
+    <div class="bulk-field" id="bf-url">
+      <div class="bulk-field-header"><input type="checkbox" class="bulk-chk" id="bc-url"><label class="bulk-lbl" for="bc-url">URL (Wikiloc / fuente)</label></div>
+      <input type="url" id="bv-url" class="bf-ctrl" placeholder="https://www.wikiloc.com/..." disabled>
+    </div>
+    <div class="bulk-field" id="bf-notes">
+      <div class="bulk-field-header"><input type="checkbox" class="bulk-chk" id="bc-notes"><label class="bulk-lbl" for="bc-notes">Notas</label></div>
+      <textarea id="bv-notes" class="bf-ctrl" rows="3" placeholder="Texto de la nota..." disabled></textarea>
+      <div class="notes-mode">
+        <label><input type="radio" name="notes-mode" value="replace" checked> Reemplazar</label>
+        <label><input type="radio" name="notes-mode" value="append"> Añadir al final</label>
+      </div>
+    </div>
+  </div>
+  <div id="bulk-footer">
+    <button id="btn-bulk-apply" disabled>Aplicar</button>
+    <button id="btn-bulk-cancel">Cancelar</button>
+  </div>
+</div>
+
+<!-- Enrich overlay -->
+<div id="enrich-overlay">
+  <div id="enrich-modal">
+    <h3>Enriquecer datos geográficos</h3>
+    <p style="font-size:12px;color:var(--muted)">
+      Llama a Nominatim (OpenStreetMap) para obtener provincia y CCAA. Infiere actividad y sierra localmente (sin red). Velocidad: ~1 track/segundo para los que necesiten Nominatim.
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px;background:var(--filter-bg);border:1px solid var(--border);border-radius:6px;padding:9px 12px;align-items:center;">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;">
+        <input type="radio" name="enrich-scope" value="pending" checked>
+        Solo pendientes <span style="color:var(--muted)">(sin datos)</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;">
+        <input type="radio" name="enrich-scope" value="selected" id="enrich-sel-radio">
+        Solo seleccionados <span id="enrich-sel-count" style="color:var(--muted)"></span>
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;">
+        <input type="radio" name="enrich-scope" value="all">
+        Todos (forzar re-enriquecer)
+      </label>
+    </div>
+    <div id="enrich-log"><span style="color:#475569">Elige el alcance y pulsa "Iniciar"...</span></div>
+    <div id="enrich-actions">
+      <button id="btn-enrich-start">▶ Iniciar</button>
+      <button id="btn-enrich-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+let ACTIVITIES = ['Mtb','Gravel','Bikepacking','Ciclismo de carretera','Trail Running','Running','Senderismo','Escalada','Esquí de montaña','Kayak','Otro'];
+let ACT_COLORS = {
+  'Senderismo':           '#16a34a',
+  'Trail Running':        '#0284c7',
+  'Running':              '#0ea5e9',
+  'Mtb':                  '#7c3aed',
+  'Gravel':               '#b45309',
+  'Bikepacking':          '#92400e',
+  'Ciclismo de carretera':'#0369a1',
+  'Escalada':             '#dc2626',
+  'Esquí de montaña':     '#0e7490',
+  'Kayak':                '#0369a1',
+  'Otro':                 '#64748b',
+};
+const CCAAS = ['Andalucía','Aragón','Principado de Asturias','Islas Baleares','Canarias','Cantabria','Castilla-La Mancha','Castilla y León','Cataluña','Ceuta','Comunidad de Madrid','Comunidad Foral de Navarra','Comunitat Valenciana','Extremadura','Galicia','La Rioja','Melilla','País Vasco','Región de Murcia','Portugal','Francia','Andorra'];
+
+const PALETTE = ['#e67e22','#27ae60','#8e44ad','#2980b9','#e74c3c','#16a085','#f39c12','#c0392b','#1abc9c','#d35400','#2c3e50','#7f8c8d'];
+let catColorMap = {};
+let catColorIdx = 0;
+try { catColorMap = JSON.parse(localStorage.getItem('gpx-cat-colors') || '{}'); } catch {}
+function catColor(cat) {
+  if (!catColorMap[cat]) catColorMap[cat] = PALETTE[catColorIdx++ % PALETTE.length];
+  return catColorMap[cat];
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function showToast(msg, ms=2200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// Dispara rebuild del catálogo y señaliza al mapa que actualice
+function triggerCatalogRebuild() {
+  fetch('/api/db/export', { method: 'POST' }).catch(() => {});
+  // Señaliza a otras pestañas (index.html) que el catálogo cambiará
+  setTimeout(() => localStorage.setItem('catalog_ts', Date.now()), 2500);
+}
+
+// ── State ──────────────────────────────────────────────────────────
+let allTracks = [];
+let filtered  = [];
+let selected  = new Set();
+let editingId = null;
+let sort      = { col:'name', dir:'asc' };
+
+// ── Load tracks ────────────────────────────────────────────────────
+let lastImportFilter = false; // true = mostrar solo última importación
+
+async function loadActivities() {
+  try {
+    const r = await fetch('/api/config/activities');
+    if (!r.ok) return;
+    const acts = await r.json();
+    ACTIVITIES = acts.filter(a => a.active).sort((a,b) => a.sort_order - b.sort_order).map(a => a.name);
+    ACT_COLORS = {};
+    acts.forEach(a => { if (a.color) ACT_COLORS[a.name] = a.color; });
+  } catch {}
+}
+
+async function loadTracks() {
+  await loadActivities();
+  try {
+    const r = await fetch('/api/tracks');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    allTracks = await r.json();
+    // Colors now driven by activity (ACT_COLORS), not category
+
+    // Detectar si hay importaciones recientes para mostrar el botón
+    if (allTracks.length > 0) {
+      const lastDate = allTracks.map(t => t.imported_at).filter(Boolean).sort().at(-1);
+      document.getElementById('btn-last-import').style.display = lastDate ? '' : 'none';
+    }
+
+    populateFilters();
+    applyFilters();
+    updateStats();
+  } catch(e) {
+    document.getElementById('tracks-body').innerHTML =
+      `<tr><td colspan="13" class="empty-td">⚠ No se pudo cargar. Inicia el servidor con <code>npm start</code>.<br><small>${escHtml(e.message)}</small></td></tr>`;
+  }
+}
+
+// ── Filters ────────────────────────────────────────────────────────
+function populateFilters() {
+  const unique = (key) => [...new Set(allTracks.map(t=>t[key]).filter(Boolean))].sort();
+  const fill   = (id, vals) => {
+    const sel = document.getElementById(id);
+    const first = sel.options[0].outerHTML;
+    sel.innerHTML = first + vals.map(v=>`<option value="${escHtml(v)}">${escHtml(v)}</option>`).join('');
+  };
+  fill('f-activity', unique('activity'));
+  fill('f-province', unique('province'));
+  fill('f-ccaa',     unique('ccaa'));
+  fill('f-sierra',   unique('sierra'));
+
+  // Bulk activity select
+  const bvAct = document.getElementById('bv-activity');
+  bvAct.innerHTML = '<option value="">—</option>' + ACTIVITIES.map(a=>`<option>${escHtml(a)}</option>`).join('');
+  const bvCcaa = document.getElementById('bv-ccaa');
+  bvCcaa.innerHTML = '<option value="">—</option>' + CCAAS.map(c=>`<option>${escHtml(c)}</option>`).join('');
+}
+
+function applyFilters() {
+  const q    = document.getElementById('search-input').value.trim().toLowerCase();
+  const fAct = document.getElementById('f-activity').value;
+  const fPro = document.getElementById('f-province').value;
+  const fCCA = document.getElementById('f-ccaa').value;
+  const fSie = document.getElementById('f-sierra').value;
+
+  let lastSessionDate = null;
+  if (lastImportFilter && allTracks.length > 0) {
+    const maxDate = allTracks.map(t => t.imported_at).filter(Boolean).sort().at(-1);
+    if (maxDate) {
+      const maxMs = new Date(maxDate.replace(' ', 'T')).getTime();
+      const SESSION_MS = 60 * 60 * 1000; // 1 hora
+      lastSessionDate = t => {
+        if (!t.imported_at) return false;
+        const tMs = new Date(t.imported_at.replace(' ', 'T')).getTime();
+        return (maxMs - tMs) <= SESSION_MS;
+      };
+    }
+  }
+
+  filtered = allTracks.filter(t =>
+    (!q    || t.name.toLowerCase().includes(q)) &&
+    (!fAct || t.activity === fAct) &&
+    (!fPro || t.province === fPro) &&
+    (!fCCA || t.ccaa     === fCCA) &&
+    (!fSie || t.sierra   === fSie) &&
+    (!lastSessionDate || lastSessionDate(t))
+  );
+  sortFiltered();
+  renderTable();
+  document.getElementById('tb-count').textContent = `${filtered.length} de ${allTracks.length}`;
+  updateSelBar();
+}
+
+function sortFiltered() {
+  const { col, dir } = sort;
+  filtered.sort((a, b) => {
+    const av = a[col] ?? '', bv = b[col] ?? '';
+    const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'es');
+    return dir === 'asc' ? cmp : -cmp;
+  });
+}
+
+// ── Render table ───────────────────────────────────────────────────
+function renderTable() {
+  const tbody = document.getElementById('tracks-body');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="13" class="empty-td">Sin resultados. Ajusta los filtros.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(t => {
+    const c  = ACT_COLORS[t.activity] || '#64748b';
+    const ch = selected.has(t.id) ? 'checked' : '';
+    const selCls = selected.has(t.id) ? 'selected' : '';
+    const edCls  = editingId === t.id ? 'editing-row' : '';
+    const actColor = ACT_COLORS[t.activity] || '#64748b';
+    const actBadge = t.activity
+      ? `<span class="act-badge" style="background:${actColor}1a;color:${actColor};border:1px solid ${actColor}44">${escHtml(t.activity)}</span>`
+      : '<span style="color:#cbd5e1;font-size:11px">—</span>';
+    const sierraCell = t.sierra
+      ? `<span class="sierra-chip" title="${escHtml(t.sierra)}">⛰ ${escHtml(t.sierra)}</span>`
+      : '<span style="color:#cbd5e1;font-size:11px">—</span>';
+    let tags = []; try { tags = t.tags ? JSON.parse(t.tags) : []; } catch {}
+    const tagsCell = tags.length
+      ? `<span class="tags-chip">${tags.length} tag${tags.length>1?'s':''}</span>`
+      : '';
+    return `<tr class="${selCls} ${edCls}" data-id="${t.id}">
+      <td class="col-cb"><input type="checkbox" class="cb row-cb" data-id="${t.id}" ${ch}></td>
+      <td class="col-name" title="${escHtml(t.file||t.name)}">
+        <a href="/track?id=${t.id}" target="_blank" class="track-detail-link" style="color:inherit;text-decoration:none;font-weight:500">${escHtml(t.name)}</a>
+        <span style="display:block;font-size:9px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px" title="${escHtml(t.file||'')}">${escHtml((t.file||'').replace('TracksGps/',''))}</span>
+      </td>
+      <td>${actBadge}</td>
+      <td style="font-size:11px;color:var(--muted)">${escHtml(t.province||'—')}</td>
+      <td style="font-size:11px;color:var(--muted)">${escHtml(t.ccaa||'—')}</td>
+      <td>${sierraCell}</td>
+      <td class="col-dist">${t.distance ? `<strong>${t.distance}</strong><span style="font-size:10px;color:var(--muted)"> km</span>` : '—'}</td>
+      <td class="col-gain">${t.elevation_gain ? `<strong>${Math.round(t.elevation_gain)}</strong><span style="font-size:10px;color:var(--muted)"> m</span>` : '—'}</td>
+      <td style="font-size:11px;color:var(--muted)">${t.date ? t.date.substring(0,10) : '—'}</td>
+      <td class="col-notes" title="${escHtml(t.notes||'')}">${escHtml(t.notes||'')}</td>
+      <td>${t.url ? `<a href="${escHtml(t.url)}" target="_blank" class="url-link" title="${escHtml(t.url)}">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        URL</a>` : ''}</td>
+      <td>${tagsCell}</td>
+      <td class="col-act" style="white-space:nowrap">
+        <button class="act-btn edit-btn" data-id="${t.id}" title="Editar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="act-btn del-btn" data-id="${t.id}" data-name="${escHtml(t.name)}" title="Borrar" style="color:#f87171">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Inject inline edit row if editingId is in filtered
+  if (editingId !== null) {
+    const t = allTracks.find(x => x.id === editingId);
+    if (t && filtered.find(x => x.id === editingId)) injectEditRow(t);
+  }
+
+  // Events
+  tbody.querySelectorAll('.row-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const id = parseInt(cb.dataset.id);
+      cb.checked ? selected.add(id) : selected.delete(id);
+      cb.closest('tr').classList.toggle('selected', cb.checked);
+      updateSelBar();
+      updateCbAll();
+    });
+  });
+  tbody.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.id);
+      editingId = editingId === id ? null : id;
+      renderTable();
+    });
+  });
+  tbody.querySelectorAll('.del-btn').forEach(btn => {
+    btn.addEventListener('click', () => confirmDelete([parseInt(btn.dataset.id)], btn.dataset.name));
+  });
+}
+
+// ── Inline edit ────────────────────────────────────────────────────
+function injectEditRow(t) {
+  const tbody = document.getElementById('tracks-body');
+  const targetRow = tbody.querySelector(`tr[data-id="${t.id}"]`);
+  if (!targetRow) return;
+
+  const actOpts = ACTIVITIES.map(a => `<option${t.activity===a?' selected':''}>${escHtml(a)}</option>`).join('');
+  const ccaaOpts = CCAAS.map(c => `<option${t.ccaa===c?' selected':''}>${escHtml(c)}</option>`).join('');
+
+  const row = document.createElement('tr');
+  row.className = 'inline-edit-row';
+  row.dataset.editFor = t.id;
+  row.innerHTML = `<td colspan="13">
+    <form class="edit-form" id="ef-${t.id}">
+      <div class="edit-grid">
+        <div class="ef-group"><label class="ef-label">Nombre</label>
+          <input class="ef-input" name="name" value="${escHtml(t.name||'')}"></div>
+        <div class="ef-group"><label class="ef-label">Actividad</label>
+          <select class="ef-select" name="activity"><option value="">—</option>${actOpts}</select></div>
+        <div class="ef-group"><label class="ef-label">Provincia</label>
+          <input class="ef-input" name="province" value="${escHtml(t.province||'')}"></div>
+        <div class="ef-group"><label class="ef-label">CCAA</label>
+          <select class="ef-select" name="ccaa"><option value="">—</option>${ccaaOpts}</select></div>
+        <div class="ef-group"><label class="ef-label">Sierra / Zona</label>
+          <input class="ef-input" name="sierra" value="${escHtml(t.sierra||'')}"></div>
+      </div>
+      <div class="edit-grid2">
+        <div class="ef-group"><label class="ef-label">URL (Wikiloc / fuente)</label>
+          <input class="ef-input" name="url" type="url" placeholder="https://www.wikiloc.com/..." value="${escHtml(t.url||'')}">
+        </div>
+        <div class="ef-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:8px">
+          ${t.url ? `<a href="${escHtml(t.url)}" target="_blank" class="url-link" style="font-size:12px;margin-bottom:7px">↗ Abrir URL</a>` : ''}
+          <a href="/track?id=${t.id}" target="_blank" class="map-link" style="font-size:12px;margin-bottom:7px">🗺 Ver detalle</a>
+        </div>
+      </div>
+      <div class="ef-group"><label class="ef-label">Notas</label>
+        <textarea class="ef-textarea" name="notes">${escHtml(t.notes||'')}</textarea></div>
+      <div class="ef-group" style="margin-top:2px">
+        <label class="ef-label">Ruta física del archivo</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <code style="font-size:11px;background:#f1f5f9;padding:4px 8px;border-radius:4px;flex:1;overflow:auto;white-space:nowrap;color:#475569">${escHtml(t.file||'')}</code>
+          <a href="#" class="url-link ef-file-link" data-file="${escHtml(t.file||'')}" title="Abrir carpeta" style="white-space:nowrap">📂 Carpeta</a>
+          <button type="button" class="btn-cancel ef-move-toggle" style="font-size:11px;padding:4px 10px">Mover…</button>
+        </div>
+        <div class="ef-move-box" style="display:none;margin-top:8px;padding:10px;background:#f8fafc;border:1px dashed var(--border);border-radius:6px;display:none">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Mover archivo a carpeta</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="ef-group"><label class="ef-label">Actividad (carpeta principal)</label>
+              <input class="ef-input ef-move-act"  placeholder="Senderismo" value="${escHtml(t.activity||'')}"></div>
+            <div class="ef-group"><label class="ef-label">Sierra / Zona (subcarpeta)</label>
+              <input class="ef-input ef-move-zone" placeholder="Sierra de Gredos" value="${escHtml(t.zone||'')}"></div>
+          </div>
+          <button type="button" class="btn-save ef-move-btn" style="margin-top:8px;background:#7c3aed;border-color:#7c3aed">Mover archivo</button>
+          <span class="ef-move-status" style="font-size:11px;margin-left:8px;color:var(--muted)"></span>
+        </div>
+      </div>
+      <div class="ef-actions">
+        <button type="submit" class="btn-save">Guardar metadatos</button>
+        <button type="button" class="btn-cancel">Cancelar</button>
+      </div>
+    </form>
+  </td>`;
+
+  targetRow.after(row);
+
+  row.querySelector('.btn-cancel:not(.ef-move-toggle):not(.ef-move-btn)').addEventListener('click', () => { editingId = null; renderTable(); });
+
+  // Open folder link
+  row.querySelector('.ef-file-link').addEventListener('click', e => {
+    e.preventDefault();
+    const file = e.currentTarget.dataset.file;
+    // Convert relative path to absolute file:// URL for parent folder
+    const abs = 'D:/proyectos/gpxlibrary/' + file.replace(/[^/]+$/, '');
+    window.open('file:///' + abs.replace(/\//g, '/'), '_blank');
+  });
+
+  // Toggle move box
+  row.querySelector('.ef-move-toggle').addEventListener('click', () => {
+    const box = row.querySelector('.ef-move-box');
+    box.style.display = box.style.display === 'none' || !box.style.display ? 'block' : 'none';
+  });
+
+  // Move file
+  row.querySelector('.ef-move-btn').addEventListener('click', async () => {
+    const act    = row.querySelector('.ef-move-act').value.trim();
+    const zone   = row.querySelector('.ef-move-zone').value.trim();
+    const status = row.querySelector('.ef-move-status');
+    if (!act) { status.textContent = '⚠ Introduce la actividad'; return; }
+    status.textContent = 'Moviendo…';
+    try {
+      const r = await fetch(`/api/tracks/${t.id}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: act, zone: zone || null }),
+      });
+      if (!r.ok) { const err = await r.text(); throw new Error(err); }
+      const data = await r.json();
+      status.textContent = '✓ Movido a ' + data.file;
+      t.file = data.file;
+      t.activity = act;
+      t.zone = zone || null;
+      row.querySelector('.ef-file-link').dataset.file = data.file;
+      row.querySelector('code').textContent = data.file;
+      triggerCatalogRebuild();
+      showToast('✓ Archivo movido');
+    } catch (e) {
+      status.textContent = '✗ ' + e.message;
+    }
+  });
+  row.querySelector(`#ef-${t.id}`).addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {};
+    for (const [k, v] of fd.entries()) body[k] = v;
+    const btn = e.target.querySelector('.btn-save');
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    const oldActivity = t.activity;
+    const oldSierra   = t.sierra;
+    try {
+      const r = await fetch(`/api/tracks/${t.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      Object.assign(t, body);
+
+      // Auto-mover archivo si cambia actividad o sierra
+      const newAct    = body.activity || t.activity;
+      const newSierra = body.sierra   || t.sierra;
+      let moved = false;
+      if (newAct && (newAct !== oldActivity || newSierra !== oldSierra)) {
+        try {
+          const mr = await fetch(`/api/tracks/${t.id}/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: newAct, zone: newSierra || null }),
+          });
+          if (mr.ok) {
+            const md = await mr.json();
+            t.file = md.file;
+            // Update the file path display in the row (will be re-rendered)
+            moved = true;
+          }
+        } catch {}
+        triggerCatalogRebuild();
+      }
+
+      editingId = null;
+      populateFilters();
+      applyFilters();
+      showToast(moved ? '✓ Guardado · archivo movido a nueva carpeta' : '✓ Guardado');
+    } catch(err) {
+      btn.disabled = false; btn.textContent = 'Guardar metadatos';
+      showToast('Error: ' + err.message, 4000);
+    }
+  });
+}
+
+// ── Selection helpers ──────────────────────────────────────────────
+function updateSelBar() {
+  const bar = document.getElementById('sel-bar');
+  const n   = selected.size;
+  document.getElementById('sel-count-label').textContent = `${n} seleccionado${n!==1?'s':''}`;
+  bar.classList.toggle('visible', n > 0);
+}
+function updateCbAll() {
+  const allCb = document.getElementById('cb-all');
+  const visIds = filtered.map(t=>t.id);
+  const allSel = visIds.length > 0 && visIds.every(id => selected.has(id));
+  allCb.checked = allSel;
+  allCb.indeterminate = !allSel && visIds.some(id => selected.has(id));
+}
+
+document.getElementById('cb-all').addEventListener('change', e => {
+  filtered.forEach(t => e.target.checked ? selected.add(t.id) : selected.delete(t.id));
+  renderTable(); updateSelBar();
+});
+document.getElementById('btn-deselect').addEventListener('click', () => { selected.clear(); renderTable(); updateSelBar(); });
+document.getElementById('btn-select-all-filter').addEventListener('click', () => {
+  filtered.forEach(t => selected.add(t.id)); renderTable(); updateSelBar(); updateCbAll();
+});
+
+// ── Sort ───────────────────────────────────────────────────────────
+document.querySelectorAll('thead th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sort.col === col) sort.dir = sort.dir === 'asc' ? 'desc' : 'asc';
+    else { sort.col = col; sort.dir = 'asc'; }
+    document.querySelectorAll('thead th').forEach(h => h.classList.remove('sorted-asc','sorted-desc'));
+    th.classList.add(sort.dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    sortFiltered(); renderTable();
+  });
+});
+
+// ── Filter events ──────────────────────────────────────────────────
+['search-input','f-activity','f-province','f-ccaa','f-sierra'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', applyFilters);
+});
+document.getElementById('tb-clear').addEventListener('click', () => {
+  document.getElementById('search-input').value = '';
+  ['f-activity','f-province','f-ccaa','f-sierra'].forEach(id => document.getElementById(id).value = '');
+  applyFilters();
+});
+
+// ── Bulk edit panel ────────────────────────────────────────────────
+function openBulkPanel() {
+  const n = selected.size;
+  document.getElementById('bulk-title').textContent = `Editar ${n} track${n!==1?'s':''} seleccionado${n!==1?'s':''}`;
+  document.getElementById('bulk-panel').classList.add('open');
+}
+
+document.getElementById('btn-bulk-edit').addEventListener('click', openBulkPanel);
+document.getElementById('bulk-close').addEventListener('click', closeBulkPanel);
+document.getElementById('btn-bulk-cancel').addEventListener('click', closeBulkPanel);
+function closeBulkPanel() { document.getElementById('bulk-panel').classList.remove('open'); }
+
+// Enable/disable bulk fields when checkbox changes
+document.querySelectorAll('.bulk-chk').forEach(chk => {
+  const fieldId = chk.id.replace('bc-','');
+  const ctrl    = document.getElementById('bv-' + fieldId);
+  const card    = document.getElementById('bf-' + fieldId);
+  chk.addEventListener('change', () => {
+    ctrl.disabled = !chk.checked;
+    card.classList.toggle('active', chk.checked);
+    updateBulkApplyBtn();
+  });
+});
+
+function updateBulkApplyBtn() {
+  const any = [...document.querySelectorAll('.bulk-chk')].some(c => c.checked);
+  document.getElementById('btn-bulk-apply').disabled = !any || selected.size === 0;
+}
+
+document.getElementById('btn-bulk-apply').addEventListener('click', async () => {
+  const fields = {};
+  let notesAppend = false;
+  document.querySelectorAll('.bulk-chk').forEach(chk => {
+    if (!chk.checked) return;
+    const fieldId = chk.id.replace('bc-','');
+    fields[fieldId] = document.getElementById('bv-' + fieldId).value;
+  });
+  if (fields.notes !== undefined) {
+    notesAppend = document.querySelector('input[name="notes-mode"]:checked')?.value === 'append';
+  }
+  const ids = [...selected];
+  const btn = document.getElementById('btn-bulk-apply');
+  btn.disabled = true; btn.textContent = 'Aplicando…';
+  try {
+    const r = await fetch('/api/tracks/bulk-update', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ ids, fields, notesAppend })
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    // Update local data
+    for (const t of allTracks) {
+      if (selected.has(t.id)) Object.assign(t, fields);
+    }
+    closeBulkPanel();
+    populateFilters();
+    applyFilters();
+    showToast(`✓ ${data.updated} tracks actualizados`);
+  } catch(err) {
+    showToast('Error: ' + err.message, 4000);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Aplicar';
+  }
+});
+
+// ── Enrich overlay ─────────────────────────────────────────────────
+document.getElementById('btn-open-enrich').addEventListener('click', () => {
+  const n = selected.size;
+  const selRadio = document.getElementById('enrich-sel-radio');
+  selRadio.disabled = n === 0;
+  document.getElementById('enrich-sel-count').textContent = n > 0 ? `(${n} seleccionados)` : '(ninguno seleccionado)';
+  if (n === 0 && document.querySelector('input[name="enrich-scope"]:checked')?.value === 'selected') {
+    document.querySelector('input[name="enrich-scope"][value="pending"]').checked = true;
+  }
+  document.getElementById('enrich-overlay').classList.add('open');
+  document.getElementById('enrich-log').innerHTML = '<span style="color:#475569">Elige el alcance y pulsa "Iniciar"...</span>';
+});
+document.getElementById('btn-enrich-close').addEventListener('click', () => {
+  document.getElementById('enrich-overlay').classList.remove('open');
+  loadTracks();
+});
+
+async function runEnrich(scope) {
+  const log = document.getElementById('enrich-log');
+  log.innerHTML = '';
+  let url = '/api/db/enrich';
+  if (scope === 'all') url += '?force=1';
+  else if (scope === 'selected') url += '?ids=' + [...selected].join(',');
+  document.getElementById('btn-enrich-start').disabled = true;
+
+  function appendLine(text, cls='') {
+    const d = document.createElement('div');
+    d.className = 'll ' + cls;
+    d.textContent = text;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  try {
+    const resp = await fetch(url, { method:'POST' });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream:true });
+      const evts = buf.split('\n\n'); buf = evts.pop();
+      for (const ev of evts) {
+        const m = ev.match(/^data: (.+)$/m);
+        if (!m) continue;
+        let obj; try { obj = JSON.parse(m[1]); } catch { continue; }
+        if (obj.type === 'start') continue;
+        if (obj.type === 'done') {
+          appendLine(obj.code === 0 ? '✓ Completado.' : `✗ Salió con código ${obj.code}`, obj.code===0?'lo':'le');
+          break;
+        }
+        const cls = obj.type==='error' ? 'le' : obj.type==='progress' ? 'lp' : '';
+        appendLine(obj.text || '', cls);
+      }
+    }
+  } catch(e) {
+    appendLine('✗ ' + e.message, 'le');
+  } finally {
+    document.getElementById('btn-enrich-start').disabled = false;
+  }
+}
+
+document.getElementById('btn-enrich-start').addEventListener('click', () => {
+  const scope = document.querySelector('input[name="enrich-scope"]:checked')?.value || 'pending';
+  runEnrich(scope);
+});
+document.getElementById('enrich-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('enrich-overlay')) {
+    document.getElementById('enrich-overlay').classList.remove('open');
+    loadTracks();
+  }
+});
+
+// ── Import from _TEMP_ ────────────────────────────────────────────
+document.getElementById('btn-open-import').addEventListener('click', () => {
+  document.getElementById('import-overlay').classList.add('open');
+  document.getElementById('import-log').innerHTML = '<span class="ll" style="color:#475569">Pulsa "Iniciar" para importar archivos de TracksGps/_TEMP_...</span>';
+  document.getElementById('btn-import-start').disabled = false;
+});
+document.getElementById('btn-import-close').addEventListener('click', () => {
+  document.getElementById('import-overlay').classList.remove('open');
+  loadTracks();
+});
+document.getElementById('import-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('import-overlay')) {
+    document.getElementById('import-overlay').classList.remove('open');
+    loadTracks();
+  }
+});
+
+async function runImport() {
+  const log   = document.getElementById('import-log');
+  const force = document.getElementById('import-force').checked;
+  const btn   = document.getElementById('btn-import-start');
+  log.innerHTML = '';
+  btn.disabled  = true;
+
+  function line(text, cls = '') {
+    const d = document.createElement('span');
+    d.className = 'll ' + cls;
+    d.textContent = text;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  try {
+    const url  = '/api/db/import-temp' + (force ? '?force=1' : '');
+    const resp = await fetch(url, { method: 'POST' });
+    const reader = resp.body.getReader();
+    const dec    = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const evts = buf.split('\n\n'); buf = evts.pop();
+      for (const ev of evts) {
+        const m = ev.match(/^data: (.+)$/m);
+        if (!m) continue;
+        let obj; try { obj = JSON.parse(m[1]); } catch { continue; }
+        if (obj.type === 'start') continue;
+        if (obj.type === 'done') {
+          line(obj.code === 0 ? '✓ Importación completada.' : `✗ Código de salida ${obj.code}`, obj.code === 0 ? 'lo' : 'le');
+          // Regenera catálogo en background
+          triggerCatalogRebuild();
+          break;
+        }
+        const cls = obj.type === 'error' ? 'le' : obj.type === 'warn' ? 'lw' : obj.text?.startsWith('✓') ? 'lo' : obj.text?.startsWith('⚠') ? 'lw' : '';
+        line(obj.text || '', cls);
+      }
+    }
+  } catch (e) {
+    line('✗ ' + e.message, 'le');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('btn-import-start').addEventListener('click', runImport);
+
+// ── Reorganizar carpetas ───────────────────────────────────────────
+document.getElementById('btn-organize-files').addEventListener('click', () => {
+  document.getElementById('org-overlay').classList.add('open');
+  document.getElementById('org-log').innerHTML = '<span class="ll" style="color:#475569">Pulsa "Iniciar" para reorganizar los archivos...</span>';
+  document.getElementById('btn-org-start').disabled = false;
+});
+document.getElementById('btn-org-close').addEventListener('click', () => {
+  document.getElementById('org-overlay').classList.remove('open');
+  loadTracks();
+});
+document.getElementById('org-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('org-overlay')) {
+    document.getElementById('org-overlay').classList.remove('open');
+    loadTracks();
+  }
+});
+document.getElementById('btn-org-start').addEventListener('click', async () => {
+  const log = document.getElementById('org-log');
+  const btn = document.getElementById('btn-org-start');
+  log.innerHTML = '';
+  btn.disabled = true;
+
+  function line(text, cls = '') {
+    const d = document.createElement('span');
+    d.className = 'll ' + cls;
+    d.textContent = text;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  try {
+    const resp   = await fetch('/api/db/organize-files', { method: 'POST' });
+    const reader = resp.body.getReader();
+    const dec    = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const evts = buf.split('\n\n'); buf = evts.pop();
+      for (const ev of evts) {
+        const m = ev.match(/^data: (.+)$/m);
+        if (!m) continue;
+        let obj; try { obj = JSON.parse(m[1]); } catch { continue; }
+        if (obj.type === 'start') continue;
+        if (obj.type === 'done') {
+          line(obj.code === 0 ? '✓ Reorganización completada.' : `✗ Error (código ${obj.code})`, obj.code === 0 ? 'lo' : 'le');
+          triggerCatalogRebuild();
+          break;
+        }
+        const cls = obj.type === 'error' ? 'le' : obj.type === 'warn' ? 'lw' : obj.text?.startsWith('✓') ? 'lo' : '';
+        line(obj.text || '', cls);
+      }
+    }
+  } catch (e) {
+    line('✗ ' + e.message, 'le');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// "Borrar todo" desde import modal → abre confirm
+document.getElementById('btn-import-delete-all').addEventListener('click', () => {
+  document.getElementById('da-overlay').classList.add('open');
+});
+document.getElementById('da-cancel').addEventListener('click', () => {
+  document.getElementById('da-overlay').classList.remove('open');
+});
+document.getElementById('da-confirm').addEventListener('click', async () => {
+  document.getElementById('da-overlay').classList.remove('open');
+  // Corre en el log del import modal
+  const log = document.getElementById('import-log');
+  log.innerHTML = '';
+  const daBtn = document.getElementById('btn-import-start');
+  daBtn.disabled = true;
+
+  function line(text, cls = '') {
+    const d = document.createElement('span');
+    d.className = 'll ' + cls;
+    d.textContent = text;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  try {
+    line('Eliminando todos los tracks...', 'lw');
+    const resp   = await fetch('/api/tracks/delete-all', { method: 'POST' });
+    const reader = resp.body.getReader();
+    const dec    = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const evts = buf.split('\n\n'); buf = evts.pop();
+      for (const ev of evts) {
+        const m = ev.match(/^data: (.+)$/m);
+        if (!m) continue;
+        let obj; try { obj = JSON.parse(m[1]); } catch { continue; }
+        if (obj.type === 'start') continue;
+        if (obj.type === 'done') {
+          line(obj.code === 0 ? '✓ Listo. Ahora puedes importar.' : `✗ Error (código ${obj.code})`, obj.code === 0 ? 'lo' : 'le');
+          triggerCatalogRebuild();
+          loadTracks();
+          break;
+        }
+        const cls = obj.type === 'error' ? 'le' : obj.text?.startsWith('✓') ? 'lo' : 'lw';
+        line(obj.text || '', cls);
+      }
+    }
+  } catch (e) {
+    line('✗ ' + e.message, 'le');
+  } finally {
+    daBtn.disabled = false;
+  }
+});
+
+// ── Última importación ─────────────────────────────────────────────
+document.getElementById('btn-last-import').addEventListener('click', () => {
+  lastImportFilter = !lastImportFilter;
+  const btn = document.getElementById('btn-last-import');
+  btn.style.background    = lastImportFilter ? '#1e3a5f' : '';
+  btn.style.color         = lastImportFilter ? 'white' : '';
+  btn.style.borderColor   = lastImportFilter ? '#3b82f6' : '';
+  applyFilters();
+});
+
+// ── Stats bar ─────────────────────────────────────────────────────
+function updateStats() {
+  const total  = allTracks.length;
+  const dist   = allTracks.reduce((s,t) => s + (t.distance||0), 0);
+  const gain   = allTracks.reduce((s,t) => s + (t.elevation_gain||0), 0);
+  const pend   = allTracks.filter(t => !t.activity).length;
+  document.getElementById('st-total').textContent = total.toLocaleString('es');
+  document.getElementById('st-dist').textContent  = Math.round(dist).toLocaleString('es');
+  document.getElementById('st-gain').textContent  = Math.round(gain/1000) + ' k';
+  document.getElementById('st-pending').textContent = pend;
+  const chip = document.getElementById('st-pending-chip');
+  chip.classList.toggle('warn', pend > 0);
+  chip.classList.toggle('ok',   pend === 0);
+}
+
+// ── Delete track ─────────────────────────────────────────────────
+let pendingDeleteIds = [];
+
+function confirmDelete(ids, nameHint) {
+  pendingDeleteIds = ids;
+  const n = ids.length;
+  document.getElementById('del-msg').innerHTML = n === 1
+    ? `Vas a borrar "<strong>${escHtml(nameHint)}</strong>".<br>Se eliminará de la base de datos y el fichero GPX físico.`
+    : `Vas a borrar <strong>${n} tracks</strong>.<br>Se eliminarán de la base de datos y los ficheros GPX físicos.`;
+  document.getElementById('del-overlay').classList.add('open');
+}
+
+document.getElementById('del-cancel').addEventListener('click', () => {
+  document.getElementById('del-overlay').classList.remove('open');
+  pendingDeleteIds = [];
+});
+document.getElementById('del-confirm').addEventListener('click', async () => {
+  if (!pendingDeleteIds.length) return;
+  document.getElementById('del-overlay').classList.remove('open');
+  const ids = [...pendingDeleteIds];
+  pendingDeleteIds = [];
+  try {
+    let deleted = 0;
+    if (ids.length === 1) {
+      const r = await fetch(`/api/tracks/${ids[0]}`, { method:'DELETE' });
+      if (r.ok) deleted = 1;
+    } else {
+      const r = await fetch('/api/tracks/bulk-delete', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ ids }),
+      });
+      if (r.ok) { const d = await r.json(); deleted = d.deleted; }
+    }
+    if (deleted) {
+      allTracks = allTracks.filter(t => !ids.includes(t.id));
+      ids.forEach(id => selected.delete(id));
+      if (editingId && ids.includes(editingId)) editingId = null;
+      populateFilters();
+      applyFilters();
+      updateStats();
+      showToast(`✓ ${deleted} track${deleted>1?'s':''} borrado${deleted>1?'s':''}`);
+      // Rebuild catalog in background
+      triggerCatalogRebuild();
+    }
+  } catch(e) {
+    showToast('Error: ' + e.message, 4000);
+  }
+});
+
+document.getElementById('btn-bulk-delete').addEventListener('click', () => {
+  if (!selected.size) return;
+  const names = [...selected].slice(0,3).map(id => allTracks.find(t=>t.id===id)?.name||'').filter(Boolean);
+  const hint = names.join(', ') + (selected.size > 3 ? '…' : '');
+  confirmDelete([...selected], hint);
+});
+
+// ── URL pre-selection (ids=1,2,3) ─────────────────────────────────
+const preIds = new URLSearchParams(location.search).get('ids');
+if (preIds) preIds.split(',').forEach(id => { const n = parseInt(id); if (n) selected.add(n); });
+
+// ── Boot ───────────────────────────────────────────────────────────
+loadTracks();
+
+})();
+</script>
+</body>
+</html>
