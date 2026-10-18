@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Track — GPX Library</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <style>
+    :root {
+      --accent: #3b82f6;
+      --bg: #f0f2f5;
+      --card: #fff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --muted: #64748b;
+      --header: #0f172a;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────── */
+    #header {
+      position: sticky; top: 0; z-index: 1000;
+      height: 50px;
+      background: var(--header);
+      color: #f8fafc;
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.35);
+    }
+    #track-title {
+      flex: 1; font-size: 15px; font-weight: 700;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* ── Two-column layout ──────────────────────────────────────── */
+    #main-layout {
+      display: flex;
+      height: calc(100vh - 50px);
+    }
+    #left-col {
+      width: 560px;
+      min-width: 320px;
+      flex-shrink: 0;
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+    }
+    #right-col {
+      flex: 1;
+      position: relative;
+    }
+
+    /* ── Map ────────────────────────────────────────────────────── */
+    #map { height: 100%; width: 100%; background: #dde3ea; }
+
+    /* ── Content ────────────────────────────────────────────────── */
+    #content {
+      padding: 18px 18px 48px;
+    }
+
+    /* ── Stats row ──────────────────────────────────────────────── */
+    #stats-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px; margin-bottom: 18px;
+    }
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 15px 12px 13px; text-align: center;
+    }
+    .stat-card.accent {
+      border-color: var(--tc, var(--accent));
+      background: color-mix(in srgb, var(--tc, var(--accent)) 6%, white);
+    }
+    .stat-val {
+      font-size: 24px; font-weight: 800; color: var(--text); line-height: 1;
+    }
+    .stat-card.accent .stat-val { color: var(--tc, var(--accent)); }
+    .stat-unit { font-size: 11px; color: var(--muted); font-weight: 500; }
+    .stat-lbl {
+      font-size: 10px; color: var(--muted); margin-top: 4px;
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+
+    /* ── Section card ───────────────────────────────────────────── */
+    .section {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; margin-bottom: 14px; overflow: hidden;
+    }
+    .section-head {
+      padding: 9px 16px; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+      border-bottom: 1px solid var(--border); background: #f8fafc;
+    }
+
+    /* ── Elevation profile ──────────────────────────────────────── */
+    #profile-wrap { position: relative; padding: 14px 14px 8px; }
+    #profile-svg { display: block; width: 100%; height: 170px; }
+    #profile-tip {
+      position: absolute; pointer-events: none;
+      background: rgba(15,23,42,.88); color: white;
+      font-size: 11px; padding: 4px 10px; border-radius: 5px;
+      white-space: nowrap; display: none; z-index: 10;
+      transform: translate(-50%, calc(-100% - 10px));
+    }
+
+    /* ── Details grid ───────────────────────────────────────────── */
+    #details-grid {
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 14px;
+    }
+    .d-lbl {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--muted); margin-bottom: 4px;
+    }
+    .d-val { font-size: 13px; font-weight: 500; color: var(--text); }
+    .act-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600;
+      background: color-mix(in srgb, var(--tc, var(--accent)) 12%, white);
+      color: color-mix(in srgb, var(--tc, var(--accent)) 80%, #111);
+      border: 1px solid color-mix(in srgb, var(--tc, var(--accent)) 28%, var(--border));
+    }
+
+    /* ── Notes ──────────────────────────────────────────────────── */
+    #notes-body {
+      padding: 14px 16px; font-size: 13.5px; line-height: 1.75;
+      color: var(--text); white-space: pre-wrap;
+    }
+
+    /* ── Tags ───────────────────────────────────────────────────── */
+    #tags-wrap { padding: 10px 16px 14px; }
+    #tags-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; min-height: 10px; }
+    .track-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 999px;
+      padding: 3px 8px 3px 10px; font-size: 12px; font-weight: 500; color: #2563eb;
+    }
+    .tag-del {
+      background: none; border: none; cursor: pointer; color: #93c5fd; font-size: 14px;
+      line-height: 1; padding: 0; display: flex; align-items: center;
+    }
+    .tag-del:hover { color: #2563eb; }
+    #tag-input-row { display: flex; gap: 6px; }
+    #tag-input {
+      flex: 1; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px;
+      font-size: 13px; background: white; color: var(--text); outline: none;
+    }
+    #tag-input:focus { border-color: var(--accent); }
+    #tag-add-btn {
+      padding: 5px 12px; background: var(--accent); color: white; border: none;
+      border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    #tag-add-btn:hover { background: #2563eb; }
+
+    /* ── Edit button ────────────────────────────────────────────── */
+    #edit-row {
+      display: flex; justify-content: flex-end; margin-bottom: 14px;
+    }
+    #edit-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 600;
+      background: var(--card); border: 1.5px solid var(--border);
+      color: var(--text); cursor: pointer;
+      transition: background .12s, border-color .12s;
+    }
+    #edit-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+
+    /* ── Edit modal ─────────────────────────────────────────────── */
+    #edit-overlay {
+      display: none; position: fixed; inset: 0; z-index: 2000;
+      background: rgba(0,0,0,.45); align-items: center; justify-content: center;
+    }
+    #edit-overlay.open { display: flex; }
+    #edit-modal {
+      background: var(--card); border-radius: 12px; width: min(560px, 96vw);
+      max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,.3);
+      display: flex; flex-direction: column;
+    }
+    #edit-modal-head {
+      padding: 16px 20px 14px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    #edit-modal-head h2 { flex: 1; font-size: 15px; font-weight: 700; }
+    #edit-modal-close {
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      font-size: 20px; line-height: 1; padding: 0 2px;
+    }
+    #edit-modal-close:hover { color: var(--text); }
+    #edit-modal-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+    .ef-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--muted); margin-bottom: 5px; }
+    .ef-input, .ef-textarea {
+      width: 100%; padding: 8px 11px; border: 1.5px solid var(--border);
+      border-radius: 6px; font-size: 13px; font-family: inherit;
+      background: var(--bg); color: var(--text); outline: none;
+      transition: border-color .12s;
+    }
+    .ef-input:focus, .ef-textarea:focus { border-color: var(--accent); background: #fff; }
+    .ef-textarea { min-height: 90px; resize: vertical; }
+    .ef-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    #edit-modal-foot {
+      padding: 12px 20px 16px; border-top: 1px solid var(--border);
+      display: flex; gap: 10px; justify-content: flex-end;
+    }
+    .ef-cancel {
+      padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500;
+      background: var(--bg); border: 1.5px solid var(--border); color: var(--muted);
+      cursor: pointer; transition: background .12s;
+    }
+    .ef-cancel:hover { background: #e2e8f0; }
+    .ef-save {
+      padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 600;
+      background: var(--accent); border: none; color: white;
+      cursor: pointer; transition: background .12s; display: flex; align-items: center; gap: 6px;
+    }
+    .ef-save:hover { background: #2563eb; }
+    .ef-save:disabled { opacity: .6; cursor: not-allowed; }
+    #edit-msg { font-size: 12px; margin-right: auto; padding: 6px 0; }
+    #edit-msg.ok  { color: #16a34a; }
+    #edit-msg.err { color: #ef4444; }
+
+    /* ── Time stats ─────────────────────────────────────────────── */
+    #time-row { display: flex; gap: 10px; margin-bottom: 16px; }
+    .time-card {
+      flex: 1; background: #f8fafc; border: 1px solid var(--border);
+      border-radius: 7px; padding: 10px 14px;
+    }
+    .time-val { font-size: 18px; font-weight: 700; color: #1e293b; }
+    .time-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Climbs list ─────────────────────────────────────────────── */
+    .climb-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 7px; cursor: pointer;
+      border: 1px solid transparent; transition: background .1s;
+    }
+    .climb-item:hover  { background: #f8fafc; border-color: var(--border); }
+    .climb-item.active { background: #eff6ff; border-color: #bfdbfe; }
+    .climb-grade-bar { width: 5px; height: 34px; border-radius: 3px; flex-shrink: 0; }
+    .climb-num  { font-size: 11px; color: var(--muted); min-width: 22px; }
+    .climb-info { flex: 1; }
+    .climb-gain { font-weight: 600; font-size: 14px; color: #1e293b; }
+    .climb-sub  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .climb-pct  { font-size: 15px; font-weight: 700; min-width: 42px; text-align: right; }
+
+    /* ── Road bar (below map in right column) ───────────────────── */
+    #road-bar-map { display: flex; height: 6px; }
+    #road-bar-map .type-seg { cursor: default; }
+    #road-bar-map .type-seg:hover { opacity: .8; }
+
+    /* ── Road / surface type breakdown ─────────────────────────── */
+    .type-bar { display: flex; height: 9px; border-radius: 5px; overflow: hidden; margin: 8px 0 12px; }
+    .type-seg { height: 100%; transition: opacity .15s; }
+    .type-seg:hover { opacity: .75; }
+    .type-list { display: flex; flex-direction: column; gap: 6px; }
+    .type-row { display: flex; align-items: center; gap: 9px; font-size: 13px; }
+    .type-swatch { width: 14px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .type-label { flex: 1; color: #334155; }
+    .type-km { color: #64748b; font-variant-numeric: tabular-nums; min-width: 58px; text-align: right; }
+    .enrich-btn {
+      display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+      padding: 5px 12px; border-radius: 5px; border: 1px solid var(--border);
+      background: #fff; color: #334155; font-size: 12px; cursor: pointer;
+    }
+    .enrich-btn:hover { background: #f8fafc; }
+    .enrich-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Source link ────────────────────────────────────────────── */
+    #source-link {
+      display: flex; align-items: center; gap: 8px;
+      padding: 14px 16px; text-decoration: none;
+      color: var(--accent); font-size: 13px; font-weight: 500;
+      transition: background .12s;
+    }
+    #source-link:hover { background: #eff6ff; }
+    #source-host { color: #94a3b8; font-size: 11px; margin-left: 4px; }
+
+    /* ── Loading ────────────────────────────────────────────────── */
+    #loading {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 14px; padding: 80px 0; color: var(--muted);
+    }
+    .spin {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Tab navigation ─────────────────────────────────────────── */
+    #tab-nav-wrap { position: relative; margin-bottom: 20px; }
+    #tab-nav {
+      display: flex; overflow-x: auto; gap: 6px;
+      padding: 12px 14px 10px; border-bottom: 1px solid var(--border);
+      scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent;
+    }
+    #tab-nav::-webkit-scrollbar { height: 3px; }
+    #tab-nav::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+    #tab-nav::-webkit-scrollbar-track { background: transparent; }
+    .tab-btn {
+      flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 5px;
+      padding: 9px 13px 8px; background: #f1f5f9; border: 1.5px solid transparent;
+      border-radius: 10px; font-size: 11px; font-weight: 600; color: #64748b; cursor: pointer;
+      white-space: nowrap; transition: all .15s; line-height: 1;
+    }
+    .tab-btn svg { opacity: .7; transition: opacity .15s; }
+    .tab-btn:hover { background: #e2e8f0; color: #334155; }
+    .tab-btn:hover svg { opacity: 1; }
+    .tab-btn.active { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+    .tab-btn.active svg { opacity: 1; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Waypoints ───────────────────────────────────────────────── */
+    .wp-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .wp-item:last-child { border-bottom: none; }
+    .wp-dot {
+      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: white;
+    }
+    .wp-info { flex: 1; }
+    .wp-label { font-weight: 600; font-size: 13px; color: #1e293b; }
+    .wp-coords { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: monospace; }
+    .wp-maps { font-size: 12px; color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .wp-maps:hover { text-decoration: underline; }
+
+    /* ── Weather widget ──────────────────────────────────────────── */
+    #weather-wrap { display: flex; flex-direction: column; gap: 12px; }
+    #weather-main { display: flex; align-items: center; gap: 16px; }
+    .wx-icon { font-size: 52px; line-height: 1; }
+    .wx-temp { font-size: 42px; font-weight: 700; color: #1e293b; }
+    .wx-desc { font-size: 15px; color: #334155; margin-top: 2px; }
+    #weather-details {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 6px;
+    }
+    .wx-detail { background: #f8fafc; border: 1px solid var(--border); border-radius: 7px; padding: 10px 14px; }
+    .wx-detail-val { font-size: 17px; font-weight: 700; color: #1e293b; }
+    .wx-detail-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    #weather-location { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    #weather-forecast { display: flex; gap: 8px; margin-top: 4px; overflow-x: auto; }
+    .wx-day { flex: 1; min-width: 70px; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px; text-align: center; }
+    .wx-day-name { font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 4px; text-transform: capitalize; }
+    .wx-day-icon { font-size: 24px; line-height: 1.2; }
+    .wx-day-range { font-size: 11px; color: #334155; margin-top: 4px; font-weight: 600; }
+    .wx-day-prec { font-size: 10px; color: #64748b; margin-top: 2px; }
+
+    @media (max-width: 900px) {
+      #main-layout { flex-direction: column; height: auto; }
+      #left-col { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+      #right-col { height: 55vw; min-height: 260px; }
+      #stats-row { grid-template-columns: repeat(3, 1fr); }
+      #weather-details { grid-template-columns: repeat(2, 1fr); }
+      .tab-btn { padding: 10px 12px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<header id="header">
+  <span id="track-title">Cargando…</span>
+</header>
+
+<!-- Edit modal -->
+<div id="edit-overlay">
+  <div id="edit-modal">
+    <div id="edit-modal-head">
+      <h2>Editar track</h2>
+      <button id="edit-modal-close" title="Cerrar">×</button>
+    </div>
+    <div id="edit-modal-body">
+      <div>
+        <div class="ef-label">Nombre</div>
+        <input id="ef-name" class="ef-input" type="text">
+      </div>
+      <div class="ef-row2">
+        <div>
+          <div class="ef-label">Actividad</div>
+          <input id="ef-activity" class="ef-input" type="text" placeholder="ciclismo, senderismo, mtb…">
+        </div>
+      </div>
+      <div class="ef-row2">
+        <div>
+          <div class="ef-label">Sierra / Parque</div>
+          <input id="ef-sierra" class="ef-input" type="text">
+        </div>
+        <div>
+          <div class="ef-label">Provincia</div>
+          <input id="ef-province" class="ef-input" type="text">
+        </div>
+      </div>
+      <div class="ef-row2">
+        <div>
+          <div class="ef-label">Comunidad (CCAA)</div>
+          <input id="ef-ccaa" class="ef-input" type="text">
+        </div>
+        <div>
+          <div class="ef-label">URL fuente</div>
+          <input id="ef-url" class="ef-input" type="url" placeholder="https://…">
+        </div>
+      </div>
+      <div>
+        <div class="ef-label">Notas</div>
+        <textarea id="ef-notes" class="ef-textarea"></textarea>
+      </div>
+    </div>
+    <div id="edit-modal-foot">
+      <span id="edit-msg"></span>
+      <button class="ef-cancel" id="ef-cancel-btn">Cancelar</button>
+      <button class="ef-save" id="ef-save-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Guardar
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="main-layout">
+  <div id="left-col">
+    <div id="content">
+      <div id="loading"><div class="spin"></div>Cargando…</div>
+    </div>
+  </div>
+  <div id="right-col">
+    <div id="map"></div>
+    <div id="road-bar-map"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── Colores y etiquetas por actividad ────────────────────────────
+const ACT = {
+  'ciclismo':      { color: '#3b82f6', icon: '🚴' },
+  'cycling':       { color: '#3b82f6', icon: '🚴' },
+  'carretera':     { color: '#8b5cf6', icon: '🚴' },
+  'road cycling':  { color: '#8b5cf6', icon: '🚴' },
+  'btt':           { color: '#f97316', icon: '🚵' },
+  'mtb':           { color: '#f97316', icon: '🚵' },
+  'mountain bike': { color: '#f97316', icon: '🚵' },
+  'senderismo':    { color: '#22c55e', icon: '🥾' },
+  'hiking':        { color: '#22c55e', icon: '🥾' },
+  'trail running': { color: '#ec4899', icon: '🏃' },
+  'running':       { color: '#ec4899', icon: '🏃' },
+};
+
+function actInfo(a) {
+  if (!a) return { color: '#3b82f6', icon: '📍' };
+  return ACT[a.toLowerCase()] || { color: '#3b82f6', icon: '📍' };
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function hav(lat1, lon1, lat2, lon2) {
+  const R = 6371, d = Math.PI / 180;
+  const a = Math.sin((lat2-lat1)*d/2)**2
+          + Math.cos(lat1*d) * Math.cos(lat2*d) * Math.sin((lon2-lon1)*d/2)**2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+function fmt(n, dec = 0) {
+  if (n == null) return '—';
+  return (+n).toLocaleString('es-ES', { maximumFractionDigits: dec, minimumFractionDigits: dec });
+}
+
+// ── Load ─────────────────────────────────────────────────────────
+const params  = new URLSearchParams(location.search);
+const trackId = parseInt(params.get('id'));
+
+if (!trackId) {
+  document.getElementById('loading').innerHTML = '<p style="color:#ef4444">Falta el parámetro <code>?id=</code></p>';
+} else {
+  fetch(`/api/tracks/${trackId}`)
+    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    .then(render)
+    .catch(e => { document.getElementById('loading').innerHTML = `<p style="color:#ef4444">Error: ${esc(e.message)}</p>`; });
+}
+
+// (gMap, gLine, gHoverMk, gTrack, gElePts, gSelHL declared below)
+
+// ── Render ───────────────────────────────────────────────────────
+function updateMapBar(t) {
+  const bar = document.getElementById('road-bar-map');
+  if (!bar || !t.road_types) return;
+  let data;
+  try { data = JSON.parse(t.road_types); } catch { return; }
+  const entries = Object.entries(data)
+    .filter(([k, km]) => k !== 'unknown' && km > 0.05)
+    .sort(([,a],[,b]) => b - a);
+  if (!entries.length) return;
+  const total = entries.reduce((s,[,km]) => s + km, 0);
+  bar.innerHTML = entries.map(([type, km]) => {
+    const m = HW_META[type] || { label: type, color: '#ccc' };
+    const pct = (km / total * 100).toFixed(2);
+    const kmStr = km < 1 ? `${Math.round(km*1000)} m` : `${km.toFixed(1)} km`;
+    return `<div class="type-seg" style="width:${pct}%;background:${m.color}" title="${esc(m.label)}: ${kmStr}"></div>`;
+  }).join('');
+}
+
+function render(t) {
+  gTrack = t;
+  const { color, icon } = actInfo(t.activity);
+  gColor = color;
+  document.title = `${t.name} — GPX Library`;
+  document.documentElement.style.setProperty('--tc', color);
+
+  // Header
+  document.getElementById('track-title').textContent = t.name;
+
+  // Map (capture map + line for hover sync)
+  const mi = initMap(t, color);
+  gMap = mi.map; gLine = mi.line;
+
+  // Content
+  document.getElementById('loading').remove();
+  document.getElementById('content').insertAdjacentHTML('afterbegin', buildContent(t, color, icon));
+
+  // File folder link
+  const ffl = document.getElementById('file-folder-link');
+  if (ffl && t.file) {
+    ffl.addEventListener('click', e => {
+      e.preventDefault();
+      const folder = 'D:/proyectos/gpxlibrary/' + t.file.replace(/[^/]+$/, '');
+      window.open('file:///' + folder, '_blank');
+    });
+  }
+
+  // Road bar (div exists in DOM now)
+  updateMapBar(t);
+
+  // Draw profile into the (possibly hidden) Altimetría tab
+  if (t.points && t.points.some(p => p[2] != null)) {
+    setTimeout(() => drawProfile(t, color), 80);
+  }
+}
+
+// ── Map ──────────────────────────────────────────────────────────
+function initMap(t, color) {
+  const map = L.map('map', { zoomControl: false });
+  const tileLayers = {
+    'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',  { attribution:'© OpenStreetMap', maxZoom:19 }),
+    'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',    { attribution:'© OpenTopoMap',   maxZoom:17 }),
+    'Satélite (Esri)': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:19 }),
+    'Google Maps':     L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
+    'Google Satélite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
+    'Google Híbrido':  L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
+    'CartoDB Claro':   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',  { attribution:'© CartoDB', maxZoom:19 }),
+    'CartoDB Oscuro':  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',   { attribution:'© CartoDB', maxZoom:19 }),
+  };
+  tileLayers['OpenStreetMap'].addTo(map);
+  L.control.layers(tileLayers, null, { position:'topright', collapsed:true }).addTo(map);
+
+  if (!t.points || t.points.length < 2) {
+    if (t.center_lat) map.setView([t.center_lat, t.center_lon], 13);
+    return { map, line: null };
+  }
+
+  const lls = t.points.map(p => [p[0], p[1]]);
+  const line = L.polyline(lls, { color, weight: 4, opacity: .9 }).addTo(map);
+
+  const mk = (bg) => L.divIcon({
+    html: `<div style="width:12px;height:12px;border-radius:50%;background:${bg};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`,
+    className: '', iconSize: [12,12], iconAnchor: [6,6]
+  });
+  L.marker(lls[0], { icon: mk('#22c55e') }).addTo(map);
+  L.marker(lls[lls.length-1], { icon: mk('#ef4444') }).addTo(map);
+
+  if (t.bounds && t.bounds[0]) {
+    map.fitBounds(t.bounds, { padding: [30,30] });
+  } else {
+    map.fitBounds(L.latLngBounds(lls), { padding: [30,30] });
+  }
+  return { map, line };
+}
+
+// ── Module-level state ────────────────────────────────────────────
+let gMap = null, gLine = null, gHoverMk = null, gTrack = null;
+let gElePts = null;   // elevation-filtered points, set by drawProfile
+let gSelHL  = null;   // segment highlight featureGroup
+let gColor  = '#3b82f6'; // track color, set by render()
+
+function hlByIdx(i1, i2) {
+  if (!gMap || !gElePts || i1 >= i2) return;
+  const color = gTrack ? actInfo(gTrack.activity).color : '#3b82f6';
+  const lls = gElePts.slice(i1, i2 + 1).map(p => [p[0], p[1]]);
+  if (!gSelHL) {
+    gSelHL = L.featureGroup([
+      L.polyline(lls, { color: 'white', weight: 13, opacity: 0.85 }),
+      L.polyline(lls, { color,          weight: 6,  opacity: 1    }),
+    ]).addTo(gMap);
+  } else {
+    const [halo, line] = gSelHL.getLayers();
+    halo.setLatLngs(lls); line.setLatLngs(lls);
+  }
+}
+
+function clearHL() {
+  if (gSelHL) { gSelHL.remove(); gSelHL = null; }
+}
+
+// ── Climb detection ───────────────────────────────────────────────
+function gradColor(pct) {
+  if (pct <  3) return '#22c55e';
+  if (pct <  6) return '#eab308';
+  if (pct <  9) return '#f97316';
+  if (pct < 12) return '#ef4444';
+  return '#7c3aed';
+}
+
+function formatDur(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${String(m).padStart(2,'0')}min`;
+  return `${m}min ${String(Math.floor(s % 60)).padStart(2,'0')}s`;
+}
+
+function detectClimbs(pts) {
+  // Build elevation-indexed array
+  const ep = [];
+  for (let i = 0; i < pts.length; i++) {
+    if (pts[i][2] == null) continue;
+    const prev = ep[ep.length - 1];
+    const d = prev ? prev.d + hav(pts[prev.pi][0], pts[prev.pi][1], pts[i][0], pts[i][1]) : 0;
+    ep.push({ pi: i, ei: ep.length, ele: pts[i][2], d });
+  }
+  if (ep.length < 10) return [];
+
+  // Smooth elevation (7-point moving average)
+  const W = 7;
+  const sm = ep.map((p, i) => {
+    const s = Math.max(0, i - W), e = Math.min(ep.length - 1, i + W);
+    return ep.slice(s, e + 1).reduce((a, q) => a + q.ele, 0) / (e - s + 1);
+  });
+
+  // Zigzag peak/valley detection
+  const NOISE = 12;
+  const events = [];
+  let refI = 0, refE = sm[0], mode = null;
+  for (let i = 1; i < sm.length; i++) {
+    if (sm[i] > refE + NOISE) {
+      if (mode === 'dn') events.push({ type: 'v', i: refI });
+      mode = 'up'; refI = i; refE = sm[i];
+    } else if (sm[i] < refE - NOISE) {
+      if (mode === 'up') events.push({ type: 'p', i: refI });
+      mode = 'dn'; refI = i; refE = sm[i];
+    } else {
+      if (mode === 'up' && sm[i] > refE) { refI = i; refE = sm[i]; }
+      else if (mode === 'dn' && sm[i] < refE) { refI = i; refE = sm[i]; }
+    }
+  }
+  if (mode === 'up') events.push({ type: 'p', i: refI });
+  else              events.push({ type: 'v', i: refI });
+
+  const all = [{ type: 'v', i: 0 }, ...events];
+  const MIN_GAIN = 25, MIN_DIST = 0.2;
+  const climbs = [];
+  for (let j = 0; j + 1 < all.length; j++) {
+    const a = all[j], b = all[j + 1];
+    if (a.type !== 'v' || b.type !== 'p') continue;
+    const gain = sm[b.i] - sm[a.i];
+    const dist = ep[b.i].d - ep[a.i].d;
+    if (gain < MIN_GAIN || dist < MIN_DIST) continue;
+    climbs.push({
+      i1:   a.i, i2: b.i,
+      gain: Math.round(gain),
+      km:   Math.round(dist * 100) / 100,
+      grad: Math.round(gain / dist / 10 * 10) / 10,
+    });
+  }
+  return climbs;
+}
+
+// ── Road / surface metadata (mirrors enrich-road-types.js) ───────
+const HW_META = {
+  motorway:     { label: 'Autopista',            color: '#e8803c' },
+  trunk:        { label: 'Autovía',              color: '#e8803c' },
+  primary:      { label: 'Carretera principal',  color: '#f0c040' },
+  secondary:    { label: 'Carretera secundaria', color: '#d4b040' },
+  tertiary:     { label: 'Carretera local',      color: '#a0a0a0' },
+  residential:  { label: 'Calle',                color: '#c0c0c0' },
+  living_street:{ label: 'Calle peatonal',       color: '#d0d0d0' },
+  unclassified: { label: 'Camino',               color: '#b0b0b0' },
+  service:      { label: 'Vía de servicio',      color: '#c8c8c8' },
+  cycleway:     { label: 'Carril bici',          color: '#4caf8c' },
+  track:        { label: 'Pista forestal',       color: '#8b7355' },
+  path:         { label: 'Senda',                color: '#6a8a5a' },
+  footway:      { label: 'Camino peatonal',      color: '#7a9a6a' },
+  bridleway:    { label: 'Camino de herradura',  color: '#7a7a40' },
+  steps:        { label: 'Escaleras',            color: '#909090' },
+};
+const SF_META = {
+  asphalt:     { label: 'Asfalto',           color: '#404040' },
+  paved:       { label: 'Pavimentado',       color: '#606060' },
+  concrete:    { label: 'Hormigón',          color: '#808080' },
+  cobblestone: { label: 'Adoquín',           color: '#907060' },
+  sett:        { label: 'Adoquín',           color: '#907060' },
+  gravel:      { label: 'Grava',             color: '#b09070' },
+  fine_gravel: { label: 'Gravilla',          color: '#b8a880' },
+  compacted:   { label: 'Tierra compactada', color: '#987858' },
+  dirt:        { label: 'Tierra',            color: '#a07050' },
+  ground:      { label: 'Tierra',            color: '#a07050' },
+  unpaved:     { label: 'Sin asfaltar',      color: '#a08060' },
+  grass:       { label: 'Hierba',            color: '#60a050' },
+  sand:        { label: 'Arena',             color: '#d0c070' },
+  wood:        { label: 'Madera',            color: '#806040' },
+  metal:       { label: 'Metal',             color: '#606878' },
+};
+
+function buildTypeSection(dataStr, meta) {
+  if (!dataStr) return null;
+  let data;
+  try { data = JSON.parse(dataStr); } catch { return null; }
+  const entries = Object.entries(data)
+    .filter(([k, km]) => k !== 'unknown' && km > 0.05)
+    .sort(([,a],[,b]) => b - a);
+  if (!entries.length) return null;
+  const total = entries.reduce((s,[,km]) => s + km, 0);
+  const bar = entries.map(([type, km]) => {
+    const m = meta[type] || { label: type, color: '#cccccc' };
+    const pct = (km / total * 100).toFixed(1);
+    return `<div class="type-seg" style="width:${pct}%;background:${m.color}" title="${esc(m.label)}: ${km < 1 ? Math.round(km*1000)+' m' : km.toFixed(1)+' km'}"></div>`;
+  }).join('');
+  const list = entries.map(([type, km]) => {
+    const m = meta[type] || { label: type, color: '#cccccc' };
+    const kmStr = km < 1 ? `${Math.round(km*1000)} m` : `${km.toFixed(1)} km`;
+    return `<div class="type-row"><div class="type-swatch" style="background:${m.color}"></div><div class="type-label">${esc(m.label)}:</div><div class="type-km">${kmStr}</div></div>`;
+  }).join('');
+  return `<div class="type-bar">${bar}</div><div class="type-list">${list}</div>`;
+}
+
+// ── Content HTML ─────────────────────────────────────────────────
+function buildContent(t, color, icon) {
+  const dist  = t.distance != null ? (+t.distance).toFixed(1) : '—';
+  const gain  = fmt(t.elevation_gain);
+  const loss  = fmt(t.elevation_loss);
+  const maxA  = fmt(t.max_elevation);
+  const minA  = fmt(t.min_elevation);
+  const date  = t.date
+    ? new Date(t.date + 'T00:00:00').toLocaleDateString('es-ES', { year:'numeric', month:'short', day:'numeric' })
+    : '—';
+
+  const hasPts = t.points && t.points.some(p => p[2] != null);
+
+  // Pre-compute climbs for the HTML template
+  const climbs = hasPts ? detectClimbs(t.points) : [];
+
+  const timeRow = (t.moving_time > 0) ? `
+    <div id="time-row">
+      <div class="time-card">
+        <div class="time-val">${formatDur(t.moving_time)}</div>
+        <div class="time-lbl">Tiempo en marcha</div>
+      </div>
+      <div class="time-card">
+        <div class="time-val">${formatDur(t.stopped_time || 0)}</div>
+        <div class="time-lbl">Tiempo parado</div>
+      </div>
+      <div class="time-card">
+        <div class="time-val">${t.distance && t.moving_time ? (t.distance / (t.moving_time / 3600)).toFixed(1) : '—'} km/h</div>
+        <div class="time-lbl">Velocidad media</div>
+      </div>
+    </div>` : '';
+
+  const details = [
+    t.activity ? `<div><div class="d-lbl">Actividad</div><div class="d-val"><span class="act-badge">${icon} ${esc(t.activity)}</span></div></div>` : '',
+    t.zone     ? `<div><div class="d-lbl">Zona</div><div class="d-val">${esc(t.zone)}</div></div>` : '',
+    t.sierra   ? `<div><div class="d-lbl">Sierra / Parque</div><div class="d-val">${esc(t.sierra)}</div></div>` : '',
+    t.province ? `<div><div class="d-lbl">Provincia</div><div class="d-val">${esc(t.province)}</div></div>` : '',
+    t.ccaa     ? `<div><div class="d-lbl">Comunidad</div><div class="d-val">${esc(t.ccaa)}</div></div>` : '',
+    t.min_elevation != null ? `<div><div class="d-lbl">Alt. mínima</div><div class="d-val">${minA} m</div></div>` : '',
+    t.raw_count ? `<div><div class="d-lbl">Puntos GPS</div><div class="d-val">${fmt(t.raw_count)}</div></div>` : '',
+  ].filter(Boolean).join('');
+
+  let sourceHost = '';
+  if (t.url) {
+    try { sourceHost = new URL(t.url).hostname.replace(/^www\./, ''); } catch {}
+  }
+
+  // ── Tab: Resumen ──────────────────────────────────────────────
+  const tabResumen = `
+    <div id="stats-row">
+      <div class="stat-card accent"><div class="stat-val">${dist}</div><div class="stat-unit">km</div><div class="stat-lbl">Distancia</div></div>
+      <div class="stat-card"><div class="stat-val">${gain}</div><div class="stat-unit">m</div><div class="stat-lbl">Desnivel +</div></div>
+      <div class="stat-card"><div class="stat-val">${loss}</div><div class="stat-unit">m</div><div class="stat-lbl">Desnivel −</div></div>
+      <div class="stat-card"><div class="stat-val">${maxA}</div><div class="stat-unit">m</div><div class="stat-lbl">Cota máx.</div></div>
+      <div class="stat-card"><div class="stat-val" style="font-size:16px;padding-top:4px">${date}</div><div class="stat-lbl" style="margin-top:6px">Fecha</div></div>
+    </div>
+    ${timeRow}
+    ${details ? `<div class="section"><div class="section-head">Detalles</div><div id="details-grid">${details}</div></div>` : ''}
+    ${t.notes ? `<div class="section"><div class="section-head">Notas</div><div id="notes-body">${esc(t.notes)}</div></div>` : ''}
+    <div class="section" id="file-section">
+      <div class="section-head">Archivo</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <code style="font-size:11px;background:#f1f5f9;padding:4px 8px;border-radius:4px;color:#475569;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.file||'')}</code>
+        <a href="#" id="file-folder-link" style="font-size:12px;color:#3b82f6;white-space:nowrap;text-decoration:none" title="Abrir carpeta">📂 Carpeta</a>
+        <a href="/editor?edit=${t.id}" style="font-size:12px;color:#64748b;white-space:nowrap;text-decoration:none">✏️ Editar</a>
+      </div>
+    </div>
+    <div class="section" id="tags-section">
+      <div class="section-head">Etiquetas</div>
+      <div id="tags-wrap">
+        <div id="tags-list">${(t.tags||[]).map(tag=>`<span class="track-tag" data-tag="${esc(tag)}">${esc(tag)}<button class="tag-del" onclick="removeTag('${esc(tag)}')" title="Quitar">×</button></span>`).join('')}</div>
+        <div id="tag-input-row">
+          <input id="tag-input" type="text" placeholder="Nueva etiqueta…" maxlength="40" autocomplete="off">
+          <button id="tag-add-btn" onclick="addTag()">Añadir</button>
+        </div>
+      </div>
+    </div>
+    ${t.url ? `<div class="section"><a id="source-link" href="${esc(t.url)}" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      Ver en fuente original<span id="source-host">${esc(sourceHost)}</span></a></div>` : ''}
+  `;
+
+  // ── Tab: Puntos de paso ───────────────────────────────────────
+  const sp = t.points?.[0], ep2 = t.points?.[t.points.length - 1];
+  const fmtCoord = p => p ? `${p[0].toFixed(5)}, ${p[1].toFixed(5)}` : '—';
+  const mapsLink = p => p ? `https://www.google.com/maps?q=${p[0]},${p[1]}` : null;
+  const tabPuntos = `
+    <div class="wp-item">
+      <div class="wp-dot" style="background:#22c55e">A</div>
+      <div class="wp-info"><div class="wp-label">Inicio</div><div class="wp-coords">${fmtCoord(sp)}</div></div>
+      ${sp ? `<a class="wp-maps" href="${mapsLink(sp)}" target="_blank" rel="noopener">Ver en Maps →</a>` : ''}
+    </div>
+    <div class="wp-item">
+      <div class="wp-dot" style="background:#ef4444">B</div>
+      <div class="wp-info"><div class="wp-label">Fin</div><div class="wp-coords">${fmtCoord(ep2)}</div></div>
+      ${ep2 ? `<a class="wp-maps" href="${mapsLink(ep2)}" target="_blank" rel="noopener">Ver en Maps →</a>` : ''}
+    </div>
+  `;
+
+  // ── Tab: Tipos de camino ──────────────────────────────────────
+  const hwHTML = buildTypeSection(t.road_types, HW_META);
+  const sfHTML = buildTypeSection(t.surface_types, SF_META);
+  const enrichBtn = `<button class="enrich-btn" onclick="enrichRoadTypes()" id="enrich-btn" style="margin-top:12px">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+    ${hwHTML || sfHTML ? 'Actualizar datos OSM' : 'Obtener datos OSM'}
+  </button>`;
+  const tabCaminos = `<div id="road-section">
+    ${hwHTML ? `<div class="section-head">Tipos de camino</div>${hwHTML}` : '<p style="font-size:13px;color:#94a3b8;margin:0 0 8px">Sin datos de OpenStreetMap todavía.</p>'}
+    ${sfHTML ? `<div class="section-head" style="margin-top:20px">Superficie</div>${sfHTML}` : ''}
+    ${enrichBtn}
+  </div>`;
+
+  // ── Tab: Altimetría ───────────────────────────────────────────
+  const tabAlt = hasPts ? `
+    <div class="section-head" style="margin-bottom:8px">Perfil de elevación
+      <span style="font-size:9px;font-weight:400;color:#94a3b8;margin-left:6px">Arrastra para seleccionar un tramo</span>
+    </div>
+    <div id="profile-wrap"><svg id="profile-svg"></svg><div id="profile-tip"></div></div>
+    <div id="sel-bar" style="display:none;padding:5px 14px;font-size:11px;color:#64748b;background:#eff6ff;border-top:1px solid #bfdbfe;gap:12px;align-items:center">
+      <span id="sel-stats"></span>
+      <button id="sel-clear" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#3b82f6;font-size:12px;padding:0">✕ Quitar selección</button>
+    </div>
+  ` : '<p style="color:#94a3b8;font-size:13px">Este track no tiene datos de elevación.</p>';
+
+  // ── Tab: Subidas ──────────────────────────────────────────────
+  const tabSubidas = climbs.length ? climbs.map((c, i) => {
+    const gc = gradColor(c.grad);
+    return `<div class="climb-item" data-i1="${c.i1}" data-i2="${c.i2}" onclick="climbClick(this)">
+      <div class="climb-grade-bar" style="background:${gc}"></div>
+      <div class="climb-num">#${i+1}</div>
+      <div class="climb-info"><div class="climb-gain">▲ ${c.gain} m</div><div class="climb-sub">${c.km} km</div></div>
+      <div class="climb-pct" style="color:${gc}">${c.grad}%</div>
+    </div>`;
+  }).join('') : '<p style="color:#94a3b8;font-size:13px">No se han detectado subidas significativas.</p>';
+
+  // ── Tab: Tiempo ───────────────────────────────────────────────
+  const tabTiempo = `<div id="weather-panel" style="color:#94a3b8;font-size:13px">Cargando datos meteorológicos…</div>`;
+
+  const tabs = [
+    ['resumen',   'Resumen'],
+    ['puntos',    'Puntos de paso'],
+    ['caminos',   'Tipos de camino'],
+    ['altimetria','Altimetría'],
+    ...(climbs.length ? [['subidas', `Subidas (${climbs.length})`]] : []),
+    ['tiempo',    'Tiempo hoy'],
+  ];
+
+  const TAB_ICONS = {
+    resumen:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/></svg>`,
+    puntos:     `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>`,
+    caminos:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-13 6 13 6-13"/></svg>`,
+    altimetria: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 8 10 13 14 18 7 21 10"/><line x1="3" y1="20" x2="21" y2="20"/></svg>`,
+    subidas:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>`,
+    tiempo:     `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`,
+  };
+
+  return `
+    <div id="edit-row">
+      <button id="edit-btn" onclick="openEditModal()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Editar
+      </button>
+    </div>
+
+    <div id="tab-nav-wrap">
+      <div id="tab-nav">
+        ${tabs.map(([id, label], i) =>
+          `<button class="tab-btn${i===0?' active':''}" data-tab="${id}" onclick="switchTab('${id}')">${TAB_ICONS[id] ?? ''}<span>${esc(label)}</span></button>`
+        ).join('')}
+      </div>
+    </div>
+
+    <div id="tab-resumen"    class="tab-panel active">${tabResumen}</div>
+    <div id="tab-puntos"     class="tab-panel">${tabPuntos}</div>
+    <div id="tab-caminos"    class="tab-panel">${tabCaminos}</div>
+    <div id="tab-altimetria" class="tab-panel">${tabAlt}</div>
+    ${climbs.length ? `<div id="tab-subidas" class="tab-panel">${tabSubidas}</div>` : ''}
+    <div id="tab-tiempo"     class="tab-panel">${tabTiempo}</div>
+  `;
+}
+
+// ── Elevation profile ─────────────────────────────────────────────
+function drawProfile(t, color) {
+  const svgEl = document.getElementById('profile-svg');
+  if (!svgEl) return;
+
+  gElePts = t.points.filter(p => p[2] != null);
+  const pts = gElePts;
+  if (pts.length < 2) return;
+
+  const dists = [0];
+  for (let i = 1; i < pts.length; i++)
+    dists.push(dists[i-1] + hav(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]));
+  const totalDist = dists[dists.length-1] || 1;
+  const eles = pts.map(p => p[2]);
+  const minE = Math.min(...eles), maxE = Math.max(...eles), rngE = (maxE - minE) || 1;
+
+  const rect = svgEl.getBoundingClientRect();
+  const W = rect.width || 700, H = 170;
+  const P = { t: 14, r: 18, b: 30, l: 54 };
+  const CW = W - P.l - P.r, CH = H - P.t - P.b;
+  const toX = d => P.l + (d / totalDist) * CW;
+  const toY = e => P.t + (1 - (e - minE) / rngE) * CH;
+
+  const coords = eles.map((e, i) => [toX(dists[i]), toY(e)]);
+  const lineD = 'M' + coords.map(([x,y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' L');
+  const areaD = `M${P.l},${P.t+CH} L${coords.map(([x,y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' L')} L${(P.l+CW).toFixed(1)},${P.t+CH} Z`;
+
+  const nY = 5;
+  const yTicks = Array.from({ length: nY }, (_, i) => {
+    const f = i / (nY - 1);
+    return { y: toY(minE + f * rngE), val: Math.round(minE + f * rngE) };
+  });
+
+  const rawStep = totalDist / 5;
+  const xStep = rawStep >= 20 ? Math.ceil(rawStep/10)*10 : rawStep >= 5 ? 5 : rawStep >= 2 ? 2 : 1;
+  const xTicks = [];
+  for (let d = 0; d <= totalDist + 0.001; d += xStep)
+    if (toX(d) <= P.l + CW + 1) xTicks.push({ x: toX(d), val: +d.toFixed(1) });
+
+  const gid = 'pg' + Math.random().toString(36).slice(2);
+  const [cr, cg, cb] = color.match(/#(..)(..)(..)/).slice(1).map(h => parseInt(h,16));
+
+  svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svgEl.style.height = H + 'px';
+  svgEl.innerHTML = `
+    <defs>
+      <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stop-color="rgb(${cr},${cg},${cb})" stop-opacity=".35"/>
+        <stop offset="100%" stop-color="rgb(${cr},${cg},${cb})" stop-opacity=".03"/>
+      </linearGradient>
+    </defs>
+    <rect x="${P.l}" y="${P.t}" width="${CW}" height="${CH}" fill="#f8fafc" rx="2"/>
+    ${yTicks.map(k => `
+      <line x1="${P.l}" y1="${k.y.toFixed(1)}" x2="${P.l+CW}" y2="${k.y.toFixed(1)}" stroke="#e2e8f0" stroke-width="1"/>
+      <text x="${P.l-6}" y="${(k.y+4).toFixed(1)}" text-anchor="end" font-size="10" fill="#94a3b8">${k.val}</text>
+    `).join('')}
+    ${xTicks.map(k => `
+      <line x1="${k.x.toFixed(1)}" y1="${P.t+CH}" x2="${k.x.toFixed(1)}" y2="${P.t+CH+4}" stroke="#cbd5e1" stroke-width="1"/>
+      <text x="${k.x.toFixed(1)}" y="${H-5}" text-anchor="middle" font-size="10" fill="#94a3b8">${k.val}km</text>
+    `).join('')}
+    <path d="${areaD}" fill="url(#${gid})"/>
+    <path d="${lineD}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
+    <rect id="sel-rect" x="${P.l}" y="${P.t}" width="0" height="${CH}" fill="rgba(59,130,246,.12)" stroke="rgba(59,130,246,.45)" stroke-width="1" opacity="0" pointer-events="none"/>
+    <line id="ph-line" x1="0" y1="${P.t}" x2="0" y2="${P.t+CH}" stroke="${color}" stroke-width="1.5" stroke-dasharray="4 3" opacity="0" pointer-events="none"/>
+    <circle id="ph-dot" cx="0" cy="0" r="4.5" fill="white" stroke="${color}" stroke-width="2" opacity="0" pointer-events="none"/>
+    <rect id="ph-area" x="${P.l}" y="${P.t}" width="${CW}" height="${CH}" fill="transparent" style="cursor:crosshair"/>
+  `;
+
+  const tip = document.getElementById('profile-tip');
+  const phL = document.getElementById('ph-line');
+  const phD = document.getElementById('ph-dot');
+  const phA = document.getElementById('ph-area');
+
+  // ── Shared helpers ────────────────────────────────────────────
+  function showHover(best) {
+    const ex = coords[best][0], ey = coords[best][1];
+    phL.setAttribute('x1', ex); phL.setAttribute('x2', ex); phL.setAttribute('opacity','1');
+    phD.setAttribute('cx', ex); phD.setAttribute('cy', ey); phD.setAttribute('opacity','1');
+    const svgR = svgEl.getBoundingClientRect();
+    const wrapR = document.getElementById('profile-wrap').getBoundingClientRect();
+    tip.style.display = 'block';
+    tip.style.left = (svgR.left - wrapR.left + ex) + 'px';
+    tip.style.top  = (svgR.top  - wrapR.top  + ey) + 'px';
+    tip.textContent = `${Math.round(eles[best])} m  ·  ${dists[best].toFixed(1)} km`;
+  }
+
+  function hideHover() {
+    phL.setAttribute('opacity','0'); phD.setAttribute('opacity','0');
+    tip.style.display = 'none';
+  }
+
+  function moveMapMarker(best) {
+    const ll = [pts[best][0], pts[best][1]];
+    if (!gHoverMk) {
+      gHoverMk = L.circleMarker(ll, {
+        radius: 7, color, weight: 2.5,
+        fillColor: '#fff', fillOpacity: 1,
+      }).addTo(gMap);
+    } else {
+      gHoverMk.setLatLng(ll);
+    }
+  }
+
+  function removeMapMarker() {
+    if (gHoverMk) { gHoverMk.remove(); gHoverMk = null; }
+  }
+
+  // ── Profile → map ─────────────────────────────────────────────
+  phA.addEventListener('mousemove', e => {
+    const r    = svgEl.getBoundingClientRect();
+    const mx   = Math.max(P.l, Math.min(P.l + CW, e.clientX - r.left));
+    const dAt  = ((mx - P.l) / CW) * totalDist;
+    let best = 0;
+    for (let i = 1; i < dists.length; i++)
+      if (Math.abs(dists[i] - dAt) < Math.abs(dists[best] - dAt)) best = i;
+    showHover(best);
+    if (gMap) moveMapMarker(best);
+  });
+  phA.addEventListener('mouseleave', () => {
+    hideHover();
+    removeMapMarker();
+  });
+
+  // ── Map → profile ─────────────────────────────────────────────
+  if (gLine) {
+    gLine.on('mousemove', e => {
+      const ll = e.latlng;
+      let best = 0, bestD2 = Infinity;
+      for (let i = 0; i < pts.length; i++) {
+        const dlat = ll.lat - pts[i][0], dlon = ll.lng - pts[i][1];
+        const d2 = dlat*dlat + dlon*dlon;
+        if (d2 < bestD2) { bestD2 = d2; best = i; }
+      }
+      showHover(best);
+    });
+    gLine.on('mouseout', hideHover);
+  }
+
+  // ── Drag-to-zoom on profile ────────────────────────────────────
+  const selRect = document.getElementById('sel-rect');
+  const selBar  = document.getElementById('sel-bar');
+  const selStats = document.getElementById('sel-stats');
+  const selClear = document.getElementById('sel-clear');
+  let selAnchor = null;   // SVG x where drag started
+
+  function xToIdx(svgX) {
+    const frac = (Math.max(P.l, Math.min(P.l + CW, svgX)) - P.l) / CW;
+    const dAt  = frac * totalDist;
+    let best = 0;
+    for (let i = 1; i < dists.length; i++)
+      if (Math.abs(dists[i] - dAt) < Math.abs(dists[best] - dAt)) best = i;
+    return best;
+  }
+
+  function showSelBar(i1, i2) {
+    const segPts = pts.slice(i1, i2 + 1);
+    let segDist = 0, segGain = 0, segLoss = 0;
+    for (let i = 1; i < segPts.length; i++) {
+      segDist += hav(segPts[i-1][0], segPts[i-1][1], segPts[i][0], segPts[i][1]);
+      const de = segPts[i][2] - segPts[i-1][2];
+      if (de > 0) segGain += de; else segLoss -= de;
+    }
+    selStats.textContent = `${segDist.toFixed(1)} km  ·  ↑${Math.round(segGain)} m  ↓${Math.round(segLoss)} m`;
+    selBar.style.display = 'flex';
+  }
+
+  phA.addEventListener('mousedown', e => {
+    const r = svgEl.getBoundingClientRect();
+    selAnchor = e.clientX - r.left;
+    selRect.setAttribute('x', selAnchor); selRect.setAttribute('width', 0);
+    selRect.setAttribute('opacity', '1');
+  });
+
+  // ── Live segment highlight ────────────────────────────────────────
+  function applyHL(x1, x2) {
+    if (x2 - x1 < 4) return;
+    const i1 = xToIdx(x1), i2 = xToIdx(x2);
+    if (i1 >= i2) return;
+    hlByIdx(i1, i2);
+    showSelBar(i1, i2);
+  }
+
+  let lastX1 = 0, lastX2 = 0, rafPending = false;
+
+  phA.addEventListener('mousemove', e => {
+    if (selAnchor === null) return;
+    const r  = svgEl.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    lastX1 = Math.min(selAnchor, mx); lastX2 = Math.max(selAnchor, mx);
+    selRect.setAttribute('x', lastX1); selRect.setAttribute('width', lastX2 - lastX1);
+    if (!rafPending) {
+      rafPending = true;
+      requestAnimationFrame(() => { rafPending = false; applyHL(lastX1, lastX2); });
+    }
+  });
+
+  function commitSel(endX) {
+    if (selAnchor === null) return;
+    const r  = svgEl.getBoundingClientRect();
+    const mx = endX - r.left;
+    const x1 = Math.min(selAnchor, mx), x2 = Math.max(selAnchor, mx);
+    selAnchor = null;
+    selRect.setAttribute('opacity', '0');
+    if (x2 - x1 < 6) { resetView(); return; }
+    applyHL(x1, x2);
+  }
+
+  window.addEventListener('mouseup', e => { commitSel(e.clientX); });
+
+  function resetView() {
+    clearHL();
+    selBar.style.display = 'none';
+    document.querySelectorAll('.climb-item.active').forEach(e => e.classList.remove('active'));
+  }
+
+  selClear && selClear.addEventListener('click', resetView);
+  svgEl.addEventListener('dblclick', resetView);
+}
+
+// ── Tab switching ────────────────────────────────────────────────
+function switchTab(name) {
+  clearHL();
+  document.querySelectorAll('.climb-item.active').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'altimetria') {
+    // Re-draw profile now that the panel is visible and has real dimensions
+    requestAnimationFrame(() => {
+      if (gTrack) drawProfile(gTrack, gColor);
+    });
+  }
+  if (name === 'tiempo') loadWeather();
+}
+
+// ── Weather ───────────────────────────────────────────────────────
+const WMO = {
+  0:['☀️','Despejado'], 1:['🌤️','Mayormente despejado'], 2:['⛅','Parcialmente nublado'],
+  3:['☁️','Nublado'], 45:['🌫️','Niebla'], 48:['🌫️','Niebla con escarcha'],
+  51:['🌦️','Llovizna ligera'], 53:['🌦️','Llovizna'], 55:['🌧️','Llovizna intensa'],
+  61:['🌧️','Lluvia ligera'], 63:['🌧️','Lluvia'], 65:['🌧️','Lluvia intensa'],
+  71:['❄️','Nieve ligera'], 73:['❄️','Nieve'], 75:['❄️','Nevada intensa'],
+  80:['🌦️','Chubascos'], 81:['🌦️','Chubascos fuertes'], 82:['⛈️','Chubascos muy fuertes'],
+  85:['❄️','Chubascos de nieve'], 86:['❄️','Chubascos de nieve fuertes'],
+  95:['⛈️','Tormenta'], 96:['⛈️','Tormenta con granizo'], 99:['⛈️','Tormenta fuerte'],
+};
+
+let gWeatherLoaded = false;
+async function loadWeather() {
+  if (gWeatherLoaded || !gTrack) return;
+  const panel = document.getElementById('weather-panel');
+  if (!panel) return;
+  const lat = gTrack.points?.[0]?.[0] ?? gTrack.center_lat;
+  const lon = gTrack.points?.[0]?.[1] ?? gTrack.center_lon;
+  if (!lat || !lon) { panel.textContent = 'Sin coordenadas de origen.'; return; }
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,precipitation&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&wind_speed_unit=kmh&forecast_days=5`;
+    const r = await fetch(url);
+    const d = await r.json();
+    const c = d.current;
+    const [emoji, desc] = WMO[c.weather_code] ?? ['🌡️', `Código ${c.weather_code}`];
+
+    const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    const forecastHTML = (d.daily?.time || []).map((dateStr, i) => {
+      const dt   = new Date(dateStr + 'T12:00:00');
+      const name = i === 0 ? 'Hoy' : DAYS[dt.getDay()];
+      const [de] = WMO[d.daily.weather_code[i]] ?? ['🌡️',''];
+      const mn   = Math.round(d.daily.temperature_2m_min[i]);
+      const mx   = Math.round(d.daily.temperature_2m_max[i]);
+      const pr   = d.daily.precipitation_sum[i];
+      return `<div class="wx-day">
+        <div class="wx-day-name">${name}</div>
+        <div class="wx-day-icon">${de}</div>
+        <div class="wx-day-range">${mx}° <span style="font-weight:400;color:#94a3b8">${mn}°</span></div>
+        ${pr > 0 ? `<div class="wx-day-prec">💧${pr}mm</div>` : '<div class="wx-day-prec">&nbsp;</div>'}
+      </div>`;
+    }).join('');
+
+    const windyUrl = `https://www.windy.com/?${lat.toFixed(4)},${lon.toFixed(4)},10`;
+    gWeatherLoaded = true;
+    panel.innerHTML = `
+      <div id="weather-wrap">
+        <div id="weather-main">
+          <div class="wx-icon">${emoji}</div>
+          <div>
+            <div class="wx-temp">${Math.round(c.temperature_2m)}°C</div>
+            <div class="wx-desc">${desc}</div>
+          </div>
+        </div>
+        <div id="weather-details">
+          <div class="wx-detail"><div class="wx-detail-val">${c.wind_speed_10m} km/h</div><div class="wx-detail-lbl">Viento</div></div>
+          <div class="wx-detail"><div class="wx-detail-val">${c.relative_humidity_2m}%</div><div class="wx-detail-lbl">Humedad</div></div>
+          <div class="wx-detail"><div class="wx-detail-val">${c.precipitation} mm</div><div class="wx-detail-lbl">Precipitación</div></div>
+        </div>
+        <div class="section-head" style="margin:16px 0 8px">Próximos 5 días</div>
+        <div id="weather-forecast">${forecastHTML}</div>
+        <div id="weather-location" style="margin-top:10px">
+          📍 ${lat.toFixed(4)}, ${lon.toFixed(4)} · Fuente: Open-Meteo ·
+          <a href="${windyUrl}" target="_blank" rel="noopener" style="color:#3b82f6;text-decoration:none">Ver detalle en Windy →</a>
+        </div>
+      </div>`;
+  } catch(e) {
+    panel.textContent = 'No se pudieron obtener datos meteorológicos.';
+  }
+}
+
+// ── Tags ─────────────────────────────────────────────────────────
+function getTags() {
+  return [...document.querySelectorAll('#tags-list .track-tag')].map(el => el.dataset.tag);
+}
+function renderTags(tags) {
+  document.getElementById('tags-list').innerHTML = tags.map(tag =>
+    `<span class="track-tag" data-tag="${tag}">${tag}<button class="tag-del" onclick="removeTag('${tag.replace(/'/g,"\\'")}')">×</button></span>`
+  ).join('');
+}
+async function saveTags(tags) {
+  if (!gTrack) return;
+  await fetch(`/api/tracks/${gTrack.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tags: JSON.stringify(tags) }),
+  });
+  // Regenerate catalog in background so filters update on next page load
+  fetch('/api/db/export', { method: 'POST' }).catch(() => {});
+  setTimeout(() => localStorage.setItem('catalog_ts', Date.now()), 2500);
+}
+function addTag() {
+  const inp = document.getElementById('tag-input');
+  const val = inp.value.trim().toLowerCase().replace(/\s+/g, '-');
+  if (!val) return;
+  const tags = getTags();
+  if (tags.includes(val)) { inp.value = ''; return; }
+  tags.push(val);
+  renderTags(tags);
+  saveTags(tags);
+  inp.value = '';
+}
+function removeTag(tag) {
+  const tags = getTags().filter(t => t !== tag);
+  renderTags(tags);
+  saveTags(tags);
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.activeElement?.id === 'tag-input') addTag();
+});
+
+// ── Climb click ──────────────────────────────────────────────────
+function climbClick(el) {
+  document.querySelectorAll('.climb-item.active').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  const i1 = +el.dataset.i1, i2 = +el.dataset.i2;
+  hlByIdx(i1, i2);
+  if (gMap && gElePts && i2 < gElePts.length) {
+    const lls = gElePts.slice(i1, i2 + 1).map(p => [p[0], p[1]]);
+    gMap.fitBounds(L.latLngBounds(lls), { padding: [50, 50], maxZoom: 15 });
+  }
+}
+
+// ── Enrich road types via OSM ────────────────────────────────────
+async function enrichRoadTypes() {
+  if (!gTrack) return;
+  const btn = document.getElementById('enrich-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Consultando OSM…'; }
+  const es = new EventSource(`/api/db/enrich-road-types?ids=${gTrack.id}`);
+  es.onmessage = ev => {
+    const d = JSON.parse(ev.data);
+    if (d.type === 'done') {
+      es.close();
+      // Reload track data to refresh road types display
+      fetch(`/api/tracks/${gTrack.id}`)
+        .then(r => r.json())
+        .then(t => {
+          gTrack = t;
+          updateMapBar(t);
+          const sec = document.getElementById('road-section');
+          if (!sec) return;
+          const hwHTML = buildTypeSection(t.road_types, HW_META);
+          const sfHTML = buildTypeSection(t.surface_types, SF_META);
+          sec.innerHTML = `
+            ${hwHTML ? `<div class="section-head">Tipos de camino</div>${hwHTML}` : '<p style="font-size:13px;color:#94a3b8;margin:0 0 4px">Sin cobertura OSM en esta zona.</p>'}
+            ${sfHTML ? `<div class="section-head" style="margin-top:20px">Superficie</div>${sfHTML}` : ''}
+            <button class="enrich-btn" onclick="enrichRoadTypes()" id="enrich-btn" style="margin-top:12px">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+              Actualizar datos OSM
+            </button>`;
+        });
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    if (btn) { btn.disabled = false; btn.textContent = 'Reintentar'; }
+  };
+}
+
+// ── Edit modal ────────────────────────────────────────────────────
+
+function openEditModal() {
+  if (!gTrack) return;
+  const t = gTrack;
+  document.getElementById('ef-name').value     = t.name      || '';
+  document.getElementById('ef-activity').value = t.activity  || '';
+  document.getElementById('ef-sierra').value   = t.sierra    || '';
+  document.getElementById('ef-province').value = t.province  || '';
+  document.getElementById('ef-ccaa').value     = t.ccaa      || '';
+  document.getElementById('ef-url').value      = t.url       || '';
+  document.getElementById('ef-notes').value    = t.notes     || '';
+  document.getElementById('edit-msg').textContent = '';
+  document.getElementById('edit-msg').className   = 'edit-msg';
+  document.getElementById('edit-overlay').classList.add('open');
+  document.getElementById('ef-name').focus();
+}
+
+function closeEditModal() {
+  document.getElementById('edit-overlay').classList.remove('open');
+}
+
+document.getElementById('edit-modal-close').addEventListener('click', closeEditModal);
+document.getElementById('ef-cancel-btn').addEventListener('click', closeEditModal);
+document.getElementById('edit-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('edit-overlay')) closeEditModal();
+});
+
+document.getElementById('ef-save-btn').addEventListener('click', async () => {
+  if (!gTrack) return;
+  const btn = document.getElementById('ef-save-btn');
+  const msg = document.getElementById('edit-msg');
+  btn.disabled = true;
+  msg.textContent = 'Guardando…'; msg.className = '';
+
+  const body = {
+    name:     document.getElementById('ef-name').value.trim()     || null,
+    activity: document.getElementById('ef-activity').value.trim() || null,
+    sierra:   document.getElementById('ef-sierra').value.trim()   || null,
+    province: document.getElementById('ef-province').value.trim() || null,
+    ccaa:     document.getElementById('ef-ccaa').value.trim()     || null,
+    url:      document.getElementById('ef-url').value.trim()      || null,
+    notes:    document.getElementById('ef-notes').value           || null,
+  };
+
+  try {
+    const res = await fetch(`/api/tracks/${gTrack.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // Update local state
+    Object.assign(gTrack, body);
+    // Update header title if name changed
+    if (body.name) document.getElementById('track-title').textContent = body.name;
+    msg.textContent = '✓ Guardado'; msg.className = 'ok';
+    setTimeout(closeEditModal, 900);
+  } catch (e) {
+    msg.textContent = 'Error: ' + e.message; msg.className = 'err';
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

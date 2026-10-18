@@ -1,0 +1,23 @@
+{
+  "name": "gpx-library",
+  "version": "1.0.0",
+  "description": "GPX Track Viewer with Leaflet",
+  "scripts": {
+    "build":       "node scripts/build-catalog.js",
+    "start":       "node server.js",
+    "start-basic": "npx http-server . -p 8080 -o --cors",
+    "dev":         "node scripts/build-catalog.js && node server.js",
+    "db:import": "node scripts/import-gpx.js",
+    "db:clean": "node scripts/clean-tracks.js",
+    "db:export": "node scripts/export-catalog.js",
+    "db:stats": "node scripts/clean-tracks.js --stats",
+    "db:list": "node scripts/clean-tracks.js --list",
+    "db:enrich": "node scripts/enrich-tracks.js",
+    "db:enrich-all": "node scripts/enrich-tracks.js --all",
+    "db:extract-urls": "node scripts/extract-urls.js",
+    "db:extract-urls-force": "node scripts/extract-urls.js --force"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
