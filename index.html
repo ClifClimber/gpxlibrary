@@ -18,9 +18,8 @@
     body { font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.4; }
 
     /* ── Layout ─────────────────────────────────── */
-    #app  { display:flex; flex-direction:column; height:100vh; }
-    #header { flex-shrink:0; height:50px; background:var(--header); color:var(--header-text); display:flex; align-items:center; padding:0 16px; gap:12px; z-index:1000; box-shadow:0 2px 8px rgba(0,0,0,.3); }
-    #header-title { font-size:16px; font-weight:700; display:flex; align-items:center; gap:7px; }
+    #app  { display:flex; flex-direction:column; height:calc(100vh - 48px); }
+    #header { z-index:1000; }
     #header-stats { margin-left:auto; font-size:12px; color:#94a3b8; display:flex; gap:14px; }
     .hstat { display:flex; align-items:center; gap:4px; }
     .hstat-val { color:#e2e8f0; font-weight:600; }
@@ -45,13 +44,7 @@
     }
     #resize-handle:hover::after, #resize-handle.dragging::after { background:var(--accent); }
 
-    /* ── Sidebar tabs ───────────────────────────── */
-    #sidebar-tabs { display:flex; flex-shrink:0; border-bottom:2px solid var(--border); background:var(--filter-bg); }
-    .stab { flex:1; padding:10px 4px; background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-2px; cursor:pointer; font-size:12px; font-weight:600; color:var(--muted); display:flex; align-items:center; justify-content:center; gap:5px; transition:color .12s; }
-    .stab:hover  { color:var(--text); }
-    .stab.active { color:var(--accent); border-bottom-color:var(--accent); }
-    .tab-panel   { display:none; flex:1; flex-direction:column; overflow:hidden; min-height:0; }
-    .tab-panel.active { display:flex; }
+    #tab-routes { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
 
     /* ── Right col ──────────────────────────────── */
     #right-col { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
@@ -86,10 +79,14 @@
     /* ── Filters (tab Rutas) ─────────────────────── */
     #filters {
       flex-shrink:0; background:var(--filter-bg); border-bottom:1px solid var(--border);
-      overflow:hidden; max-height:600px; transition:max-height .25s ease, padding .25s ease;
-      padding:14px;
+      overflow:hidden; max-height:560px; transition:max-height .25s ease, padding .25s ease;
+      padding:0; display:flex; flex-direction:column;
     }
-    #filters.collapsed { max-height:0; padding-top:0; padding-bottom:0; border-bottom:none; }
+    #filters.collapsed { max-height:0; border-bottom:none; }
+    #filters-scroll { flex:1; overflow-y:auto; padding:14px 14px 0; }
+    #filters-scroll::-webkit-scrollbar { width:4px; }
+    #filters-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+    .filter-footer { padding:10px 14px 14px; background:var(--filter-bg); border-top:1px solid var(--border); flex-shrink:0; display:flex; gap:8px; margin:0; }
     .filter-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
     .filter-header-title { font-weight:700; font-size:13px; display:flex; align-items:center; gap:7px; }
     .filter-header-actions { display:flex; align-items:center; gap:6px; }
@@ -117,6 +114,7 @@
     .dual-range-outer { padding:4px 0 2px; }
     .dual-range-track { position:relative; height:5px; background:var(--border); border-radius:3px; margin:8px 0; }
     .dual-range-fill  { position:absolute; top:0; height:100%; background:#f59e0b; border-radius:3px; pointer-events:none; }
+    #ibp-rs-fill { background:linear-gradient(to right,#16a34a,#d97706,#c2410c,#b91c1c,#7e22ce,#1e293b) !important; }
     .dual-range-inputs { position:relative; height:22px; margin:-18px 0 0; }
     .dual-range-inputs input[type=range] {
       position:absolute; left:0; width:100%; height:22px; margin:0;
@@ -140,8 +138,15 @@
     .dual-range-inputs input[type=range]::-webkit-slider-runnable-track,
     .dual-range-inputs input[type=range]::-moz-range-track { background:transparent; }
     .rs-val-label { font-weight:600; color:var(--text); text-transform:none; letter-spacing:0; font-size:11px; margin-left:4px; }
+    /* ── IBP dot slider ─────────────────────── */
+    .ibp-slider-wrap { padding:2px 0; }
+    .ibp-dots-row { display:flex; justify-content:space-between; margin-bottom:2px; }
+    .ibp-dot { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; }
+    .ibp-dot-circle { width:13px; height:13px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1.5px rgba(0,0,0,.15); transition:transform .15s,box-shadow .15s; }
+    .ibp-dot.in-range .ibp-dot-circle { transform:scale(1.35); box-shadow:0 0 0 2px rgba(0,0,0,.25); }
+    .ibp-dot-lbl { font-size:8px; color:var(--muted); text-align:center; white-space:nowrap; transition:color .15s,font-weight .15s; line-height:1.2; }
+    .ibp-dot.in-range .ibp-dot-lbl { color:var(--text); font-weight:600; }
     /* ── Filter footer ──────────────────────── */
-    .filter-footer { display:flex; gap:8px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
     #clear-filters-btn { flex:1; padding:7px 10px; border-radius:6px; font-size:12px; font-weight:500; cursor:pointer; border:1.5px solid var(--border); background:transparent; color:var(--muted); transition:border-color .12s,color .12s; }
     #clear-filters-btn:hover { border-color:var(--text); color:var(--text); }
     #apply-filters-btn { flex:2; padding:7px 10px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:none; background:var(--accent); color:#fff; transition:background .12s; }
@@ -162,6 +167,18 @@
     #vp-filter-btn { font-size:10px; padding:2px 7px; border-radius:10px; border:1.5px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; white-space:nowrap; transition:background .12s,color .12s,border-color .12s; }
     #vp-filter-btn:hover { border-color:var(--accent); color:var(--accent); }
     #vp-filter-btn.active { background:color-mix(in srgb,var(--accent) 12%,white); color:var(--accent); border-color:var(--accent); }
+    /* ── Text search in filter panel ─────────── */
+    .fsearch-wrap { position:relative; }
+    .fsearch-wrap svg { position:absolute; left:8px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none; }
+    .fsearch-input { width:100%; padding:6px 10px 6px 28px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--input-bg); color:var(--text); outline:none; }
+    .fsearch-input:focus { border-color:var(--accent); }
+    /* ── Search chip bar ─────────────────────── */
+    #search-chip-bar { display:none; padding:4px 8px 5px; gap:5px; flex-wrap:wrap; align-items:center; border-bottom:1px solid var(--border); background:var(--filter-bg); }
+    #search-chip-bar.has-chips { display:flex; }
+    .search-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 5px 2px 8px; border-radius:999px; font-size:11px; background:color-mix(in srgb,var(--accent) 10%,white); color:var(--accent); border:1.5px solid color-mix(in srgb,var(--accent) 30%,var(--border)); max-width:200px; }
+    .search-chip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .search-chip .chip-x { background:none; border:none; cursor:pointer; color:inherit; font-size:14px; line-height:1; padding:0 0 0 2px; opacity:.6; display:flex; }
+    .search-chip .chip-x:hover { opacity:1; }
     #tracklist { flex:1; overflow-y:auto; padding:6px; }
     #tracklist::-webkit-scrollbar { width:5px; }
     #tracklist::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
@@ -179,64 +196,6 @@
     .tstat { font-size:11px; color:var(--muted); }
     .empty-state { padding:32px 16px; text-align:center; color:var(--muted); font-size:13px; }
     .empty-state p { margin-top:6px; font-size:12px; }
-
-    /* ── DB tab ─────────────────────────────────── */
-    #tab-db-inner { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:12px; }
-    #tab-db-inner::-webkit-scrollbar { width:5px; }
-    #tab-db-inner::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
-
-    .db-section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:6px; display:flex; align-items:center; justify-content:space-between; }
-    .db-refresh { background:none; border:none; cursor:pointer; color:var(--muted); font-size:14px; padding:0 2px; transition:transform .3s; }
-    .db-refresh:hover { color:var(--accent); }
-    .db-refresh.spinning { animation:spin .7s linear infinite; }
-    @keyframes spin { to { transform:rotate(360deg); } }
-
-    .db-cards { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    .db-card { background:var(--filter-bg); border:1px solid var(--border); border-radius:8px; padding:8px 10px; }
-    .db-card-val { font-size:20px; font-weight:700; color:var(--text); line-height:1.1; }
-    .db-card-lbl { font-size:10px; color:var(--muted); margin-top:2px; }
-    .db-card.accent-card { background:color-mix(in srgb,var(--accent) 8%,white); border-color:color-mix(in srgb,var(--accent) 25%,var(--border)); }
-    .db-card.accent-card .db-card-val { color:var(--accent); }
-
-    .db-table { width:100%; border-collapse:collapse; font-size:11px; }
-    .db-table th { padding:4px 6px; font-weight:600; color:var(--muted); border-bottom:1px solid var(--border); text-align:left; }
-    .db-table th:not(:first-child) { text-align:right; }
-    .db-table td { padding:5px 6px; border-bottom:1px solid var(--border); }
-    .db-table td:not(:first-child) { text-align:right; }
-    .db-table tr:last-child td { border-bottom:none; }
-    .db-reduc { font-weight:600; color:#16a34a; }
-    .db-reduc.none { color:var(--muted); font-weight:400; }
-
-    .db-actions { display:flex; flex-direction:column; gap:7px; }
-    .db-btn-row { display:flex; gap:7px; }
-    .db-btn { flex:1; padding:8px 10px; border-radius:6px; font-size:12px; font-weight:500; cursor:pointer; border:1.5px solid; display:flex; align-items:center; justify-content:center; gap:5px; transition:background .12s,opacity .12s; }
-    .db-btn:disabled { opacity:.5; cursor:not-allowed; }
-    .db-btn-primary   { background:var(--accent); color:white; border-color:var(--accent); }
-    .db-btn-primary:not(:disabled):hover   { background:#2563eb; }
-    .db-btn-secondary { background:var(--filter-bg); color:var(--text); border-color:var(--border); }
-    .db-btn-secondary:not(:disabled):hover { background:var(--hover-bg); }
-    .db-btn-success   { background:#16a34a; color:white; border-color:#16a34a; }
-    .db-btn-success:not(:disabled):hover   { background:#15803d; }
-
-    .db-clean-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; background:var(--filter-bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px; }
-    .db-clean-row label { font-size:11px; color:var(--muted); white-space:nowrap; }
-    .db-num { width:60px; padding:4px 6px; border:1px solid var(--border); border-radius:4px; font-size:12px; background:var(--input-bg); color:var(--text); outline:none; }
-    .db-num:focus { border-color:var(--accent); }
-    .db-clean-sep { font-size:11px; color:var(--border); }
-
-    #db-log { background:#0f172a; color:#e2e8f0; border-radius:6px; padding:8px 10px; font-size:11px; font-family:'Cascadia Code',Consolas,monospace; max-height:220px; overflow-y:auto; display:none; }
-    #db-log.visible { display:block; }
-    #db-log::-webkit-scrollbar { width:4px; }
-    #db-log::-webkit-scrollbar-thumb { background:#334155; }
-    .log-line { line-height:1.5; }
-    .log-error { color:#f87171; }
-    .log-warn  { color:#fbbf24; }
-    .log-ok    { color:#34d399; }
-    .log-muted { color:#64748b; }
-    .log-progress { color:#7dd3fc; }
-
-    .db-no-api { color:var(--muted); font-size:12px; padding:16px; line-height:1.8; text-align:center; }
-    .db-no-api code { background:var(--filter-bg); border:1px solid var(--border); padding:1px 5px; border-radius:3px; font-size:11px; }
 
     /* ── Leaflet layer control ──────────────────── */
     .leaflet-control-layers { font-size:12px; }
@@ -262,23 +221,22 @@
       #sidebar-toggle { display:block; }
     }
   </style>
+  <link rel="stylesheet" href="/shared.css">
 </head>
 <body>
+<nav>
+  <span class="logo">GPX Library</span>
+  <a href="/" style="color:#f8fafc">Visor</a>
+  <a href="/editor">Editor</a>
+  <a href="/config">Config</a>
+  <a href="/admin">Admin</a>
+</nav>
 <div id="app">
-  <header id="header">
-    <div id="header-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
-      GPX Library
+  <header id="header" class="page-header">
+    <div class="page-header-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" opacity=".7"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      GPX Library — Visor
     </div>
-    <div id="header-stats">
-      <span class="hstat">Tracks: <span class="hstat-val" id="stat-count">—</span></span>
-      <span class="hstat">Dist.: <span class="hstat-val" id="stat-dist">—</span></span>
-      <span class="hstat">Desnivel+: <span class="hstat-val" id="stat-ele">—</span></span>
-    </div>
-    <a href="/editor" id="editor-link" title="Gestión de tracks" style="color:#94a3b8;text-decoration:none;font-size:12px;display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:4px;border:1px solid #334155;transition:background .12s;">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-      Gestión
-    </a>
     <button id="side-toggle" title="Mover panel izquierda/derecha">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
     </button>
@@ -289,21 +247,9 @@
 
   <div id="main">
     <aside id="sidebar">
-      <!-- Tab buttons -->
-      <div id="sidebar-tabs">
-        <button class="stab active" data-tab="routes">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-          Rutas
-        </button>
-        <button class="stab" data-tab="db">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-          Base de datos
-        </button>
-      </div>
-
-      <!-- Tab: Rutas -->
-      <div id="tab-routes" class="tab-panel active">
+      <div id="tab-routes">
         <div id="filters">
+          <div id="filters-scroll">
           <div class="filter-header">
             <span class="filter-header-title">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
@@ -311,6 +257,13 @@
             </span>
             <div class="filter-header-actions">
               <button id="filter-close-btn" title="Cerrar filtros">×</button>
+            </div>
+          </div>
+          <div class="fsec">
+            <div class="flabel">Buscar texto</div>
+            <div class="fsearch-wrap">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input type="text" id="text-search" class="fsearch-input" placeholder="Nombre de la ruta..." autocomplete="off">
             </div>
           </div>
           <div class="fsec">
@@ -356,6 +309,27 @@
             <div class="flabel">Año</div>
             <select class="filter-select" id="year-filter"><option value="">Todos</option></select>
           </div>
+          <div class="fsec" id="fsec-ibp">
+            <div class="flabel">Dificultad IBP <span id="ibp-rs-label" class="rs-val-label"></span></div>
+            <div class="ibp-slider-wrap">
+              <div class="ibp-dots-row" id="ibp-dots-row">
+                <div class="ibp-dot" data-i="0"><div class="ibp-dot-circle" style="background:#16a34a"></div><div class="ibp-dot-lbl">Muy fácil</div></div>
+                <div class="ibp-dot" data-i="1"><div class="ibp-dot-circle" style="background:#d97706"></div><div class="ibp-dot-lbl">Fácil</div></div>
+                <div class="ibp-dot" data-i="2"><div class="ibp-dot-circle" style="background:#c2410c"></div><div class="ibp-dot-lbl">Moderada</div></div>
+                <div class="ibp-dot" data-i="3"><div class="ibp-dot-circle" style="background:#b91c1c"></div><div class="ibp-dot-lbl">Dura</div></div>
+                <div class="ibp-dot" data-i="4"><div class="ibp-dot-circle" style="background:#7e22ce"></div><div class="ibp-dot-lbl">Muy dura</div></div>
+                <div class="ibp-dot" data-i="5"><div class="ibp-dot-circle" style="background:#1e293b"></div><div class="ibp-dot-lbl">Extrema</div></div>
+              </div>
+              <div class="dual-range-outer">
+                <div class="dual-range-track"><div class="dual-range-fill" id="ibp-rs-fill"></div></div>
+                <div class="dual-range-inputs">
+                  <input type="range" id="ibp-rs-min" min="0" max="5" step="1" value="0">
+                  <input type="range" id="ibp-rs-max" min="0" max="5" step="1" value="5">
+                </div>
+              </div>
+            </div>
+          </div>
+          </div><!-- #filters-scroll -->
           <div class="filter-footer">
             <button id="clear-filters-btn">Limpiar filtros</button>
             <button id="apply-filters-btn">Aplicar filtros</button>
@@ -369,77 +343,10 @@
           </button>
           <button id="vp-filter-btn" title="Mostrar solo tracks visibles en el mapa actual">📍 Solo mapa</button>
         </div>
+        <div id="search-chip-bar"></div>
         <div id="tracklist"><div class="empty-state">Cargando...</div></div>
       </div>
 
-      <!-- Tab: Base de datos -->
-      <div id="tab-db" class="tab-panel">
-        <div id="tab-db-inner">
-          <!-- Stats section -->
-          <div>
-            <div class="db-section-title">
-              Estadísticas
-              <button class="db-refresh" id="db-refresh-btn" title="Actualizar">↻</button>
-            </div>
-            <div id="db-stats-content">
-              <div class="db-no-api">Cargando estadísticas…</div>
-            </div>
-          </div>
-
-          <!-- Actions section -->
-          <div>
-            <div class="db-section-title">Acciones</div>
-            <div class="db-actions">
-
-              <!-- Import -->
-              <div class="db-btn-row">
-                <button class="db-btn db-btn-primary" id="btn-import">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  Importar tracks
-                </button>
-                <button class="db-btn db-btn-secondary" id="btn-import-force" title="Reimportar aunque ya existan">
-                  ↻ Force
-                </button>
-              </div>
-
-              <!-- Clean -->
-              <div class="db-clean-row">
-                <label>min-dist</label>
-                <input type="number" class="db-num" id="inp-mindist" value="5" min="0" max="100" title="Eliminar puntos a menos de N metros (0 = off)">
-                <span style="font-size:10px;color:var(--muted)">m</span>
-                <span class="db-clean-sep">·</span>
-                <label>RDP</label>
-                <input type="number" class="db-num" id="inp-rdp" value="8" min="0" max="50" title="Douglas-Peucker epsilon en metros (0 = off)">
-                <span style="font-size:10px;color:var(--muted)">m</span>
-                <button class="db-btn db-btn-secondary" id="btn-clean" style="flex:0 0 auto;padding:5px 10px;" title="Limpiar tracks">
-                  Limpiar
-                </button>
-              </div>
-
-              <!-- Enrich -->
-              <div class="db-btn-row">
-                <button class="db-btn db-btn-secondary" id="btn-enrich">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-                  Enriquecer datos
-                </button>
-                <button class="db-btn db-btn-secondary" id="btn-enrich-force" title="Enriquecer todos (incluye ya procesados)" style="flex:0 0 auto;padding:5px 10px;">↻ Todos</button>
-              </div>
-
-              <!-- Export -->
-              <div class="db-btn-row">
-                <button class="db-btn db-btn-success" id="btn-export">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  Exportar catálogo
-                </button>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- Log -->
-          <div id="db-log"></div>
-        </div>
-      </div>
     </aside>
 
     <div id="resize-handle" title="Arrastrar para redimensionar"></div>
@@ -491,6 +398,27 @@ if (typeof CATALOG === 'undefined') {
   return;
 }
 
+// ── IBP difficulty levels ────────────────────────────────────────────
+const IBP_LEVELS = [
+  { label:'Muy fácil', emoji:'🟢', min:0,   max:50,       color:'#15803d', bg:'#f0fdf4', border:'#bbf7d0' },
+  { label:'Fácil',     emoji:'🟡', min:51,  max:100,      color:'#854d0e', bg:'#fefce8', border:'#fde68a' },
+  { label:'Moderada',  emoji:'🟠', min:101, max:150,      color:'#c2410c', bg:'#fff7ed', border:'#fed7aa' },
+  { label:'Dura',      emoji:'🔴', min:151, max:250,      color:'#b91c1c', bg:'#fef2f2', border:'#fecaca' },
+  { label:'Muy dura',  emoji:'🟣', min:251, max:400,      color:'#7e22ce', bg:'#faf5ff', border:'#e9d5ff' },
+  { label:'Extrema',   emoji:'⚫', min:401, max:Infinity, color:'#e2e8f0', bg:'#1e293b', border:'#475569' },
+];
+const CYCLING_ACTS_V = ['Mtb','Gravel','Bikepacking','Ciclismo de carretera'];
+const RUNNING_ACTS_V = ['Trail Running','Running'];
+function ibpForTrackV(t) {
+  if (CYCLING_ACTS_V.includes(t.activity)) return t.ibp_bicycle;
+  if (RUNNING_ACTS_V.includes(t.activity)) return t.ibp_running;
+  return t.ibp_hiking;
+}
+function ibpLevelIdxV(val) {
+  if (val == null) return -1;
+  return IBP_LEVELS.findIndex(l => val >= l.min && val <= l.max);
+}
+
 // ── Color system (activity-based) ───────────────────────────────────
 const ACT_COLORS = {
   'Mtb':                   '#7c3aed',
@@ -509,24 +437,31 @@ const ACT_COLORS = {
 
 // ── Activity icons (SVG paths, 24x24 viewBox) ────────────────────────
 const ACT_ICONS = {
-  'Mtb':                   '<circle cx="6" cy="16" r="3" stroke-width="2"/><circle cx="18" cy="16" r="3" stroke-width="2"/><path stroke-width="2" d="M9 16 L12 7h4l1.5 3M12 7 l6 9M9 16 l4-9"/>',
-  'Gravel':                '<circle cx="6" cy="16" r="3" stroke-width="2"/><circle cx="18" cy="16" r="3" stroke-width="2"/><path stroke-width="2" d="M9 16 L12 7h4l1.5 3M12 7 l6 9M9 16 l4-9"/>',
-  'Bikepacking':           '<circle cx="6" cy="16" r="2.5" stroke-width="2"/><circle cx="18" cy="16" r="2.5" stroke-width="2"/><path stroke-width="2" d="M9 16 L12 7h4l1.5 3M12 7 l6 9M9 16 l4-9"/><rect x="11" y="8.5" width="3.5" height="3" rx="0.5" stroke-width="1.5"/>',
-  'Ciclismo de carretera': '<circle cx="6" cy="16" r="3" stroke-width="2"/><circle cx="18" cy="16" r="3" stroke-width="2"/><path stroke-width="2" d="M9 16 l3-9h3l3 9M12 7 l-2 4M12 7 h3"/>',
-  'Trail Running':         '<circle cx="13" cy="4" r="2" stroke-width="2"/><path stroke-width="2" d="M13 6 l-1 4-3 6M12 10 l3-2 2 4M12 10 l1 10"/>',
-  'Running':               '<circle cx="14" cy="4" r="2" stroke-width="2"/><path stroke-width="2" d="M14 6 l-1 4-4 4M13 10 l3-2 1 3M9 10 l-1 7M13 10 l1 8"/>',
-  'Senderismo':            '<circle cx="11" cy="4" r="2" stroke-width="2"/><path stroke-width="2" d="M11 6 v4M9 10 l-2 8M11 10 l2 8M11 10 l-3-3M16 8 l-2 2-3-2"/>',
-  'Montañismo':            '<path stroke-width="2" d="M3 20 L9 9 L14 16 L17 11 L21 20z"/>',
-  'Escalada':              '<path stroke-width="2" d="M5 20 l4-8 4 3 4-10"/><circle cx="17" cy="5" r="1.5" stroke-width="2"/><path stroke-width="2" d="M13 15 l5 2M9 12 l-3 2"/>',
-  'Esquí de montaña':      '<circle cx="12" cy="4" r="2" stroke-width="2"/><path stroke-width="2" d="M12 6 l-2 5-4 6M10 11 l6-3M6 17 l12-1"/>',
-  'Kayak':                 '<path stroke-width="2" d="M12 3 v18M3 12 Q7.5 7 12 8 Q16.5 7 21 12M3 12 Q7.5 17 12 16 Q16.5 17 21 12"/>',
-  'Otro':                  '<path stroke-width="2" d="M12 2a6 6 0 0 1 6 7c0 5-6 13-6 13S6 14 6 9a6 6 0 0 1 6-7z"/><circle cx="12" cy="9" r="2" stroke-width="2"/>',
+  'Mtb':                   `<circle cx="7" cy="17" r="3.2" stroke-width="2.2"/><circle cx="17" cy="17" r="3.2" stroke-width="2.2"/><path stroke-width="2" d="M10.2 17 L13 9 L16.5 13 L17 17"/><path stroke-width="2" d="M13 9 L15 9 L17 13"/><circle cx="15.5" cy="6.5" r="1.8" fill="white" stroke="none"/><path stroke-width="1.8" d="M15 8 L13 10 M15.5 8 L17 11"/>`,
+  'Gravel':                `<circle cx="6.5" cy="17" r="3" stroke-width="2.2"/><circle cx="17.5" cy="17" r="3" stroke-width="2.2"/><path stroke-width="2" d="M9.5 17 L13 8 L17.5 13.5 L17.5 17"/><path stroke-width="2" d="M13 8 L15.5 8 L17.5 12"/><circle cx="16" cy="5.5" r="1.8" fill="white" stroke="none"/><path stroke-width="1.8" d="M15.5 7 L14 9.5 M16 7 L18 9"/>`,
+  'Bikepacking':           `<circle cx="7" cy="17" r="3" stroke-width="2.2"/><circle cx="17" cy="17" r="3" stroke-width="2.2"/><path stroke-width="2" d="M10 17 L13 9 L16.5 13 L17 17"/><path stroke-width="2" d="M13 9 L15 9 L17 13"/><rect x="12.5" y="9.5" width="3" height="2.5" rx="0.5" fill="white" stroke="none"/><circle cx="15.5" cy="7" r="1.8" fill="white" stroke="none"/>`,
+  'Ciclismo de carretera': `<circle cx="6" cy="17" r="3" stroke-width="2.2"/><circle cx="18" cy="17" r="3" stroke-width="2.2"/><path stroke-width="2" d="M9 17 L12 7.5 L18 13.5 L18 17"/><path stroke-width="2" d="M12 7.5 L14.5 7.5 L18 12.5"/><circle cx="15" cy="5" r="1.8" fill="white" stroke="none"/><path stroke-width="1.8" d="M14.5 6.5 L13 9.5 M15 6.5 L17 8"/>`,
+  'Trail Running':         `<circle cx="13" cy="4" r="1.8" fill="white" stroke="none"/><path stroke-width="2.5" d="M13 5.8 L11 11 L8 14.5 M11 11 L13.5 15 L12 20 M8 14.5 L7 20 M13 5.8 L16 9"/><path stroke-width="2" d="M11 11 L14 9.5 L16 11"/>`,
+  'Running':               `<circle cx="14" cy="4" r="1.8" fill="white" stroke="none"/><path stroke-width="2.5" d="M14 5.8 L12 11 L9 9.5 M12 11 L14 16 L11 20 M14 16 L17 20 M14 5.8 L16 10"/><path stroke-width="2" d="M9 9.5 L7.5 11 M16 10 L18 9"/>`,
+  'Senderismo':            `<circle cx="12" cy="4" r="1.8" fill="white" stroke="none"/><path stroke-width="2.5" d="M12 5.8 L11 12 L9.5 20 M11 12 L13 20"/><path stroke-width="2" d="M12 5.8 L15 9 M11 9 L9 10 L8.5 20"/><path stroke-width="1.5" d="M9 10 L7 8"/>`,
+  'Montañismo':            `<path fill="white" stroke="none" d="M3 21 L9 9 L13.5 16 L16.5 10.5 L21 21Z"/>`,
+  'Apinismo':              `<path fill="white" stroke="none" d="M3 21 L9 9 L13.5 16 L16.5 10.5 L21 21Z"/>`,
+  'Escalada':              `<line x1="3.5" y1="2" x2="3.5" y2="22" stroke-width="2.5"/><path stroke-width="1.5" d="M3.5 6 L7 7 M3.5 12 L7 13 M3.5 18 L7 19"/><circle cx="17" cy="5" r="1.8" fill="white" stroke="none"/><path stroke-width="2" d="M17 6.8 L14.5 10 L12 9 M14.5 10 L13.5 16 L11.5 21 M13.5 16 L16.5 19 M17 6.8 L19 9"/><path stroke-width="1.5" d="M3.5 10 L12 9"/>`,
+  'Ferratas':              `<line x1="3.5" y1="2" x2="3.5" y2="22" stroke-width="2.5"/><path stroke-width="1.5" d="M3.5 5 L6 5 M3.5 9 L6 9 M3.5 13 L6 13 M3.5 17 L6 17"/><circle cx="17" cy="5" r="1.8" fill="white" stroke="none"/><path stroke-width="2" d="M17 6.8 L15 10 L12 9 M15 10 L14 17 L12 21 M14 17 L17 20 M17 6.8 L19 9"/><path stroke-width="1.5" d="M3.5 9 L12 9"/>`,
+  'Esquí de montaña':      `<circle cx="13" cy="4" r="1.8" fill="white" stroke="none"/><path stroke-width="2.5" d="M13 5.8 L11 11 L8 12.5 M11 11 L12 18 M13 5.8 L15 9 L17 10"/><path stroke-width="1.5" d="M8 12.5 L6 14 M17 10 L18 14"/><path stroke-width="2.5" d="M5 21 L13 22 L17 21"/>`,
+  'Kayak':                 `<circle cx="12" cy="4" r="1.8" fill="white" stroke="none"/><path stroke-width="2.5" d="M12 5.8 L11 9.5 L12 14"/><path stroke-width="2" d="M8.5 9.5 L15.5 9.5"/><path stroke-width="2" fill="white" d="M4 16 Q12 13.5 20 16 Q12 18.5 4 16Z"/><path stroke-width="2" d="M3 9 L8 10 M16 10 L21 9"/><path stroke-width="2" d="M3 8.5 L3 9.5 M21 8.5 L21 9.5"/>`,
+  'Otro':                  `<path fill="white" stroke="none" d="M12 2.5C8.8 2.5 6.5 5.3 6.5 8.6c0 4.9 5.5 12.9 5.5 12.9s5.5-8 5.5-12.9C17.5 5.3 15.2 2.5 12 2.5z"/>`,
 };
 
+let actIconsCustom = {};
+
 function makeActivityIcon(act, color) {
-  const paths = ACT_ICONS[act] || ACT_ICONS['Otro'];
+  const customSrc = actIconsCustom[act];
+  const inner = customSrc
+    ? `<img src="${customSrc}" style="width:18px;height:18px;object-fit:contain;border-radius:2px"/>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round">${ACT_ICONS[act] || ACT_ICONS['Otro']}</svg>`;
   return L.divIcon({
-    html: `<div class="act-marker" style="background:${color}"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round">${paths}</svg></div>`,
+    html: `<div class="act-marker" style="background:${color}">${inner}</div>`,
     className: 'act-marker-wrap',
     iconSize: [32, 32],
     iconAnchor: [16, 16],
@@ -537,10 +472,12 @@ const PALETTE = ['#e67e22','#27ae60','#8e44ad','#2980b9','#e74c3c','#16a085','#f
 let actColorIdx = 0;
 let actColorsCustom = {};
 let trackColors = {};
+// actIconsCustom declared above near ACT_ICONS
 
 function loadColors() {
-  try { actColorsCustom = JSON.parse(localStorage.getItem('gpx-act-colors') || '{}'); } catch {}
-  try { trackColors     = JSON.parse(localStorage.getItem('gpx-track-colors') || '{}'); } catch {}
+  try { actColorsCustom  = JSON.parse(localStorage.getItem('gpx-act-colors')   || '{}'); } catch {}
+  try { trackColors      = JSON.parse(localStorage.getItem('gpx-track-colors') || '{}'); } catch {}
+  try { actIconsCustom   = JSON.parse(localStorage.getItem('gpx-act-icons')    || '{}'); } catch {}
 }
 function saveActColors()   { try { localStorage.setItem('gpx-act-colors',   JSON.stringify(actColorsCustom));  } catch {} }
 function saveTrackColors() { try { localStorage.setItem('gpx-track-colors', JSON.stringify(trackColors)); } catch {} }
@@ -554,6 +491,47 @@ function actColor(act) {
 function getTrackColor(track) { return trackColors[track.file] || actColor(track.activity || 'Otro'); }
 
 loadColors();
+
+// Seed activity colors from DB if not already in localStorage
+fetch('/api/config/activities')
+  .then(r => r.json())
+  .then(acts => {
+    acts.forEach(a => { if (a.color && !actColorsCustom[a.name]) actColorsCustom[a.name] = a.color; });
+  })
+  .catch(() => {});
+
+// Live sync: re-apply when config.html (or another tab) changes colors/icons
+window.addEventListener('storage', e => {
+  if (e.key === 'gpx-act-colors' && e.newValue) {
+    try {
+      const newColors = JSON.parse(e.newValue);
+      Object.entries(newColors).forEach(([act, color]) => {
+        if (actColorsCustom[act] !== color) setActivityColor(act, color, false);
+      });
+      actColorsCustom = newColors;
+    } catch {}
+  }
+  if (e.key === 'gpx-act-icons' && e.newValue) {
+    try {
+      actIconsCustom = JSON.parse(e.newValue);
+      // Refresh markers for all activities whose icon may have changed
+      if (typeof items !== 'undefined') {
+        const seen = new Set();
+        items.forEach(({ track, marker }) => {
+          const act = track.activity || 'Otro';
+          if (marker && !seen.has(act)) {
+            seen.add(act);
+            const color = actColorsCustom[act] || ACT_COLORS[act] || '#64748b';
+            items.forEach(i => {
+              if ((i.track.activity || 'Otro') === act && i.marker)
+                i.marker.setIcon(makeActivityIcon(act, color));
+            });
+          }
+        });
+      }
+    } catch {}
+  }
+});
 
 // ── Color picker ─────────────────────────────────────────────────
 function pickColor(currentColor, onInput, onFinal) {
@@ -569,8 +547,11 @@ function pickColor(currentColor, onInput, onFinal) {
 function setActivityColor(act, color, save) {
   actColorsCustom[act] = color;
   if (save) saveActColors();
-  items.forEach(({ track, layer }) => {
-    if ((track.activity||'Otro') === act && !trackColors[track.file]) layer.setStyle({ color });
+  items.forEach(({ track, layer, marker }) => {
+    if ((track.activity||'Otro') === act && !trackColors[track.file]) {
+      layer.setStyle({ color });
+      if (marker) marker.setIcon(makeActivityIcon(act, color));
+    }
   });
   document.querySelectorAll('.cat-pill[data-activity]').forEach(p => {
     if (p.dataset.activity === act) { p.style.setProperty('--c', color); const dot = p.querySelector('.cat-dot'); if(dot) dot.style.background = color; }
@@ -586,7 +567,10 @@ function setTrackColor(track, color, save) {
   trackColors[track.file] = color;
   if (save) saveTrackColors();
   const item = items.find(it => it.track === track);
-  if (item) item.layer.setStyle({ color });
+  if (item) {
+    item.layer.setStyle({ color });
+    if (item.marker) item.marker.setIcon(makeActivityIcon(track.activity || 'Otro', color));
+  }
   renderList();
   if (activeIdx !== null && items[activeIdx].track === track) fillDetailHeader(track, color);
 }
@@ -632,7 +616,7 @@ const segHL = {
   },
   hide() {
     this._layers.forEach(l => l.remove()); this._layers = [];
-    if (activeIdx !== null && items[activeIdx]) items[activeIdx].layer.setStyle({ weight:4, opacity:1 });
+    if (activeIdx !== null && items[activeIdx]) items[activeIdx].layer.setStyle({ weight:4.5, opacity:1 });
   }
 };
 
@@ -668,12 +652,12 @@ function initDualSlider(minId, maxId, fillId, labelId, lo, hi, step, unit) {
   };
 }
 
-// ── Polylines ────────────────────────────────────────────────────
+// ── Markers + Polylines ──────────────────────────────────────────
 const items = CATALOG.map((track, i) => {
   const color = getTrackColor(track);
-  const layer = L.polyline(track.points.map(p=>[p[0],p[1]]), { color, weight:2, opacity:0.65 }).addTo(map);
-  layer.on('mouseover', () => { if (activeIdx!==i) layer.setStyle({ weight:3.5, opacity:1 }); });
-  layer.on('mouseout',  () => { if (activeIdx!==i) layer.setStyle({ weight:2, opacity:0.65 }); });
+
+  // Polyline — NOT added to map yet (appears on hover/select)
+  const layer = L.polyline(track.points.map(p=>[p[0],p[1]]), { color, weight:3, opacity:0.8, interactive:true });
   layer.on('click',     () => activateTrack(i, true));
   layer.on('mousemove', e => {
     if (activeIdx!==i || !PS?.geom) return;
@@ -683,16 +667,47 @@ const items = CATALOG.map((track, i) => {
     syncCursorSvg(ci);
   });
   layer.on('mouseout', () => { if (activeIdx===i) hideCursor(); });
-  return { track, layer, visible:true };
+
+  // Activity icon marker at start point
+  const sp = track.points[0];
+  const marker = sp ? L.marker([sp[0], sp[1]], {
+    icon: makeActivityIcon(track.activity || 'Otro', color),
+    title: track.name,
+    zIndexOffset: 0,
+  }).addTo(map) : null;
+
+  if (marker) {
+    marker.on('mouseover', () => {
+      if (activeIdx !== i) {
+        layer.setStyle({ weight:3, opacity:0.85 });
+        layer.addTo(map);
+        layer.bringToFront();
+      }
+    });
+    marker.on('mouseout', () => {
+      if (activeIdx !== i) layer.remove();
+    });
+    marker.on('click', () => activateTrack(i, true));
+  }
+
+  return { track, layer, marker, visible:true };
 });
 
 // ── Activate / deactivate ────────────────────────────────────────
 function activateTrack(i, fitMap) {
-  if (activeIdx!==null && items[activeIdx]) items[activeIdx].layer.setStyle({ weight:2, opacity:0.65 });
+  // Remove previous active polyline and reset its marker
+  if (activeIdx !== null && items[activeIdx]) {
+    items[activeIdx].layer.remove();
+    items[activeIdx].layer.setStyle({ weight:3, opacity:0.8 });
+    items[activeIdx].marker?.getElement()?.querySelector('.act-marker')?.classList.remove('active-marker');
+  }
   activeIdx = i;
-  const { track, layer } = items[i];
-  layer.setStyle({ weight:4, opacity:1 });
+  const { track, layer, marker } = items[i];
+  layer.setStyle({ weight:4.5, opacity:1 });
+  layer.addTo(map);
   layer.bringToFront();
+  marker?.getElement()?.querySelector('.act-marker')?.classList.add('active-marker');
+  marker?.setZIndexOffset(1000);
   if (fitMap) map.fitBounds(L.latLngBounds(track.bounds[0], track.bounds[1]), { padding:[40,40], maxZoom:16 });
   fillDetailHeader(track, getTrackColor(track));
   showProfile(track, getTrackColor(track));
@@ -702,7 +717,12 @@ function activateTrack(i, fitMap) {
 }
 
 function deactivateTrack() {
-  if (activeIdx!==null && items[activeIdx]) items[activeIdx].layer.setStyle({ weight:2, opacity:0.65 });
+  if (activeIdx !== null && items[activeIdx]) {
+    items[activeIdx].layer.remove();
+    items[activeIdx].layer.setStyle({ weight:3, opacity:0.8 });
+    items[activeIdx].marker?.getElement()?.querySelector('.act-marker')?.classList.remove('active-marker');
+    items[activeIdx].marker?.setZIndexOffset(0);
+  }
   activeIdx = null;
   document.querySelectorAll('.track-item').forEach(el => el.classList.remove('active'));
   document.getElementById('profile').classList.remove('visible');
@@ -932,11 +952,17 @@ function applyFilters() {
   const eleMax  = sliders.ele?.getMax()  ?? Infinity;
   const year    = document.getElementById('year-filter').value;
   const region  = document.getElementById('region-filter')?.value || '';
+  const q       = (document.getElementById('text-search')?.value || '').trim().toLowerCase();
+  const ibpMin = parseInt(document.getElementById('ibp-rs-min')?.value ?? 0);
+  const ibpMax = parseInt(document.getElementById('ibp-rs-max')?.value ?? 5);
+  const ibpActive = ibpMin > 0 || ibpMax < 5;
   const vb      = vpFilterActive ? map.getBounds() : null;
   let totalDist=0, totalEle=0, visCount=0;
   updateFilterBadge();
-  items.forEach(({track,layer},i)=>{
+  updateSearchChip(q);
+  items.forEach(({track,layer,marker},i)=>{
     const inViewport = !vb || vb.intersects(L.latLngBounds(track.bounds[0], track.bounds[1]));
+    const ibpOk = !ibpActive || (() => { const idx = ibpLevelIdxV(ibpForTrackV(track)); return idx >= ibpMin && idx <= ibpMax; })();
     const ok=(activeActs.size===0||activeActs.has(track.activity||'Sin clasificar'))&&
       (activeSierras.size===0||activeSierras.has(track.sierra))&&
       (activeTags.size===0||[...(track.tags||[])].some(t=>activeTags.has(t)))&&
@@ -944,14 +970,20 @@ function applyFilters() {
       track.distance>=distMin&&track.distance<=distMax&&
       track.elevationGain>=eleMin&&track.elevationGain<=eleMax&&
       (!year||(track.date&&track.date.startsWith(year))) &&
+      (!q||track.name.toLowerCase().includes(q)) &&
+      ibpOk &&
       inViewport;
-    if(ok){layer.addTo(map);items[i].visible=true;visCount++;totalDist+=track.distance;totalEle+=track.elevationGain;}
-    else  {layer.remove();items[i].visible=false;}
+    if (ok) {
+      if (marker && !map.hasLayer(marker)) marker.addTo(map);
+      items[i].visible = true;
+      visCount++; totalDist+=track.distance; totalEle+=track.elevationGain;
+    } else {
+      if (marker) marker.remove();
+      if (activeIdx === i) { layer.remove(); }
+      items[i].visible = false;
+    }
   });
   renderList();
-  document.getElementById('stat-count').textContent=visCount;
-  document.getElementById('stat-dist').textContent=Math.round(totalDist)+' km';
-  document.getElementById('stat-ele').textContent=Math.round(totalEle/1000)+' km';
   document.getElementById('list-count').textContent=`${visCount} de ${CATALOG.length} tracks`;
 }
 
@@ -1057,6 +1089,42 @@ function buildFilters() {
   const sel=document.getElementById('year-filter');
   years.forEach(y=>{const o=document.createElement('option');o.value=o.textContent=y;sel.appendChild(o);});
 
+  // IBP difficulty slider
+  window.updateIbpSlider = function updateIbpSlider() {
+    const minV = parseInt(document.getElementById('ibp-rs-min').value);
+    const maxV = parseInt(document.getElementById('ibp-rs-max').value);
+    const pct  = i => (i / 5) * 100;
+    const colors = ['#16a34a','#d97706','#c2410c','#b91c1c','#7e22ce','#1e293b'];
+    const gradStops = colors.map((c,i) => `${c} ${pct(i)}%`).join(', ');
+    const fill = document.getElementById('ibp-rs-fill');
+    fill.style.left       = pct(minV) + '%';
+    fill.style.right      = (100 - pct(maxV)) + '%';
+    fill.style.background = `linear-gradient(to right, ${gradStops})`;
+    document.querySelectorAll('#ibp-dots-row .ibp-dot').forEach(d => {
+      const i = parseInt(d.dataset.i);
+      d.classList.toggle('in-range', i >= minV && i <= maxV);
+    });
+    const lbl = document.getElementById('ibp-rs-label');
+    if (minV === 0 && maxV === 5) {
+      lbl.textContent = '';
+    } else if (minV === maxV) {
+      lbl.textContent = IBP_LEVELS[minV].label;
+    } else {
+      lbl.textContent = IBP_LEVELS[minV].label + ' → ' + IBP_LEVELS[maxV].label;
+    }
+  }
+  ['ibp-rs-min','ibp-rs-max'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      let mn = parseInt(document.getElementById('ibp-rs-min').value);
+      let mx = parseInt(document.getElementById('ibp-rs-max').value);
+      if (mn > mx) { if (id === 'ibp-rs-min') mn = mx; else mx = mn; }
+      document.getElementById('ibp-rs-min').value = mn;
+      document.getElementById('ibp-rs-max').value = mx;
+      updateIbpSlider();
+    });
+  });
+  updateIbpSlider();
+
   // Range sliders — init with catalog-derived bounds
   const maxDist = Math.max(Math.ceil(Math.max(...CATALOG.map(t=>t.distance||0)) / 10) * 10, 50);
   const maxEle  = Math.max(Math.ceil(Math.max(...CATALOG.map(t=>t.elevationGain||0)) / 500) * 500, 1000);
@@ -1078,11 +1146,33 @@ function countActiveFilters() {
   n += document.querySelectorAll('#cat-filters .cat-pill.active').length;
   n += document.querySelectorAll('#sierra-filters .cat-pill.active').length;
   n += document.querySelectorAll('#tag-filters .cat-pill.active').length;
+  const ibpMn = parseInt(document.getElementById('ibp-rs-min')?.value ?? 0);
+  const ibpMx = parseInt(document.getElementById('ibp-rs-max')?.value ?? 5);
+  if (ibpMn > 0 || ibpMx < 5) n++;
   if(document.getElementById('region-filter')?.value) n++;
   if(sliders.dist?.isActive()) n++;
   if(sliders.ele?.isActive()) n++;
   if(document.getElementById('year-filter')?.value) n++;
+  if((document.getElementById('text-search')?.value||'').trim()) n++;
   return n;
+}
+
+function updateSearchChip(q) {
+  if (q === undefined) q = (document.getElementById('text-search')?.value||'').trim().toLowerCase();
+  const bar = document.getElementById('search-chip-bar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  if (!q) { bar.classList.remove('has-chips'); return; }
+  const chip = document.createElement('div');
+  chip.className = 'search-chip';
+  chip.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><span title="${escHtml(q)}">${escHtml(q)}</span><button class="chip-x" title="Quitar búsqueda"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+  chip.querySelector('.chip-x').addEventListener('click', () => {
+    const el = document.getElementById('text-search');
+    if (el) el.value = '';
+    applyFilters();
+  });
+  bar.appendChild(chip);
+  bar.classList.add('has-chips');
 }
 function updateFilterBadge() {
   const n = countActiveFilters();
@@ -1098,11 +1188,18 @@ document.getElementById('apply-filters-btn').addEventListener('click', () => {
   setFiltersOpen(false);
 });
 document.getElementById('clear-filters-btn').addEventListener('click', () => {
-  document.querySelectorAll('.cat-pill.active').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.cat-pill.active').forEach(el=>{
+    el.classList.remove('active');
+    el.style.background=''; el.style.color='';
+  });
+  const ibpMnEl = document.getElementById('ibp-rs-min');
+  const ibpMxEl = document.getElementById('ibp-rs-max');
+  if (ibpMnEl) { ibpMnEl.value = 0; ibpMxEl.value = 5; updateIbpSlider(); }
   sliders.dist?.reset();
   sliders.ele?.reset();
   document.getElementById('year-filter').value='';
   const rf=document.getElementById('region-filter'); if(rf) rf.value='';
+  const ts=document.getElementById('text-search'); if(ts) ts.value='';
   applyFilters();
 });
 document.getElementById('filter-close-btn').addEventListener('click',()=>setFiltersOpen(false));
@@ -1116,218 +1213,6 @@ document.getElementById('side-toggle').addEventListener('click',()=>{
   document.getElementById('main').classList.toggle('sidebar-right');
   setTimeout(()=>map.invalidateSize(),10);
 });
-
-// ── Sidebar tabs ─────────────────────────────────────────────────
-document.querySelectorAll('.stab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const tab = btn.dataset.tab;
-    document.querySelectorAll('.stab').forEach(b => b.classList.toggle('active', b===btn));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id===`tab-${tab}`));
-    if (tab === 'db') loadDbStats();
-  });
-});
-
-// ── DB Tab ───────────────────────────────────────────────────────
-function fmtN(n) { return n==null ? '—' : Number(n).toLocaleString('es'); }
-
-async function loadDbStats() {
-  const el  = document.getElementById('db-stats-content');
-  const btn = document.getElementById('db-refresh-btn');
-  btn.classList.add('spinning');
-  try {
-    const r = await fetch('/api/db/stats');
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const d = await r.json();
-    if (d.error) throw new Error(d.error);
-    renderDbStats(d, el);
-  } catch (e) {
-    el.innerHTML = `<div class="db-no-api">
-      ⚠ API no disponible.<br>
-      Usa <code>node server.js</code> (o <code>npm start</code>)<br>
-      en lugar de <code>http-server</code>.<br><br>
-      <small style="color:#94a3b8">${escHtml(e.message)}</small>
-    </div>`;
-  } finally {
-    btn.classList.remove('spinning');
-  }
-}
-
-function renderDbStats(d, el) {
-  const rawPts   = d.rawPoints   || 0;
-  const cleanPts = d.cleanPoints || 0;
-  const pct = rawPts ? ((1 - cleanPts / rawPts) * 100).toFixed(1) + '%' : '—';
-  const dbMb = d.dbSize ? (d.dbSize / 1024 / 1024).toFixed(1) + ' MB' : '—';
-
-  el.innerHTML = `
-    <div class="db-cards">
-      <div class="db-card">
-        <div class="db-card-val">${fmtN(d.tracks)}</div>
-        <div class="db-card-lbl">Tracks en BD</div>
-      </div>
-      <div class="db-card">
-        <div class="db-card-val">${fmtN(d.cleanedTracks)}</div>
-        <div class="db-card-lbl">Limpios</div>
-      </div>
-      <div class="db-card accent-card">
-        <div class="db-card-val">${pct}</div>
-        <div class="db-card-lbl">Reducción pts</div>
-      </div>
-      <div class="db-card">
-        <div class="db-card-val">${dbMb}</div>
-        <div class="db-card-lbl">Tamaño BD · ${fmtN(d.gpxCount)} GPX</div>
-      </div>
-    </div>
-
-    <div>
-      <div class="flabel" style="margin-top:2px;margin-bottom:5px">Por actividad</div>
-      <table class="db-table">
-        <thead><tr><th>Actividad</th><th>Tracks</th><th>Puntos</th><th>Reduc.</th></tr></thead>
-        <tbody>
-          ${(d.cats||[]).map(c => {
-            const hasCln = c.cleanPoints > 0;
-            const red = hasCln ? ((1-c.cleanPoints/c.rawPoints)*100).toFixed(0)+'%' : '—';
-            const redClass = hasCln ? 'db-reduc' : 'db-reduc none';
-            return `<tr>
-              <td>${escHtml(c.category||'Sin clasificar')}</td>
-              <td>${c.count}</td>
-              <td>${fmtN(c.rawPoints)}</td>
-              <td class="${redClass}">${red}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-
-    <div style="font-size:10px;color:var(--muted)">
-      ${d.lastImport ? 'Actualizado: ' + d.lastImport.substring(0,16).replace('T',' ') : 'Sin importaciones'}
-    </div>
-  `;
-}
-
-// SSE helper: consume fetch response como stream SSE
-async function runWithSseLog(url, method, body, onDone) {
-  const log = document.getElementById('db-log');
-  log.innerHTML = '';
-  log.classList.add('visible');
-
-  const resp = await fetch(url, {
-    method,
-    headers: body ? { 'Content-Type':'application/json' } : {},
-    body:    body ? JSON.stringify(body) : undefined,
-  });
-
-  const reader  = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const events = buf.split('\n\n');
-    buf = events.pop();
-    for (const ev of events) {
-      const m = ev.match(/^data: (.+)$/m);
-      if (!m) continue;
-      let obj;
-      try { obj = JSON.parse(m[1]); } catch { continue; }
-      appendLog(obj, log);
-      if (obj.type === 'done') { onDone?.(obj.code); return; }
-    }
-  }
-}
-
-function appendLog(obj, log) {
-  if (obj.type === 'start') return;
-  const line = document.createElement('div');
-  line.className = 'log-line';
-  if (obj.type === 'error')    line.classList.add('log-error');
-  else if (obj.type === 'warn') line.classList.add('log-warn');
-  else if (obj.type === 'progress') line.classList.add('log-progress');
-  else if (obj.text?.startsWith('✓')) line.classList.add('log-ok');
-  line.textContent = obj.text || '';
-  log.appendChild(line);
-  log.scrollTop = log.scrollHeight;
-}
-
-function setDbBusy(busy) {
-  ['btn-import','btn-import-force','btn-clean','btn-export','btn-enrich','btn-enrich-force'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.disabled = busy;
-  });
-}
-
-document.getElementById('btn-import').addEventListener('click', async () => {
-  setDbBusy(true);
-  document.getElementById('btn-import').textContent = '⏳ Importando…';
-  await runWithSseLog('/api/db/import', 'POST', null, () => {
-    setDbBusy(false);
-    document.getElementById('btn-import').innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Importar tracks`;
-    loadDbStats();
-  });
-});
-
-document.getElementById('btn-import-force').addEventListener('click', async () => {
-  if (!confirm('¿Reimportar TODOS los tracks aunque ya existan? Esto borra los puntos limpios.')) return;
-  setDbBusy(true);
-  document.getElementById('btn-import-force').textContent = '⏳ Reimportando…';
-  await runWithSseLog('/api/db/import?force=1', 'POST', null, () => {
-    setDbBusy(false);
-    document.getElementById('btn-import-force').textContent = '↻ Force';
-    loadDbStats();
-  });
-});
-
-document.getElementById('btn-clean').addEventListener('click', async () => {
-  const minDist = parseFloat(document.getElementById('inp-mindist').value) || 0;
-  const rdp     = parseFloat(document.getElementById('inp-rdp').value)     || 0;
-  if (!minDist && !rdp) { alert('Introduce al menos un valor de min-dist o RDP mayor que 0.'); return; }
-  setDbBusy(true);
-  document.getElementById('btn-clean').textContent = '⏳';
-  await runWithSseLog('/api/db/clean', 'POST', { minDist, rdp }, () => {
-    setDbBusy(false);
-    document.getElementById('btn-clean').textContent = 'Limpiar';
-    loadDbStats();
-  });
-});
-
-document.getElementById('btn-export').addEventListener('click', async () => {
-  setDbBusy(true);
-  document.getElementById('btn-export').innerHTML = '⏳ Exportando…';
-  await runWithSseLog('/api/db/export', 'POST', null, code => {
-    setDbBusy(false);
-    document.getElementById('btn-export').innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Exportar catálogo`;
-    if (code === 0) {
-      const line = document.createElement('div');
-      line.className = 'log-line log-ok';
-      line.textContent = '↻ Recarga la página para ver el catálogo actualizado.';
-      document.getElementById('db-log').appendChild(line);
-    }
-  });
-});
-
-document.getElementById('btn-enrich').addEventListener('click', async () => {
-  setDbBusy(true);
-  document.getElementById('btn-enrich').textContent = '⏳ Enriqueciendo…';
-  await runWithSseLog('/api/db/enrich', 'POST', null, () => {
-    setDbBusy(false);
-    document.getElementById('btn-enrich').innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Enriquecer datos`;
-    loadDbStats();
-  });
-});
-
-document.getElementById('btn-enrich-force').addEventListener('click', async () => {
-  if (!confirm('¿Enriquecer TODOS los tracks, incluso los que ya tienen datos?')) return;
-  setDbBusy(true);
-  document.getElementById('btn-enrich-force').textContent = '⏳';
-  await runWithSseLog('/api/db/enrich?force=1', 'POST', null, () => {
-    setDbBusy(false);
-    document.getElementById('btn-enrich-force').textContent = '↻ Todos';
-    loadDbStats();
-  });
-});
-
-document.getElementById('db-refresh-btn').addEventListener('click', loadDbStats);
 
 // ── Init ──────────────────────────────────────────────────────────
 buildFilters();

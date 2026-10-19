@@ -1,0 +1,61 @@
+/* GPX Library — estilos compartidos */
+
+/* ── Nav principal ────────────────────────────────────────── */
+nav {
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 0 20px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 1100;
+  flex-shrink: 0;
+}
+nav a { color: #94a3b8; text-decoration: none; }
+nav a:hover { color: #f8fafc; }
+nav a.active { color: #f8fafc; }
+nav .logo { color: #f8fafc; font-weight: 600; font-size: 15px; margin-right: 8px; }
+
+/* ── Barra de cabecera de página (barra oscura bajo la nav) ── */
+.page-header {
+  height: 50px;
+  background: #0f172a;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  flex-shrink: 0;
+}
+.page-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.page-header-title svg { opacity: .7; }
+.page-header-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+/* ── Botones en cabecera oscura ──────────────────────────── */
+.hbtn-nav {
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1.5px solid #334155;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  color: #94a3b8;
+  text-decoration: none;
+  transition: background .12s;
+}
+.hbtn-nav:hover { background: #1e293b; color: #fff; }

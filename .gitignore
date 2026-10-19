@@ -1,0 +1,8 @@
+node_modules/
+
+# Base de datos y backups (datos personales, no van a git)
+data/
+ibp.key
+
+# Archivos generados automáticamente
+catalog-data.js

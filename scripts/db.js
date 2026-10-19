@@ -4,7 +4,10 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '..', 'tracks.db');
+const fs = require('fs');
+const DATA_DIR = path.join(__dirname, '..', 'data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const DB_PATH = path.join(DATA_DIR, 'tracks.db');
 
 let _db;
 
@@ -81,6 +84,9 @@ function _migrate(db) {
     ['moving_time',   'INTEGER'],
     ['stopped_time',  'INTEGER'],
     ['tags',          'TEXT'],
+    ['ibp_bicycle',   'REAL'],
+    ['ibp_hiking',    'REAL'],
+    ['ibp_running',   'REAL'],
   ];
   for (const [col, type] of newCols) {
     try { db.exec(`ALTER TABLE tracks ADD COLUMN ${col} ${type}`); } catch {}
@@ -183,4 +189,8 @@ function _initSchema(db) {
   `);
 }
 
-module.exports = { openDb, withTransaction, DB_PATH };
+function closeDb() {
+  if (_db) { try { _db.close(); } catch {} _db = null; }
+}
+
+module.exports = { openDb, closeDb, withTransaction, DB_PATH };

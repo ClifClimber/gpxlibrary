@@ -1,0 +1,509 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx creator="Wikiloc - https://www.wikiloc.com" version="1.1" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <metadata>
+    <name>Wikiloc - Cascada del Hornillo desde Robledondo</name>
+    <link href="https://www.wikiloc.com/hiking-trails/cascada-del-hornillo-desde-robledondo-24925467">
+      <text>Cascada del Hornillo desde Robledondo on Wikiloc</text>
+    </link>
+    <time>2018-05-15T10:38:47Z</time>
+  </metadata>
+  <wpt lat="40.597078" lon="-4.214273">
+    <ele>1319.7</ele>
+    <time>2018-05-15T09:37:01Z</time>
+    <name>Apertura muro 2</name>
+    <cmt>Apertura muro 2</cmt>
+    <desc>Apertura muro 2</desc>
+  </wpt>
+  <wpt lat="40.595858" lon="-4.212102">
+    <ele>1356.9</ele>
+    <time>2018-05-15T09:49:33Z</time>
+    <name>Apertura muro 4</name>
+    <cmt>Apertura muro 4</cmt>
+    <desc>Apertura muro 4</desc>
+  </wpt>
+  <wpt lat="40.595045" lon="-4.212181">
+    <ele>1385.0</ele>
+    <time>2018-05-15T09:54:23Z</time>
+    <name>Apertura muro 5 y último</name>
+    <cmt>Apertura muro 5 y último</cmt>
+    <desc>Apertura muro 5 y último</desc>
+  </wpt>
+  <wpt lat="40.597195" lon="-4.214797">
+    <ele>1326.1</ele>
+    <time>2018-05-15T09:34:06Z</time>
+    <name>Apertura muro 1</name>
+    <cmt>Apertura muro 1</cmt>
+    <desc>Apertura muro 1</desc>
+  </wpt>
+  <wpt lat="40.577455" lon="-4.207609">
+    <ele>1438.9</ele>
+    <time>2018-05-15T07:10:07Z</time>
+    <name>Arrancar - parte trasera Iglesia Robledondo</name>
+    <cmt>Arrancar - parte trasera Iglesia Robledondo</cmt>
+    <desc>Arrancar - parte trasera Iglesia Robledondo</desc>
+  </wpt>
+  <wpt lat="40.596935" lon="-4.221499">
+    <ele>1280.1</ele>
+    <time>2018-05-15T09:15:36Z</time>
+    <name>Cascada del Hornillo - zona alta</name>
+    <cmt>Cascada del Hornillo - zona alta</cmt>
+    <desc>Cascada del Hornillo - zona alta</desc>
+  </wpt>
+  <wpt lat="40.596749" lon="-4.221572">
+    <ele>1253.5</ele>
+    <time>2018-05-15T08:39:02Z</time>
+    <name>Cascada del Hornillo - zona baja</name>
+    <cmt>Cascada del Hornillo - zona baja</cmt>
+    <desc>Cascada del Hornillo - zona baja</desc>
+  </wpt>
+  <wpt lat="40.580883" lon="-4.209730">
+    <ele>1394.4</ele>
+    <time>2018-05-15T07:31:19Z</time>
+    <name>Coger - senda izquierda</name>
+    <cmt>Coger - senda izquierda</cmt>
+    <desc>Coger - senda izquierda</desc>
+  </wpt>
+  <wpt lat="40.593958" lon="-4.214947">
+    <ele>1417.5</ele>
+    <time>2018-05-15T10:02:42Z</time>
+    <name>Desvio a izquierda</name>
+    <cmt>Desvio a izquierda</cmt>
+    <desc>Desvio a izquierda</desc>
+  </wpt>
+  <wpt lat="40.578067" lon="-4.207156">
+    <ele>1438.2</ele>
+    <time>2018-05-15T07:18:10Z</time>
+    <name>Fuente 1</name>
+    <cmt>Fuente 1</cmt>
+    <desc>Fuente 1</desc>
+  </wpt>
+  <wpt lat="40.580732" lon="-4.209063">
+    <ele>1446.6</ele>
+    <time>2018-05-15T07:24:16Z</time>
+    <name>Fuente 2</name>
+    <cmt>Fuente 2</cmt>
+    <desc>Fuente 2</desc>
+  </wpt>
+  <wpt lat="40.595733" lon="-4.229988">
+    <ele>1169.5</ele>
+    <time>2018-05-15T08:18:39Z</time>
+    <name>Parking - senda del Hornillo - area recreativa</name>
+    <cmt>Parking - senda del Hornillo - area recreativa</cmt>
+    <desc>Parking - senda del Hornillo - area recreativa</desc>
+  </wpt>
+  <wpt lat="40.597054" lon="-4.215558">
+    <ele>1322.9</ele>
+    <time>2018-05-15T09:27:52Z</time>
+    <name>Puente troncos</name>
+    <cmt>Puente troncos</cmt>
+    <desc>Puente troncos</desc>
+  </wpt>
+  <wpt lat="40.595343" lon="-4.223947">
+    <ele>1227.0</ele>
+    <time>2018-05-15T08:31:05Z</time>
+    <name>Puente 2 - sobre arroyo del Hornillo</name>
+    <cmt>Puente 2 - sobre arroyo del Hornillo</cmt>
+    <desc>Puente 2 - sobre arroyo del Hornillo</desc>
+  </wpt>
+  <wpt lat="40.595948" lon="-4.229453">
+    <ele>1172.0</ele>
+    <time>2018-05-15T08:19:58Z</time>
+    <name>Puente1 - sobre arroyo del Hornillo</name>
+    <cmt>Puente1 - sobre arroyo del Hornillo</cmt>
+    <desc>Puente1 - sobre arroyo del Hornillo</desc>
+  </wpt>
+  <wpt lat="40.594697" lon="-4.230745">
+    <ele>1165.6</ele>
+    <time>2018-05-15T17:40:02Z</time>
+    <name>Senda a derechas</name>
+    <cmt>Senda a derechas</cmt>
+    <desc>Senda a derechas</desc>
+  </wpt>
+  <wpt lat="40.596823" lon="-4.212966">
+    <ele>1332.1</ele>
+    <time>2018-05-15T09:44:16Z</time>
+    <name>Vadeo de arroyo y apertura muro 3</name>
+    <cmt>Vadeo de arroyo y apertura muro 3</cmt>
+    <desc>Vadeo de arroyo y apertura muro 3</desc>
+  </wpt>
+  <trk>
+    <link href="https://www.wikiloc.com/hiking-trails/cascada-del-hornillo-desde-robledondo-24925467"/>
+    
+    
+    
+    
+    <type>Senderismo</type>
+    <name>Cascada del Hornillo desde Robledondo</name>
+    <cmt></cmt>
+    <desc></desc>
+    <trkseg>
+      <trkpt lat="40.577469" lon="-4.207586">
+        <ele>1434.497</ele>
+        <time>2018-05-15T07:12:20Z</time>
+      </trkpt>
+      <trkpt lat="40.577430" lon="-4.207234">
+        <ele>1431.023</ele>
+        <time>2018-05-15T07:16:18Z</time>
+      </trkpt>
+      <trkpt lat="40.577908" lon="-4.207069">
+        <ele>1441.125</ele>
+        <time>2018-05-15T07:17:26Z</time>
+      </trkpt>
+      <trkpt lat="40.578070" lon="-4.207154">
+        <ele>1438.208</ele>
+        <time>2018-05-15T07:18:11Z</time>
+      </trkpt>
+      <trkpt lat="40.578089" lon="-4.207496">
+        <ele>1434.971</ele>
+        <time>2018-05-15T07:18:35Z</time>
+      </trkpt>
+      <trkpt lat="40.578500" lon="-4.207909">
+        <ele>1431.513</ele>
+        <time>2018-05-15T07:19:22Z</time>
+      </trkpt>
+      <trkpt lat="40.579654" lon="-4.208329">
+        <ele>1439.218</ele>
+        <time>2018-05-15T07:21:18Z</time>
+      </trkpt>
+      <trkpt lat="40.580704" lon="-4.209159">
+        <ele>1445.971</ele>
+        <time>2018-05-15T07:23:28Z</time>
+      </trkpt>
+      <trkpt lat="40.580728" lon="-4.209005">
+        <ele>1446.924</ele>
+        <time>2018-05-15T07:23:52Z</time>
+      </trkpt>
+      <trkpt lat="40.581197" lon="-4.210966">
+        <ele>1424.363</ele>
+        <time>2018-05-15T07:32:35Z</time>
+      </trkpt>
+      <trkpt lat="40.581677" lon="-4.212101">
+        <ele>1409.995</ele>
+        <time>2018-05-15T07:34:05Z</time>
+      </trkpt>
+      <trkpt lat="40.582290" lon="-4.212996">
+        <ele>1399.386</ele>
+        <time>2018-05-15T07:36:08Z</time>
+      </trkpt>
+      <trkpt lat="40.582676" lon="-4.214072">
+        <ele>1384.995</ele>
+        <time>2018-05-15T07:37:46Z</time>
+      </trkpt>
+      <trkpt lat="40.583415" lon="-4.215431">
+        <ele>1375.749</ele>
+        <time>2018-05-15T07:40:00Z</time>
+      </trkpt>
+      <trkpt lat="40.583869" lon="-4.215900">
+        <ele>1374.323</ele>
+        <time>2018-05-15T07:40:52Z</time>
+      </trkpt>
+      <trkpt lat="40.584336" lon="-4.217135">
+        <ele>1363.708</ele>
+        <time>2018-05-15T07:42:28Z</time>
+      </trkpt>
+      <trkpt lat="40.584757" lon="-4.217640">
+        <ele>1366.141</ele>
+        <time>2018-05-15T07:43:33Z</time>
+      </trkpt>
+      <trkpt lat="40.585252" lon="-4.219237">
+        <ele>1349.323</ele>
+        <time>2018-05-15T07:45:38Z</time>
+      </trkpt>
+      <trkpt lat="40.587790" lon="-4.223321">
+        <ele>1333.948</ele>
+        <time>2018-05-15T07:51:50Z</time>
+      </trkpt>
+      <trkpt lat="40.588100" lon="-4.224945">
+        <ele>1322.481</ele>
+        <time>2018-05-15T07:54:00Z</time>
+      </trkpt>
+      <trkpt lat="40.589176" lon="-4.227476">
+        <ele>1319.054</ele>
+        <time>2018-05-15T07:57:38Z</time>
+      </trkpt>
+      <trkpt lat="40.590096" lon="-4.228183">
+        <ele>1315.743</ele>
+        <time>2018-05-15T07:59:27Z</time>
+      </trkpt>
+      <trkpt lat="40.590538" lon="-4.228932">
+        <ele>1302.245</ele>
+        <time>2018-05-15T08:00:53Z</time>
+      </trkpt>
+      <trkpt lat="40.590796" lon="-4.229127">
+        <ele>1294.586</ele>
+        <time>2018-05-15T08:01:43Z</time>
+      </trkpt>
+      <trkpt lat="40.591483" lon="-4.229318">
+        <ele>1271.428</ele>
+        <time>2018-05-15T08:03:58Z</time>
+      </trkpt>
+      <trkpt lat="40.592084" lon="-4.229286">
+        <ele>1254.189</ele>
+        <time>2018-05-15T08:05:57Z</time>
+      </trkpt>
+      <trkpt lat="40.592543" lon="-4.229552">
+        <ele>1238.817</ele>
+        <time>2018-05-15T08:07:07Z</time>
+      </trkpt>
+      <trkpt lat="40.593244" lon="-4.230238">
+        <ele>1211.408</ele>
+        <time>2018-05-15T08:09:45Z</time>
+      </trkpt>
+      <trkpt lat="40.593506" lon="-4.230878">
+        <ele>1203.254</ele>
+        <time>2018-05-15T08:10:38Z</time>
+      </trkpt>
+      <trkpt lat="40.593754" lon="-4.230930">
+        <ele>1199.866</ele>
+        <time>2018-05-15T08:11:04Z</time>
+      </trkpt>
+      <trkpt lat="40.594263" lon="-4.230608">
+        <ele>1189.241</ele>
+        <time>2018-05-15T08:13:02Z</time>
+      </trkpt>
+      <trkpt lat="40.594756" lon="-4.230771">
+        <ele>1179.664</ele>
+        <time>2018-05-15T08:14:26Z</time>
+      </trkpt>
+      <trkpt lat="40.595665" lon="-4.229925">
+        <ele>1172.467</ele>
+        <time>2018-05-15T08:17:45Z</time>
+      </trkpt>
+      <trkpt lat="40.595738" lon="-4.230009">
+        <ele>1170.046</ele>
+        <time>2018-05-15T08:18:26Z</time>
+      </trkpt>
+      <trkpt lat="40.596154" lon="-4.229064">
+        <ele>1175.318</ele>
+        <time>2018-05-15T08:21:08Z</time>
+      </trkpt>
+      <trkpt lat="40.596246" lon="-4.228443">
+        <ele>1180.629</ele>
+        <time>2018-05-15T08:22:03Z</time>
+      </trkpt>
+      <trkpt lat="40.595712" lon="-4.227425">
+        <ele>1191.274</ele>
+        <time>2018-05-15T08:23:52Z</time>
+      </trkpt>
+      <trkpt lat="40.595194" lon="-4.226980">
+        <ele>1196.056</ele>
+        <time>2018-05-15T08:24:52Z</time>
+      </trkpt>
+      <trkpt lat="40.594647" lon="-4.225110">
+        <ele>1213.821</ele>
+        <time>2018-05-15T08:28:21Z</time>
+      </trkpt>
+      <trkpt lat="40.595375" lon="-4.224058">
+        <ele>1226.308</ele>
+        <time>2018-05-15T08:30:40Z</time>
+      </trkpt>
+      <trkpt lat="40.595297" lon="-4.223886">
+        <ele>1226.729</ele>
+        <time>2018-05-15T08:31:42Z</time>
+      </trkpt>
+      <trkpt lat="40.595518" lon="-4.223437">
+        <ele>1237.881</ele>
+        <time>2018-05-15T08:33:22Z</time>
+      </trkpt>
+      <trkpt lat="40.595796" lon="-4.221996">
+        <ele>1256.586</ele>
+        <time>2018-05-15T08:36:08Z</time>
+      </trkpt>
+      <trkpt lat="40.596482" lon="-4.221499">
+        <ele>1266.189</ele>
+        <time>2018-05-15T08:38:03Z</time>
+      </trkpt>
+      <trkpt lat="40.596756" lon="-4.221729">
+        <ele>1261.822</ele>
+        <time>2018-05-15T08:40:07Z</time>
+      </trkpt>
+      <trkpt lat="40.596607" lon="-4.221301">
+        <ele>1271.091</ele>
+        <time>2018-05-15T09:13:52Z</time>
+      </trkpt>
+      <trkpt lat="40.596871" lon="-4.221329">
+        <ele>1280.143</ele>
+        <time>2018-05-15T09:14:55Z</time>
+      </trkpt>
+      <trkpt lat="40.596944" lon="-4.221512">
+        <ele>1280.144</ele>
+        <time>2018-05-15T09:15:34Z</time>
+      </trkpt>
+      <trkpt lat="40.597260" lon="-4.221099">
+        <ele>1288.323</ele>
+        <time>2018-05-15T09:17:29Z</time>
+      </trkpt>
+      <trkpt lat="40.597048" lon="-4.220349">
+        <ele>1296.983</ele>
+        <time>2018-05-15T09:19:33Z</time>
+      </trkpt>
+      <trkpt lat="40.597145" lon="-4.219458">
+        <ele>1302.211</ele>
+        <time>2018-05-15T09:21:14Z</time>
+      </trkpt>
+      <trkpt lat="40.596988" lon="-4.218022">
+        <ele>1314.208</ele>
+        <time>2018-05-15T09:23:41Z</time>
+      </trkpt>
+      <trkpt lat="40.597211" lon="-4.216942">
+        <ele>1317.634</ele>
+        <time>2018-05-15T09:25:12Z</time>
+      </trkpt>
+      <trkpt lat="40.596891" lon="-4.216657">
+        <ele>1323.356</ele>
+        <time>2018-05-15T09:25:48Z</time>
+      </trkpt>
+      <trkpt lat="40.596822" lon="-4.216309">
+        <ele>1322.951</ele>
+        <time>2018-05-15T09:26:25Z</time>
+      </trkpt>
+      <trkpt lat="40.597195" lon="-4.214803">
+        <ele>1326.774</ele>
+        <time>2018-05-15T09:34:00Z</time>
+      </trkpt>
+      <trkpt lat="40.597357" lon="-4.214587">
+        <ele>1329.697</ele>
+        <time>2018-05-15T09:34:43Z</time>
+      </trkpt>
+      <trkpt lat="40.597040" lon="-4.214292">
+        <ele>1328.286</ele>
+        <time>2018-05-15T09:36:03Z</time>
+      </trkpt>
+      <trkpt lat="40.597156" lon="-4.214070">
+        <ele>1329.128</ele>
+        <time>2018-05-15T09:38:11Z</time>
+      </trkpt>
+      <trkpt lat="40.596910" lon="-4.212987">
+        <ele>1331.569</ele>
+        <time>2018-05-15T09:43:28Z</time>
+      </trkpt>
+      <trkpt lat="40.596606" lon="-4.212809">
+        <ele>1333.928</ele>
+        <time>2018-05-15T09:44:55Z</time>
+      </trkpt>
+      <trkpt lat="40.596236" lon="-4.211901">
+        <ele>1339.789</ele>
+        <time>2018-05-15T09:46:18Z</time>
+      </trkpt>
+      <trkpt lat="40.595883" lon="-4.212135">
+        <ele>1357.017</ele>
+        <time>2018-05-15T09:49:16Z</time>
+      </trkpt>
+      <trkpt lat="40.595498" lon="-4.212042">
+        <ele>1370.908</ele>
+        <time>2018-05-15T09:51:13Z</time>
+      </trkpt>
+      <trkpt lat="40.595317" lon="-4.212360">
+        <ele>1379.694</ele>
+        <time>2018-05-15T09:53:10Z</time>
+      </trkpt>
+      <trkpt lat="40.594990" lon="-4.212171">
+        <ele>1391.176</ele>
+        <time>2018-05-15T09:54:32Z</time>
+      </trkpt>
+      <trkpt lat="40.594010" lon="-4.214944">
+        <ele>1416.631</ele>
+        <time>2018-05-15T10:02:26Z</time>
+      </trkpt>
+      <trkpt lat="40.593600" lon="-4.214924">
+        <ele>1422.494</ele>
+        <time>2018-05-15T10:03:33Z</time>
+      </trkpt>
+      <trkpt lat="40.593214" lon="-4.215352">
+        <ele>1431.097</ele>
+        <time>2018-05-15T10:04:30Z</time>
+      </trkpt>
+      <trkpt lat="40.592696" lon="-4.215209">
+        <ele>1440.196</ele>
+        <time>2018-05-15T10:08:42Z</time>
+      </trkpt>
+      <trkpt lat="40.592442" lon="-4.214684">
+        <ele>1445.948</ele>
+        <time>2018-05-15T10:09:40Z</time>
+      </trkpt>
+      <trkpt lat="40.591807" lon="-4.214393">
+        <ele>1454.669</ele>
+        <time>2018-05-15T10:10:50Z</time>
+      </trkpt>
+      <trkpt lat="40.591520" lon="-4.214521">
+        <ele>1455.094</ele>
+        <time>2018-05-15T10:11:30Z</time>
+      </trkpt>
+      <trkpt lat="40.591217" lon="-4.215139">
+        <ele>1453.657</ele>
+        <time>2018-05-15T10:12:22Z</time>
+      </trkpt>
+      <trkpt lat="40.590043" lon="-4.215031">
+        <ele>1459.422</ele>
+        <time>2018-05-15T10:14:16Z</time>
+      </trkpt>
+      <trkpt lat="40.588681" lon="-4.215417">
+        <ele>1466.108</ele>
+        <time>2018-05-15T10:16:16Z</time>
+      </trkpt>
+      <trkpt lat="40.586842" lon="-4.215215">
+        <ele>1465.651</ele>
+        <time>2018-05-15T10:18:54Z</time>
+      </trkpt>
+      <trkpt lat="40.586147" lon="-4.214730">
+        <ele>1462.363</ele>
+        <time>2018-05-15T10:20:44Z</time>
+      </trkpt>
+      <trkpt lat="40.584021" lon="-4.212322">
+        <ele>1433.428</ele>
+        <time>2018-05-15T10:25:01Z</time>
+      </trkpt>
+      <trkpt lat="40.582291" lon="-4.211142">
+        <ele>1414.211</ele>
+        <time>2018-05-15T10:27:42Z</time>
+      </trkpt>
+      <trkpt lat="40.581428" lon="-4.210349">
+        <ele>1402.714</ele>
+        <time>2018-05-15T10:29:15Z</time>
+      </trkpt>
+      <trkpt lat="40.580866" lon="-4.209697">
+        <ele>1395.433</ele>
+        <time>2018-05-15T10:30:16Z</time>
+      </trkpt>
+      <trkpt lat="40.580491" lon="-4.208600">
+        <ele>1394.075</ele>
+        <time>2018-05-15T10:31:37Z</time>
+      </trkpt>
+      <trkpt lat="40.580046" lon="-4.208239">
+        <ele>1395.966</ele>
+        <time>2018-05-15T10:32:22Z</time>
+      </trkpt>
+      <trkpt lat="40.579604" lon="-4.207272">
+        <ele>1400.361</ele>
+        <time>2018-05-15T10:33:38Z</time>
+      </trkpt>
+      <trkpt lat="40.579323" lon="-4.207212">
+        <ele>1398.321</ele>
+        <time>2018-05-15T10:34:00Z</time>
+      </trkpt>
+      <trkpt lat="40.578775" lon="-4.207362">
+        <ele>1392.113</ele>
+        <time>2018-05-15T10:34:44Z</time>
+      </trkpt>
+      <trkpt lat="40.578110" lon="-4.206746">
+        <ele>1385.808</ele>
+        <time>2018-05-15T10:35:59Z</time>
+      </trkpt>
+      <trkpt lat="40.577579" lon="-4.206556">
+        <ele>1378.628</ele>
+        <time>2018-05-15T10:36:54Z</time>
+      </trkpt>
+      <trkpt lat="40.577318" lon="-4.206945">
+        <ele>1367.610</ele>
+        <time>2018-05-15T10:37:55Z</time>
+      </trkpt>
+      <trkpt lat="40.577479" lon="-4.207176">
+        <ele>1365.675</ele>
+        <time>2018-05-15T10:38:11Z</time>
+      </trkpt>
+      <trkpt lat="40.577421" lon="-4.207575">
+        <ele>1362.848</ele>
+        <time>2018-05-15T10:38:47Z</time>
+      </trkpt>
+    </trkseg>
+  </trk></gpx>

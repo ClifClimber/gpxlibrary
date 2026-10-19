@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — GPX Library</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5;color:#1e293b;min-height:100vh}
+.page{max-width:960px;margin:0 auto;padding:24px 16px;display:flex;flex-direction:column;gap:20px}
+h1{font-size:20px;font-weight:700;color:#0f172a}
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden}
+.card-head{padding:14px 18px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card-head h2{font-size:14px;font-weight:600;color:#0f172a}
+.card-body{padding:18px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.stat{background:#f8fafc;border-radius:8px;padding:14px;text-align:center}
+.stat .val{font-size:24px;font-weight:700;color:#0f172a}
+.stat .lbl{font-size:11px;color:#64748b;margin-top:2px}
+button{cursor:pointer;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;transition:background .15s}
+.btn-primary{background:#2563eb;color:#fff}.btn-primary:hover{background:#1d4ed8}
+.btn-danger{background:#dc2626;color:#fff}.btn-danger:hover{background:#b91c1c}
+.btn-ghost{background:#f1f5f9;color:#374151}.btn-ghost:hover{background:#e2e8f0}
+.btn-sm{padding:4px 10px;font-size:12px}
+button:disabled{opacity:.5;cursor:not-allowed}
+.backups-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.backup-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8fafc;border-radius:6px;font-size:13px}
+.backup-row .bname{flex:1;font-family:monospace;font-size:12px;color:#374151}
+.backup-row .bsize{color:#64748b;font-size:12px;white-space:nowrap}
+.backup-row .bdate{color:#94a3b8;font-size:11px;white-space:nowrap}
+.log-line{margin:1px 0;white-space:pre-wrap;word-break:break-all}
+.log-line.err{color:#f87171}.log-line.ok{color:#4ade80}.log-line.warn{color:#fbbf24}
+#log-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:2000}
+#log-modal[hidden]{display:none}
+.lm-box{background:#0f172a;border-radius:10px;width:min(700px,95vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.lm-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1e293b}
+.lm-head h3{color:#f8fafc;font-size:14px;font-weight:600}
+.lm-close{background:none;border:none;color:#64748b;font-size:22px;cursor:pointer;padding:0 4px;line-height:1}
+.lm-close:hover{color:#f8fafc}
+.lm-body{flex:1;overflow-y:auto;padding:12px 16px;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;color:#e2e8f0;min-height:200px}
+.lm-body::-webkit-scrollbar{width:4px}
+.lm-body::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
+.lm-foot{padding:10px 16px;border-top:1px solid #1e293b;display:flex;justify-content:flex-end}
+.lm-foot button{background:#1e293b;border:1.5px solid #334155;color:#94a3b8;padding:6px 16px;border-radius:6px;font-size:13px;cursor:pointer}
+.lm-foot button:hover{background:#334155;color:#f8fafc}
+.lm-foot button:disabled{opacity:.5;cursor:not-allowed}
+.ops-grid{display:flex;flex-direction:column;gap:14px}
+.op-item{background:#f8fafc;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.op-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.op-head h3{font-size:14px;font-weight:600;color:#0f172a;padding-top:2px}
+.op-btns{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.op-item>p{font-size:12px;color:#64748b;line-height:1.5}
+.op-item code{background:#e2e8f0;padding:1px 5px;border-radius:3px;font-size:11px}
+.db-num{width:60px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;color:#1e293b;outline:none;background:#fff}
+.db-num:focus{border-color:#2563eb}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:12px}
+.badge-green{background:#dcfce7;color:#15803d}
+.badge-red{background:#fee2e2;color:#b91c1c}
+.badge-blue{background:#dbeafe;color:#1d4ed8}
+.maint-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.maint-item{background:#f8fafc;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.maint-item h3{font-size:13px;font-weight:600;color:#0f172a}
+.maint-item p{font-size:12px;color:#64748b;line-height:1.5}
+.result-line{font-size:12px;color:#374151;margin-top:4px}
+.result-line.ok{color:#15803d}.result-line.err{color:#b91c1c}
+#toast{position:fixed;bottom:20px;right:20px;background:#1e293b;color:#f8fafc;padding:10px 16px;border-radius:8px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.2);transform:translateY(60px);opacity:0;transition:all .3s;pointer-events:none;z-index:1000}
+#toast.show{transform:translateY(0);opacity:1}
+</style>
+<link rel="stylesheet" href="/shared.css">
+</head>
+<body>
+
+<nav>
+  <span class="logo">GPX Library</span>
+  <a href="/">Visor</a>
+  <a href="/editor">Editor</a>
+  <a href="/config">Config</a>
+  <a href="/admin" style="color:#f8fafc">Admin</a>
+</nav>
+
+<div class="page-header">
+  <div class="page-header-title">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+    GPX Library — Admin
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- Stats -->
+  <div class="card">
+    <div class="card-head">
+      <h2>Estado de la base de datos</h2>
+      <button class="btn-ghost btn-sm" id="btn-refresh-stats">↻ Actualizar</button>
+    </div>
+    <div class="card-body">
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat"><div class="val" id="s-tracks">—</div><div class="lbl">Tracks</div></div>
+        <div class="stat"><div class="val" id="s-cleaned">—</div><div class="lbl">Limpiados</div></div>
+        <div class="stat"><div class="val" id="s-reduction">—</div><div class="lbl">Reducción pts</div></div>
+        <div class="stat"><div class="val" id="s-gpx">—</div><div class="lbl">Archivos GPX</div></div>
+        <div class="stat"><div class="val" id="s-dbsize">—</div><div class="lbl">Tamaño BD</div></div>
+        <div class="stat"><div class="val" id="s-walsize">—</div><div class="lbl">WAL</div></div>
+        <div class="stat"><div class="val" id="s-backups">—</div><div class="lbl">Backups</div></div>
+        <div class="stat"><div class="val" id="s-last">—</div><div class="lbl">Última importación</div></div>
+      </div>
+      <div id="stats-cats" style="margin-top:16px;display:none">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:2px solid #f1f5f9">
+            <th style="text-align:left;padding:6px 8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Actividad</th>
+            <th style="text-align:right;padding:6px 8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Tracks</th>
+            <th style="text-align:right;padding:6px 8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Puntos raw</th>
+            <th style="text-align:right;padding:6px 8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Reducción</th>
+          </tr></thead>
+          <tbody id="stats-cats-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Operaciones de BD -->
+  <div class="card">
+    <div class="card-head"><h2>Operaciones de BD</h2></div>
+    <div class="card-body">
+      <div class="ops-grid">
+
+        <div class="op-item">
+          <div class="op-head">
+            <h3>Importar tracks</h3>
+            <div class="op-btns">
+              <button class="btn-primary btn-sm" id="btn-import">Importar _TEMP_</button>
+              <button class="btn-ghost btn-sm" id="btn-import-force" title="Reimportar aunque ya existan">↻ Force</button>
+            </div>
+          </div>
+          <p>Procesa los GPX de <code>TracksGps/_TEMP_/</code>: geocodifica con Nominatim, clasifica por actividad, mueve a la carpeta correcta e inserta en la BD. Al finalizar regenera el catálogo automáticamente.</p>
+        </div>
+
+        <div class="op-item">
+          <div class="op-head">
+            <h3>Limpiar tracks</h3>
+            <div class="op-btns">
+              <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">min-dist <input type="number" class="db-num" id="inp-mindist" value="5" min="0" max="100"> m</label>
+              <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">RDP <input type="number" class="db-num" id="inp-rdp" value="8" min="0" max="50"> m</label>
+              <button class="btn-ghost btn-sm" id="btn-clean">Limpiar</button>
+            </div>
+          </div>
+          <p><b>min-dist</b>: descarta puntos GPS a menos de N metros del anterior (elimina pausas grabadas). <b>RDP</b>: aplica Douglas-Peucker con epsilon en metros, reduciendo el número de puntos sin perder la forma de la ruta. Los puntos limpios se guardan en <code>clean_points</code> y se usan al exportar el catálogo.</p>
+        </div>
+
+        <div class="op-item">
+          <div class="op-head">
+            <h3>Enriquecer datos OSM</h3>
+            <div class="op-btns">
+              <button class="btn-ghost btn-sm" id="btn-enrich">Enriquecer</button>
+              <button class="btn-ghost btn-sm" id="btn-enrich-force" title="Enriquecer todos, incluidos los ya procesados">↻ Todos</button>
+            </div>
+          </div>
+          <p>Consulta OpenStreetMap (Overpass API) para obtener el tipo de camino y superficie de cada track. Los datos aparecen en el Editor y en la página de detalle de cada ruta.</p>
+        </div>
+
+        <div class="op-item">
+          <div class="op-head">
+            <h3>Reconstruir catálogo</h3>
+            <div class="op-btns">
+              <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">MAX_POINTS <input type="number" class="db-num" id="inp-maxpts-export" value="300" min="50" max="2000" step="50"></label>
+              <button class="btn-primary btn-sm" id="btn-export-catalog">Exportar</button>
+            </div>
+          </div>
+          <p>Regenera <code>catalog-data.js</code> desde la BD usando <code>clean_points</code> cuando estén disponibles y simplificando a MAX_POINTS puntos por track. Necesario para que los cambios sean visibles en el visor — recarga la página tras exportar.</p>
+          <div id="export-size-est" style="font-size:12px;color:#2563eb;font-weight:500"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Backups -->
+  <div class="card">
+    <div class="card-head">
+      <h2>Copias de seguridad</h2>
+      <button class="btn-primary btn-sm" id="btn-backup">+ Crear backup</button>
+    </div>
+    <div class="card-body">
+      <div id="backups-list" class="backups-list">
+        <div style="color:#94a3b8;font-size:13px">Cargando…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mantenimiento -->
+  <div class="card">
+    <div class="card-head">
+      <h2>Mantenimiento</h2>
+    </div>
+    <div class="card-body">
+      <div class="maint-grid">
+        <div class="maint-item">
+          <h3>Vacuum</h3>
+          <p>Compacta la BD, libera espacio y elimina fragmentación.</p>
+          <button class="btn-ghost" id="btn-vacuum">Ejecutar VACUUM</button>
+          <div class="result-line" id="vacuum-result"></div>
+        </div>
+        <div class="maint-item">
+          <h3>Integridad</h3>
+          <p>Verifica que la BD no esté corrupta.</p>
+          <button class="btn-ghost" id="btn-integrity">Verificar</button>
+          <div class="result-line" id="integrity-result"></div>
+        </div>
+        <div class="maint-item">
+          <h3>Calcular IBP</h3>
+          <p>Calcula IBP Index para los tracks que no lo tienen.</p>
+          <button class="btn-ghost" id="btn-ibp">Calcular IBP</button>
+        </div>
+        <div class="maint-item">
+          <h3>Escribir attrs a GPX</h3>
+          <p>Reescribe nombre, actividad, notas y URL en todos los archivos GPX desde la BD.</p>
+          <button class="btn-ghost" id="btn-write-attrs">Escribir todos</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="log-modal" hidden>
+  <div class="lm-box">
+    <div class="lm-head">
+      <h3 id="log-modal-title">Operación</h3>
+      <button class="lm-close" id="log-modal-close" title="Cerrar">×</button>
+    </div>
+    <div class="lm-body" id="log-modal-body"></div>
+    <div class="lm-foot">
+      <button id="log-modal-btn" disabled>Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+function fmtSize(b) {
+  if (b == null) return '—';
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+function fmtDate(s) {
+  if (!s) return '—';
+  return new Date(s.replace(' ','T') + (s.includes('T') ? '' : 'Z')).toLocaleString('es-ES', {dateStyle:'short', timeStyle:'short'});
+}
+
+let toast_t;
+function toast(msg, err) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = err ? '#b91c1c' : '#1e293b';
+  el.classList.add('show');
+  clearTimeout(toast_t);
+  toast_t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function fmtN(n) { return n == null ? '—' : Number(n).toLocaleString('es'); }
+
+async function loadStats() {
+  const r = await fetch('/api/admin/stats');
+  const d = await r.json();
+  const raw   = d.rawPoints   || 0;
+  const clean = d.cleanPoints || 0;
+  const pct   = raw ? ((1 - clean / raw) * 100).toFixed(1) + '%' : '—';
+  statsTrackCount = d.tracks || 0;
+  updateSizeEstimates();
+  document.getElementById('s-tracks').textContent    = fmtN(d.tracks);
+  document.getElementById('s-cleaned').textContent   = fmtN(d.cleanedTracks);
+  document.getElementById('s-reduction').textContent = pct;
+  document.getElementById('s-gpx').textContent       = fmtN(d.gpxCount);
+  document.getElementById('s-dbsize').textContent    = fmtSize(d.dbSize);
+  document.getElementById('s-walsize').textContent   = fmtSize(d.walSize);
+  document.getElementById('s-backups').textContent   = (d.backups || []).length;
+  document.getElementById('s-last').textContent      = fmtDate(d.lastImport);
+
+  const cats = d.cats || [];
+  const catsEl = document.getElementById('stats-cats');
+  if (cats.length) {
+    catsEl.style.display = '';
+    document.getElementById('stats-cats-body').innerHTML = cats.map(c => {
+      const red = c.rawPoints ? ((1 - (c.cleanPoints||0) / c.rawPoints) * 100).toFixed(0) + '%' : '—';
+      return `<tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:6px 8px">${c.category || 'Sin clasificar'}</td>
+        <td style="padding:6px 8px;text-align:right">${c.count}</td>
+        <td style="padding:6px 8px;text-align:right;color:#64748b">${fmtN(c.rawPoints)}</td>
+        <td style="padding:6px 8px;text-align:right;color:#2563eb;font-weight:600">${red}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+async function loadBackups() {
+  const r = await fetch('/api/admin/backups');
+  const list = await r.json();
+  const el = document.getElementById('backups-list');
+  if (!list.length) {
+    el.innerHTML = '<div style="color:#94a3b8;font-size:13px">Sin backups todavía.</div>';
+    return;
+  }
+  el.innerHTML = list.map(b => `
+    <div class="backup-row" data-name="${b.name}">
+      <span class="bname">${b.name}</span>
+      <span class="bsize">${fmtSize(b.size)}</span>
+      <span class="bdate">${fmtDate(b.mtime)}</span>
+      <button class="btn-ghost btn-sm" onclick="restoreBackup('${b.name}')">Restaurar</button>
+      <button class="btn-danger btn-sm" onclick="deleteBackup('${b.name}')">✕</button>
+    </div>
+  `).join('');
+}
+
+async function restoreBackup(name) {
+  if (!confirm(`¿Restaurar el backup "${name}"?\n\nSe sobreescribirá la base de datos actual.`)) return;
+  const r = await fetch(`/api/admin/restore/${encodeURIComponent(name)}`, { method: 'POST' });
+  if (r.ok) { toast('Base de datos restaurada'); loadStats(); loadBackups(); }
+  else      { const e = await r.json().catch(()=>({error:r.statusText})); toast(e.error || 'Error', true); }
+}
+
+async function deleteBackup(name) {
+  if (!confirm(`¿Eliminar el backup "${name}"?`)) return;
+  const r = await fetch(`/api/admin/backups/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  if (r.ok) { toast('Backup eliminado'); loadBackups(); loadStats(); }
+  else      { toast('Error al eliminar', true); }
+}
+
+document.getElementById('btn-refresh-stats').addEventListener('click', () => { loadStats(); loadBackups(); });
+
+document.getElementById('btn-backup').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-backup');
+  btn.disabled = true; btn.textContent = 'Creando…';
+  try {
+    const r = await fetch('/api/admin/backup', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) { toast(`Backup creado: ${d.name} (${fmtSize(d.size)})`); loadBackups(); loadStats(); }
+    else      { toast(d.error || 'Error', true); }
+  } finally { btn.disabled = false; btn.textContent = '+ Crear backup'; }
+});
+
+document.getElementById('btn-vacuum').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-vacuum');
+  const res = document.getElementById('vacuum-result');
+  btn.disabled = true; btn.textContent = 'Ejecutando…';
+  res.textContent = '';
+  try {
+    const r = await fetch('/api/admin/vacuum', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) { res.textContent = `✓ Completado. Tamaño: ${fmtSize(d.dbSize)}`; res.className = 'result-line ok'; loadStats(); }
+    else      { res.textContent = '✗ ' + (d.error || 'Error'); res.className = 'result-line err'; }
+  } finally { btn.disabled = false; btn.textContent = 'Ejecutar VACUUM'; }
+});
+
+document.getElementById('btn-integrity').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-integrity');
+  const res = document.getElementById('integrity-result');
+  btn.disabled = true; btn.textContent = 'Verificando…';
+  res.textContent = '';
+  try {
+    const r = await fetch('/api/admin/integrity');
+    const d = await r.json();
+    if (d.ok) { res.textContent = '✓ Sin errores de integridad'; res.className = 'result-line ok'; }
+    else      { res.textContent = '✗ Errores: ' + d.result.join(', '); res.className = 'result-line err'; }
+  } finally { btn.disabled = false; btn.textContent = 'Verificar'; }
+});
+
+function streamScript(url, title, postBody) {
+  const modal    = document.getElementById('log-modal');
+  const body     = document.getElementById('log-modal-body');
+  const closeBtn = document.getElementById('log-modal-btn');
+  document.getElementById('log-modal-title').textContent = title;
+  body.innerHTML = '';
+  closeBtn.disabled = true;
+  modal.hidden = false;
+
+  function addLine(text, cls) {
+    const d = document.createElement('div');
+    d.className = 'log-line' + (cls ? ' ' + cls : '');
+    d.textContent = text;
+    body.appendChild(d);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  const opts = { method: 'POST' };
+  if (postBody) { opts.headers = { 'Content-Type': 'application/json' }; opts.body = JSON.stringify(postBody); }
+
+  return fetch(url, opts).then(r => {
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    function pump() {
+      return reader.read().then(({ done, value }) => {
+        if (done) { closeBtn.disabled = false; return; }
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop();
+        for (const part of parts) {
+          const line = part.replace(/^data:\s*/, '');
+          if (!line) continue;
+          try {
+            const ev = JSON.parse(line);
+            if (ev.type === 'log' || ev.type === 'progress') addLine(ev.text);
+            if (ev.type === 'error') addLine(ev.text, 'err');
+            if (ev.type === 'warn')  addLine(ev.text, 'warn');
+            if (ev.type === 'done')  { addLine(ev.code === 0 ? '✓ Completado' : `✗ Código ${ev.code}`, ev.code === 0 ? 'ok' : 'err'); closeBtn.disabled = false; }
+          } catch {}
+        }
+        return pump();
+      });
+    }
+    return pump();
+  }).catch(e => { addLine('Error: ' + e.message, 'err'); closeBtn.disabled = false; });
+}
+
+document.getElementById('log-modal-close').addEventListener('click', () => { document.getElementById('log-modal').hidden = true; });
+document.getElementById('log-modal-btn').addEventListener('click', () => { document.getElementById('log-modal').hidden = true; });
+document.getElementById('log-modal').addEventListener('click', e => { if (e.target === document.getElementById('log-modal')) document.getElementById('log-modal').hidden = true; });
+
+
+document.getElementById('btn-ibp').addEventListener('click', function() {
+  this.disabled = true;
+  streamScript('/api/db/calc-ibp', 'Calcular IBP')
+    .finally(() => { this.disabled = false; loadStats(); });
+});
+
+document.getElementById('btn-write-attrs').addEventListener('click', function() {
+  this.disabled = true;
+  streamScript('/api/db/write-gpx-attrs', 'Escribir attrs GPX')
+    .finally(() => { this.disabled = false; });
+});
+
+document.getElementById('btn-import').addEventListener('click', function() {
+  this.disabled = true;
+  streamScript('/api/db/import', 'Importar _TEMP_')
+    .finally(() => { this.disabled = false; loadStats(); });
+});
+
+document.getElementById('btn-import-force').addEventListener('click', function() {
+  if (!confirm('¿Reimportar TODOS los tracks aunque ya existan? Esto borra los puntos limpios.')) return;
+  this.disabled = true;
+  streamScript('/api/db/import?force=1', 'Importar _TEMP_ (force)')
+    .finally(() => { this.disabled = false; loadStats(); });
+});
+
+document.getElementById('btn-clean').addEventListener('click', function() {
+  const minDist = parseFloat(document.getElementById('inp-mindist').value) || 0;
+  const rdp     = parseFloat(document.getElementById('inp-rdp').value) || 0;
+  if (!minDist && !rdp) { alert('Introduce al menos un valor de min-dist o RDP mayor que 0.'); return; }
+  this.disabled = true;
+  streamScript('/api/db/clean', 'Limpiar tracks', { minDist, rdp })
+    .finally(() => { this.disabled = false; loadStats(); });
+});
+
+document.getElementById('btn-enrich').addEventListener('click', function() {
+  this.disabled = true;
+  streamScript('/api/db/enrich', 'Enriquecer datos OSM')
+    .finally(() => { this.disabled = false; });
+});
+
+document.getElementById('btn-enrich-force').addEventListener('click', function() {
+  if (!confirm('¿Enriquecer TODOS los tracks, incluso los que ya tienen datos?')) return;
+  this.disabled = true;
+  streamScript('/api/db/enrich?force=1', 'Enriquecer datos OSM (todos)')
+    .finally(() => { this.disabled = false; });
+});
+
+document.getElementById('btn-export-catalog').addEventListener('click', function() {
+  const maxPoints = parseInt(document.getElementById('inp-maxpts-export').value) || 300;
+  this.disabled = true;
+  streamScript('/api/db/export', 'Reconstruir catálogo', { maxPoints })
+    .finally(() => { this.disabled = false; });
+});
+
+
+let statsTrackCount = 0;
+
+function updateSizeEstimates() {
+  if (!statsTrackCount) return;
+  [['inp-maxpts-export', 'export-size-est']].forEach(([inpId, estId]) => {
+    const inp = document.getElementById(inpId);
+    const el  = document.getElementById(estId);
+    if (!inp || !el) return;
+    const pts   = parseInt(inp.value) || 300;
+    const bytes = statsTrackCount * (250 + pts * 22);
+    const size  = bytes >= 1048576 ? (bytes/1048576).toFixed(1) + ' MB' : Math.round(bytes/1024) + ' KB';
+    el.textContent = `${statsTrackCount} tracks × ${pts} pts ≈ ${size}`;
+  });
+}
+
+document.getElementById('inp-maxpts-export').addEventListener('input', updateSizeEstimates);
+
+loadStats();
+loadBackups();
+</script>
+</body>
+</html>
