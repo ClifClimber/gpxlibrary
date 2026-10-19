@@ -11,8 +11,10 @@
 const http   = require('http');
 const fs     = require('fs');
 const path   = require('path');
+const zlib   = require('zlib');
 const { spawn } = require('child_process');
-const { openDb, withTransaction } = require('./scripts/db');
+const { openDb, closeDb, withTransaction, DB_PATH } = require('./scripts/db');
+const { escXml, updateGpxMetadata } = require('./scripts/gpx-utils');
 
 const PORT = parseInt(process.env.PORT || '8080');
 const ROOT = __dirname;
@@ -64,8 +66,7 @@ function apiStats(res) {
       GROUP BY activity ORDER BY count DESC
     `).all();
 
-    const dbPath = path.join(ROOT, 'tracks.db');
-    const dbSize = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
+    const dbSize = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
     const gpxCount = countGpx(path.join(ROOT, 'TracksGps'));
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -198,7 +199,8 @@ function apiGetTrackById(res, id) {
              sw_lat, sw_lon, ne_lat, ne_lon, center_lat, center_lon,
              raw_count, clean_count, cleaned,
              activity, province, ccaa, sierra, notes, url,
-             road_types, surface_types, moving_time, stopped_time, tags
+             road_types, surface_types, moving_time, stopped_time, tags,
+             ibp_bicycle, ibp_hiking, ibp_running
       FROM tracks WHERE id=?
     `).get(id);
     if (!track) { res.writeHead(404); res.end('Not found'); return; }
@@ -217,7 +219,7 @@ function apiGetTrackById(res, id) {
 
     // Compute moving/stopped time from GPX if not cached
     if (track.moving_time == null) {
-      const gpxPath = path.join(ROOT, 'TracksGps', track.file);
+      const gpxPath = path.join(ROOT, track.file);
       const times = computeGpxTimes(gpxPath);
       if (times) {
         track.moving_time  = times.moving;
@@ -235,6 +237,214 @@ function apiGetTrackById(res, id) {
   }
 }
 
+// ── ZIP builder (pure Node — zlib for deflate, no npm deps) ──────
+const _crc32t = (() => {
+  const t = new Int32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    t[i] = c;
+  }
+  return t;
+})();
+
+function crc32(buf) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = _crc32t[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function buildZip(entries) {
+  const locals = [];
+  const cds    = [];
+  let   offset = 0;
+
+  for (const { name, data } of entries) {
+    const nb   = Buffer.from(name, 'utf8');
+    const crc  = crc32(data);
+    const comp = zlib.deflateRawSync(data, { level: 6 });
+    const pay  = comp.length < data.length ? comp : data;
+    const meth = pay === comp ? 8 : 0;
+
+    const lh = Buffer.alloc(30 + nb.length);
+    lh.writeUInt32LE(0x04034b50,  0);
+    lh.writeUInt16LE(20,          4);
+    lh.writeUInt16LE(0x0800,      6);
+    lh.writeUInt16LE(meth,        8);
+    lh.writeUInt16LE(0,          10);
+    lh.writeUInt16LE(0,          12);
+    lh.writeUInt32LE(crc,        14);
+    lh.writeUInt32LE(pay.length, 18);
+    lh.writeUInt32LE(data.length,22);
+    lh.writeUInt16LE(nb.length,  26);
+    lh.writeUInt16LE(0,          28);
+    nb.copy(lh, 30);
+
+    const cd = Buffer.alloc(46 + nb.length);
+    cd.writeUInt32LE(0x02014b50,   0);
+    cd.writeUInt16LE(20,           4);
+    cd.writeUInt16LE(20,           6);
+    cd.writeUInt16LE(0x0800,       8);
+    cd.writeUInt16LE(meth,        10);
+    cd.writeUInt16LE(0,           12);
+    cd.writeUInt16LE(0,           14);
+    cd.writeUInt32LE(crc,         16);
+    cd.writeUInt32LE(pay.length,  20);
+    cd.writeUInt32LE(data.length, 24);
+    cd.writeUInt16LE(nb.length,   28);
+    cd.writeUInt16LE(0,           30);
+    cd.writeUInt16LE(0,           32);
+    cd.writeUInt16LE(0,           34);
+    cd.writeUInt16LE(0,           36);
+    cd.writeUInt32LE(0,           38);
+    cd.writeUInt32LE(offset,      42);
+    nb.copy(cd, 46);
+
+    locals.push(lh, pay);
+    cds.push(cd);
+    offset += lh.length + pay.length;
+  }
+
+  const cdBuf = Buffer.concat(cds);
+  const eocd  = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50,      0);
+  eocd.writeUInt16LE(0,               4);
+  eocd.writeUInt16LE(0,               6);
+  eocd.writeUInt16LE(entries.length,  8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(cdBuf.length,   12);
+  eocd.writeUInt32LE(offset,         16);
+  eocd.writeUInt16LE(0,              20);
+
+  return Buffer.concat([...locals, cdBuf, eocd]);
+}
+
+// ── Export GPX ────────────────────────────────────────────────────
+function simplifyPts(pts, maxN) {
+  if (pts.length <= maxN) return pts;
+  const out = [], step = (pts.length - 1) / (maxN - 1);
+  for (let i = 0; i < maxN; i++) out.push(pts[Math.round(i * step)]);
+  return out;
+}
+function buildGpx(tracksData) {
+  const lines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<gpx version="1.1" creator="GPX Library" xmlns="http://www.topografix.com/GPX/1/1">',
+  ];
+  for (const t of tracksData) {
+    lines.push('  <trk>');
+    lines.push(`    <name>${escXml(t.name)}</name>`);
+    if (t.date) lines.push(`    <desc>Fecha: ${t.date.slice(0,10)}</desc>`);
+    lines.push('    <trkseg>');
+    for (const p of t.pts) {
+      const ele = p.ele != null ? `<ele>${p.ele}</ele>` : '';
+      lines.push(`      <trkpt lat="${p.lat}" lon="${p.lon}">${ele}</trkpt>`);
+    }
+    lines.push('    </trkseg>');
+    lines.push('  </trk>');
+  }
+  lines.push('</gpx>');
+  return lines.join('\n');
+}
+function exportGpxResponse(res, tracksData, filename) {
+  const gpx = buildGpx(tracksData);
+  const safe = filename.replace(/[^\w\s\-áéíóúñÁÉÍÓÚÑ.]/g, '_').trim();
+  res.writeHead(200, {
+    'Content-Type': 'application/gpx+xml; charset=utf-8',
+    'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(safe)}`,
+  });
+  res.end(gpx);
+}
+function getTracksForExport(db, ids, mode, maxPts) {
+  const fetchRaw   = db.prepare('SELECT lat,lon,ele FROM raw_points   WHERE track_id=? ORDER BY seq');
+  const fetchClean = db.prepare('SELECT lat,lon,ele FROM clean_points WHERE track_id=? ORDER BY seq');
+  const result = [];
+  for (const id of ids) {
+    const t = db.prepare('SELECT id,name,date,file,cleaned FROM tracks WHERE id=?').get(id);
+    if (!t) continue;
+    let pts = t.cleaned ? fetchClean.all(t.id) : fetchRaw.all(t.id);
+    if (mode === 'simplified') pts = simplifyPts(pts, maxPts);
+    result.push({ id: t.id, name: t.name, date: t.date, file: t.file, pts });
+  }
+  return result;
+}
+async function apiExportGpx(req, res) {
+  try {
+    const body   = await parseBody(req);
+    const ids    = Array.isArray(body.ids) ? body.ids.map(Number).filter(Boolean) : [];
+    const mode   = body.mode === 'simplified' ? 'simplified' : 'full';
+    const maxPts = parseInt(body.pts) || 500;
+    const format = body.format === 'zip' ? 'zip' : 'gpx';
+    const layout = body.layout === 'flat' ? 'flat' : 'tree';
+    if (!ids.length) { res.writeHead(400); return res.end('ids required'); }
+    const db   = openDb();
+    const data = getTracksForExport(db, ids, mode, maxPts);
+    if (!data.length) { res.writeHead(404); return res.end('No tracks found'); }
+
+    if (format === 'zip') {
+      const safeName = s => s.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim() || 'track';
+      const usedNames = new Set();
+      const entries = data.map(t => {
+        const gpx = buildGpx([t]);
+        let zipName;
+        if (layout === 'tree' && t.file) {
+          zipName = t.file.replace(/\\/g, '/');
+        } else {
+          let base = safeName(t.name) + '.gpx';
+          if (usedNames.has(base)) base = safeName(t.name) + '_' + t.id + '.gpx';
+          usedNames.add(base);
+          zipName = base;
+        }
+        return { name: zipName, data: Buffer.from(gpx, 'utf8') };
+      });
+      const zipBuf  = buildZip(entries);
+      const zipFile = `gpx-export-${new Date().toISOString().slice(0,10)}.zip`;
+      res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(zipFile)}`,
+        'Content-Length': zipBuf.length,
+      });
+      res.end(zipBuf);
+    } else {
+      const filename = data.length === 1
+        ? data[0].name + '.gpx'
+        : `gpx-export-${new Date().toISOString().slice(0,10)}.gpx`;
+      exportGpxResponse(res, data, filename);
+    }
+  } catch(e) { res.writeHead(500); res.end(e.message); }
+}
+function apiExportGpxSingle(res, id, searchParams) {
+  try {
+    const mode   = searchParams.get('mode') === 'simplified' ? 'simplified' : 'full';
+    const maxPts = parseInt(searchParams.get('pts')) || 500;
+    const db   = openDb();
+    const data = getTracksForExport(db, [id], mode, maxPts);
+    if (!data.length) { res.writeHead(404); return res.end('Not found'); }
+    exportGpxResponse(res, data, data[0].name + '.gpx');
+  } catch(e) { res.writeHead(500); res.end(e.message); }
+}
+
+// ── API: list _TEMP_ files ────────────────────────────────────────
+function apiTempFiles(res) {
+  try {
+    const TEMP_DIR = path.join(ROOT, 'TracksGps', '_TEMP_');
+    function collect(dir, base) {
+      const out = [];
+      try {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+          const rel = base ? base + '/' + e.name : e.name;
+          if (e.isDirectory() && e.name !== '_REVIEW_') out.push(...collect(path.join(dir, e.name), rel));
+          else if (e.name.toLowerCase().endsWith('.gpx')) out.push({ rel, name: e.name });
+        }
+      } catch {}
+      return out;
+    }
+    const files = fs.existsSync(TEMP_DIR) ? collect(TEMP_DIR, '') : [];
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(files));
+  } catch(e) { res.writeHead(500); res.end(e.message); }
+}
+
 // ── API /tracks ───────────────────────────────────────────────────
 function apiGetTracks(res) {
   try {
@@ -243,7 +453,8 @@ function apiGetTracks(res) {
       SELECT id, name, file, zone, date,
              distance, elevation_gain, elevation_loss, min_elevation, max_elevation,
              center_lat, center_lon, raw_count, clean_count, cleaned,
-             activity, province, ccaa, sierra, notes, url, imported_at, tags
+             activity, province, ccaa, sierra, notes, url, imported_at, tags,
+             ibp_bicycle, ibp_hiking, ibp_running
       FROM tracks ORDER BY imported_at DESC, name
     `).all();
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -263,7 +474,7 @@ function deleteTrackById(id) {
   db.prepare('DELETE FROM tracks WHERE id=?').run(id);
   let fileDeleted = false;
   try {
-    const fp = path.join(ROOT, 'TracksGps', track.file);
+    const fp = path.join(ROOT, track.file);
     if (fs.existsSync(fp)) { fs.unlinkSync(fp); fileDeleted = true; }
   } catch (e) { /* file delete failed — DB row is already gone */ }
   return { ok: true, fileDeleted };
@@ -336,6 +547,15 @@ async function apiMoveTrack(req, res, id) {
     db.prepare('UPDATE tracks SET file=?, activity=?, zone=? WHERE id=?')
       .run(newRel, actParam, newZone ?? null, id);
 
+    // Write activity (and any existing name/notes/url) back to the moved GPX
+    const tData = db.prepare('SELECT name, activity, notes, url FROM tracks WHERE id=?').get(id);
+    if (tData) {
+      const gf = { name: tData.name, activity: tData.activity };
+      if (tData.notes != null) gf.notes = tData.notes;
+      if (tData.url   != null) gf.url   = tData.url;
+      updateGpxMetadata(newAbs, gf);
+    }
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, file: newRel }));
   } catch (e) {
@@ -352,6 +572,16 @@ async function apiPatchTrack(req, res, id) {
     const db   = openDb();
     const sets = fields.map(f => `${f}=?`).join(',');
     db.prepare(`UPDATE tracks SET ${sets} WHERE id=?`).run(...fields.map(f => body[f] ?? null), id);
+
+    // Write name/activity/notes back to GPX file
+    const gpxFields = Object.fromEntries(
+      fields.filter(f => ['name','activity','notes','url'].includes(f)).map(f => [f, body[f]])
+    );
+    if (Object.keys(gpxFields).length) {
+      const track = db.prepare('SELECT file FROM tracks WHERE id=?').get(id);
+      if (track) updateGpxMetadata(path.join(ROOT, track.file), gpxFields);
+    }
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
   } catch (e) {
@@ -534,6 +764,14 @@ function apiOrganizeFiles(res) {
         const newRel = path.relative(ROOT, newAbs).replace(/\\/g, '/');
         db.prepare('UPDATE tracks SET file=?, zone=? WHERE id=?')
           .run(newRel, sierraFolder, track.id);
+        // Write attrs to GPX at new location
+        const tData = db.prepare('SELECT name, activity, notes, url FROM tracks WHERE id=?').get(track.id);
+        if (tData) {
+          const gf = { name: tData.name, activity: tData.activity };
+          if (tData.notes != null) gf.notes = tData.notes;
+          if (tData.url   != null) gf.url   = tData.url;
+          updateGpxMetadata(newAbs, gf);
+        }
         moved++;
         send({ type: 'log', text: `→ ${filename}  ➜  ${actFolder}/${sierraFolder}/` });
       } catch (e) {
@@ -592,6 +830,148 @@ function apiDeleteAll(res) {
   res.end();
 }
 
+// ── Admin API ─────────────────────────────────────────────────────
+const BACKUPS_DIR = path.join(path.dirname(DB_PATH), 'backups');
+
+function apiAdminStats(res) {
+  try {
+    const db = openDb();
+    const summary = db.prepare(`
+      SELECT COUNT(*) AS tracks,
+        SUM(raw_count) AS rawPoints,
+        SUM(CASE WHEN cleaned=1 THEN clean_count ELSE 0 END) AS cleanPoints,
+        SUM(cleaned) AS cleanedTracks,
+        MAX(imported_at) AS lastImport
+      FROM tracks
+    `).get();
+    const cats = db.prepare(`
+      SELECT activity AS category,
+        COUNT(*) AS count,
+        SUM(raw_count) AS rawPoints,
+        SUM(CASE WHEN cleaned=1 THEN clean_count ELSE 0 END) AS cleanPoints,
+        SUM(cleaned) AS cleaned
+      FROM tracks
+      GROUP BY activity ORDER BY count DESC
+    `).all();
+    const dbSize  = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
+    const walSize = fs.existsSync(DB_PATH + '-wal') ? fs.statSync(DB_PATH + '-wal').size : 0;
+    const gpxCount = countGpx(path.join(ROOT, 'TracksGps'));
+    let backups = [];
+    try {
+      backups = fs.readdirSync(BACKUPS_DIR)
+        .filter(f => f.endsWith('.db'))
+        .map(f => {
+          const stat = fs.statSync(path.join(BACKUPS_DIR, f));
+          return { name: f, size: stat.size, mtime: stat.mtime.toISOString() };
+        })
+        .sort((a, b) => b.mtime.localeCompare(a.mtime));
+    } catch {}
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ...summary, cats, dbSize, walSize, gpxCount, backups }));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+function apiAdminBackup(res) {
+  try {
+    const db = openDb();
+    fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+    const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const dest = path.join(BACKUPS_DIR, `tracks-${ts}.db`);
+    db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
+    const size = fs.statSync(dest).size;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, name: path.basename(dest), size }));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+function apiAdminBackups(res) {
+  try {
+    fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+    const backups = fs.readdirSync(BACKUPS_DIR)
+      .filter(f => f.endsWith('.db'))
+      .map(f => {
+        const stat = fs.statSync(path.join(BACKUPS_DIR, f));
+        return { name: f, size: stat.size, mtime: stat.mtime.toISOString() };
+      })
+      .sort((a, b) => b.mtime.localeCompare(a.mtime));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(backups));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+function apiAdminRestore(res, filename) {
+  try {
+    if (/[/\\]/.test(filename)) { res.writeHead(400); res.end('Invalid filename'); return; }
+    const src = path.join(BACKUPS_DIR, filename);
+    if (!src.startsWith(BACKUPS_DIR) || !fs.existsSync(src)) {
+      res.writeHead(404); res.end('Backup not found'); return;
+    }
+    closeDb();
+    fs.copyFileSync(src, DB_PATH);
+    // Remove WAL/SHM so SQLite starts fresh
+    for (const ext of ['-wal', '-shm']) {
+      try { fs.unlinkSync(DB_PATH + ext); } catch {}
+    }
+    openDb(); // reopen
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+function apiAdminDeleteBackup(res, filename) {
+  try {
+    if (/[/\\]/.test(filename)) { res.writeHead(400); res.end('Invalid filename'); return; }
+    const target = path.join(BACKUPS_DIR, filename);
+    if (!target.startsWith(BACKUPS_DIR) || !fs.existsSync(target)) {
+      res.writeHead(404); res.end('Not found'); return;
+    }
+    fs.unlinkSync(target);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+function apiAdminVacuum(res) {
+  try {
+    const db = openDb();
+    db.exec('VACUUM');
+    const size = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, dbSize: size }));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+function apiAdminIntegrity(res) {
+  try {
+    const db = openDb();
+    const rows = db.prepare('PRAGMA integrity_check').all();
+    const ok   = rows.length === 1 && rows[0].integrity_check === 'ok';
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok, result: rows.map(r => r.integrity_check) }));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
 // ── Enrutador ──────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
   const { pathname, searchParams } = new URL(req.url, `http://localhost:${PORT}`);
@@ -610,8 +990,12 @@ const server = http.createServer(async (req, res) => {
     return apiRunScript(res, path.join(ROOT,'scripts','import-gpx.js'), force ? ['--force'] : []);
   }
 
-  if (pathname === '/api/db/export' && method === 'POST')
-    return apiRunScript(res, path.join(ROOT,'scripts','export-catalog.js'));
+  if (pathname === '/api/db/export' && method === 'POST') {
+    const opts = await parseBody(req);
+    const args = [];
+    if (opts.maxPoints) args.push('--max-points', String(parseInt(opts.maxPoints)));
+    return apiRunScript(res, path.join(ROOT,'scripts','export-catalog.js'), args);
+  }
 
   if (pathname === '/api/db/clean' && method === 'POST') {
     const opts = await parseBody(req);
@@ -622,6 +1006,14 @@ const server = http.createServer(async (req, res) => {
     if (!args.length)  { res.writeHead(400); res.end('No algorithms specified'); return; }
     return apiRunScript(res, path.join(ROOT,'scripts','clean-tracks.js'), args);
   }
+
+  // ── Export GPX ────────────────────────────────────────────────────
+  if (pathname === '/api/tracks/export-gpx' && method === 'POST')
+    return apiExportGpx(req, res);
+
+  const exportMatch = pathname.match(/^\/api\/tracks\/(\d+)\/export-gpx$/);
+  if (exportMatch && method === 'GET')
+    return apiExportGpxSingle(res, parseInt(exportMatch[1]), searchParams);
 
   // ── Track CRUD ────────────────────────────────────────────────────
   if (pathname === '/api/tracks' && method === 'GET')
@@ -648,9 +1040,17 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/db/organize-files' && method === 'POST')
     return apiOrganizeFiles(res);
 
+  if (pathname === '/api/db/temp-files' && method === 'GET')
+    return apiTempFiles(res);
+
   if (pathname === '/api/db/import-temp' && method === 'POST') {
-    const force = searchParams.get('force') === '1';
-    return apiRunScript(res, path.join(ROOT,'scripts','import-from-temp.js'), force ? ['--force'] : []);
+    const body  = await parseBody(req).catch(() => ({}));
+    const force = body.force || searchParams.get('force') === '1';
+    const files = Array.isArray(body.files) && body.files.length ? body.files : null;
+    const args  = [];
+    if (force) args.push('--force');
+    if (files) args.push('--files', files.join('|'));
+    return apiRunScript(res, path.join(ROOT,'scripts','import-from-temp.js'), args);
   }
 
   if (pathname === '/api/tracks/delete-all' && method === 'POST')
@@ -694,6 +1094,58 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/config/provinces' && method === 'GET')
     return apiConfigProvinces(res);
 
+  // ── IBP Index ────────────────────────────────────────────────────
+  const IBP_KEY_FILE = path.join(ROOT, 'ibp.key');
+  if (pathname === '/api/config/ibp-key' && method === 'GET') {
+    const hasKey = fs.existsSync(IBP_KEY_FILE) && fs.readFileSync(IBP_KEY_FILE,'utf8').trim().length > 0;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ hasKey }));
+  }
+  if (pathname === '/api/config/ibp-key' && method === 'POST') {
+    try {
+      const body = await parseBody(req);
+      const key  = (body.key || '').trim();
+      if (!key) { res.writeHead(400); return res.end(JSON.stringify({ error: 'key vacía' })); }
+      fs.writeFileSync(IBP_KEY_FILE, key, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true }));
+    } catch(e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: e.message }));
+    }
+  }
+  if (pathname === '/api/db/calc-ibp' && method === 'POST') {
+    const force = searchParams.get('force') === '1';
+    const ids   = searchParams.get('ids');
+    const args  = [];
+    if (force) args.push('--force');
+    if (ids)   { args.push('--ids'); args.push(ids); }
+    return apiRunScript(res, path.join(ROOT,'scripts','calc-ibp.js'), args);
+  }
+
+  // ── Admin routes ─────────────────────────────────────────────────
+  if (pathname === '/admin' && method === 'GET')
+    return serveStatic(res, path.join(ROOT, 'admin.html'));
+
+  if (pathname === '/api/admin/stats' && method === 'GET')
+    return apiAdminStats(res);
+  if (pathname === '/api/admin/backup' && method === 'POST')
+    return apiAdminBackup(res);
+  if (pathname === '/api/admin/backups' && method === 'GET')
+    return apiAdminBackups(res);
+  if (pathname === '/api/admin/vacuum' && method === 'POST')
+    return apiAdminVacuum(res);
+  if (pathname === '/api/admin/integrity' && method === 'GET')
+    return apiAdminIntegrity(res);
+
+  const restoreMatch = pathname.match(/^\/api\/admin\/restore\/(.+)$/);
+  if (restoreMatch && method === 'POST')
+    return apiAdminRestore(res, decodeURIComponent(restoreMatch[1]));
+
+  const delBackupMatch = pathname.match(/^\/api\/admin\/backups\/(.+)$/);
+  if (delBackupMatch && method === 'DELETE')
+    return apiAdminDeleteBackup(res, decodeURIComponent(delBackupMatch[1]));
+
   if (pathname === '/editor' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'editor.html'));
 
@@ -702,6 +1154,12 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/track' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'track.html'));
+
+  if (pathname === '/api/db/write-gpx-attrs' && method === 'POST') {
+    const ids = searchParams.get('ids');
+    const args = ids ? ['--ids', ids] : [];
+    return apiRunScript(res, path.join(ROOT,'scripts','write-gpx-attrs.js'), args);
+  }
 
   if (pathname === '/api/db/extract-urls' && method === 'POST') {
     const force = searchParams.get('force') === '1';

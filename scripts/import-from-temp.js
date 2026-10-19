@@ -13,11 +13,16 @@
 const fs   = require('fs');
 const path = require('path');
 const { openDb, withTransaction } = require('./db');
+const { updateGpxMetadata }       = require('./gpx-utils');
 
 const TRACKS_DIR = path.join(__dirname, '..', 'TracksGps');
 const TEMP_DIR   = path.join(TRACKS_DIR, '_TEMP_');
 const REVIEW_DIR = path.join(TEMP_DIR, '_REVIEW_');
 const FORCE      = process.argv.includes('--force');
+const filesIdx   = process.argv.indexOf('--files');
+const FILTER_FILES = filesIdx !== -1
+  ? new Set(process.argv[filesIdx + 1].split('|'))
+  : null;
 
 // ── Sierras (cargadas desde BD en tiempo de ejecución) ──────────────
 let SIERRAS = [];
@@ -101,7 +106,7 @@ function inferActivity(name, dist, gain) {
   if (n.includes('senderism') || /\bcaminata\b/.test(n)) return { act: 'Senderismo',             conf: 'high' };
   if (/\bcamino\b/.test(n) && !n.includes('carretera')) return { act: 'Senderismo',               conf: 'high' };
   if (n.includes('carretera') || n.includes('ciclism'))  return { act: 'Ciclismo de carretera',  conf: 'high' };
-  if (n.includes('mtb') || n.includes('mountain bike') || n.includes('btt')) return { act: 'MTB', conf: 'high' };
+  if (n.includes('mtb') || n.includes('mountain bike') || n.includes('btt')) return { act: 'Mtb', conf: 'high' };
   if (n.includes('bikepacking'))                         return { act: 'Bikepacking',             conf: 'high' };
   if (n.includes('kayak') || n.includes('pirag'))        return { act: 'Kayak',                  conf: 'high' };
 
@@ -151,6 +156,15 @@ function parseGpx(content, filePath) {
   else {
     const mn = content.match(/<metadata\b[^>]*>[\s\S]*?<name>([\s\S]*?)<\/name>/);
     if (mn) name = unesc(mn[1]).replace(/^wikiloc\s*-\s*/i,'').trim();
+  }
+
+  // URL desde <metadata><link href="..."> o <trk><link href="...">
+  let sourceUrl = null;
+  const metaLink = content.match(/<metadata\b[^>]*>[\s\S]*?<link\s[^>]*href="([^"]+)"/);
+  if (metaLink) sourceUrl = metaLink[1].trim();
+  if (!sourceUrl) {
+    const trkLink = content.match(/<trk\b[^>]*>[\s\S]*?<link\s[^>]*href="([^"]+)"/);
+    if (trkLink) sourceUrl = trkLink[1].trim();
   }
 
   let date = null;
@@ -215,7 +229,7 @@ function parseGpx(content, filePath) {
   }
 
   return {
-    name, origFile: filePath, date,
+    name, origFile: filePath, date, url: sourceUrl,
     distance:      Math.round(dist * 10) / 10,
     elevationGain: Math.round(gain),
     elevationLoss: Math.round(loss),
@@ -267,13 +281,16 @@ function collectTempGpx(dir) {
     process.exit(0);
   }
 
-  const files = collectTempGpx(TEMP_DIR);
+  let files = collectTempGpx(TEMP_DIR);
+  if (FILTER_FILES) {
+    files = files.filter(f => FILTER_FILES.has(path.relative(TEMP_DIR, f).replace(/\\/g, '/')));
+  }
   if (!files.length) {
-    console.log('✓ _TEMP_ está vacía, nada que importar.');
+    console.log('✓ No hay archivos que importar.');
     process.exit(0);
   }
 
-  console.log(`\nEncontrados ${files.length} archivos GPX en _TEMP_...\n`);
+  console.log(`\nImportando ${files.length} archivo(s) GPX...\n`);
 
   const db = openDb();
   const existingFiles = new Set(
@@ -284,8 +301,8 @@ function collectTempGpx(dir) {
     INSERT INTO tracks
       (name,file,zone,date,distance,elevation_gain,elevation_loss,
        min_elevation,max_elevation,sw_lat,sw_lon,ne_lat,ne_lon,
-       center_lat,center_lon,raw_count,cleaned,activity,sierra,province,ccaa)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)
+       center_lat,center_lon,raw_count,cleaned,activity,sierra,province,ccaa,url)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)
     ON CONFLICT(file) DO UPDATE SET
       name=excluded.name, zone=excluded.zone,
       date=excluded.date, distance=excluded.distance,
@@ -296,6 +313,7 @@ function collectTempGpx(dir) {
       center_lat=excluded.center_lat, center_lon=excluded.center_lon,
       raw_count=excluded.raw_count, activity=excluded.activity,
       sierra=excluded.sierra, province=excluded.province, ccaa=excluded.ccaa,
+      url=COALESCE(excluded.url, tracks.url),
       imported_at=datetime('now'), cleaned=0, clean_count=NULL, cleaned_at=NULL
   `);
   const insertRaw   = db.prepare('INSERT OR REPLACE INTO raw_points(track_id,seq,lat,lon,ele) VALUES(?,?,?,?,?)');
@@ -304,6 +322,7 @@ function collectTempGpx(dir) {
   const getTrackId  = db.prepare('SELECT id FROM tracks WHERE file=?');
 
   function importTrack(track, relFile, activity, sierra, province, ccaa) {
+    let trackId;
     withTransaction(() => {
       const parts = relFile.split('/');
       const zone   = parts.length > 3 ? parts[2] : null;
@@ -313,9 +332,11 @@ function collectTempGpx(dir) {
         track.minElevation ?? null, track.maxElevation ?? null,
         track.swLat, track.swLon, track.neLat, track.neLon,
         track.centerLat, track.centerLon, track.points.length,
-        activity ?? null, sierra ?? null, province ?? null, ccaa ?? null
+        activity ?? null, sierra ?? null, province ?? null, ccaa ?? null,
+        track.url ?? null
       );
       const row = getTrackId.get(relFile);
+      trackId = row.id;
       deleteRaw.run(row.id);
       deleteClean.run(row.id);
       for (let i = 0; i < track.points.length; i++) {
@@ -323,9 +344,11 @@ function collectTempGpx(dir) {
         insertRaw.run(row.id, i, p.lat, p.lon, p.ele ?? null);
       }
     });
+    return trackId;
   }
 
   let imported = 0, skipped = 0, reviewed = 0, errors = 0;
+  const importedIds = [];
 
   for (let i = 0; i < files.length; i++) {
     const filePath = files[i];
@@ -396,11 +419,15 @@ function collectTempGpx(dir) {
       continue;
     }
 
-    // ── Paso 6: Importar a BD ────────────────────────────────────────
+    // ── Paso 6: Importar a BD y escribir atributos al GPX ───────────
     try {
-      importTrack(track, relFile, act, sierra, province, ccaa);
+      const newId = importTrack(track, relFile, act, sierra, province, ccaa);
+      importedIds.push(newId);
       imported++;
-      console.log(`  ✓ Importado`);
+      console.log(`  ✓ Importado (id=${newId})`);
+      const gf = { name: track.name, activity: act };
+      if (track.url) gf.url = track.url;
+      updateGpxMetadata(movedFile, gf);
     } catch (e) {
       console.log(`  ✗ Error en BD: ${e.message}`);
       errors++;
@@ -415,6 +442,9 @@ function collectTempGpx(dir) {
   console.log(`  Errores             : ${errors}`);
   if (reviewed > 0) {
     console.log(`\n⚠  ${reviewed} tracks en _TEMP_/_REVIEW_ necesitan clasificación manual.`);
+  }
+  if (importedIds.length > 0) {
+    console.log(`IMPORTED_IDS:${importedIds.join(',')}`);
   }
   console.log('');
 })();

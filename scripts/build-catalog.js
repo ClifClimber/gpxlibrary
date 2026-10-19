@@ -6,7 +6,7 @@ const path = require('path');
 
 const TRACKS_DIR = path.join(__dirname, '..', 'TracksGps');
 const OUTPUT_FILE = path.join(__dirname, '..', 'catalog-data.js');
-const MAX_POINTS = 150;
+const MAX_POINTS = 300;
 
 // Load optional DB metadata (activity, sierra, province, ccaa)
 function loadDbMeta() {

@@ -42,7 +42,7 @@ Each catalog entry:
 }
 ```
 
-`MAX_POINTS = 150` controls simplification (uniform sampling). Files containing only `<wpt>` waypoints (no `<trkpt>`) are silently skipped.
+`MAX_POINTS = 300` controls simplification (uniform sampling). Files containing only `<wpt>` waypoints (no `<trkpt>`) are silently skipped.
 
 ### Viewer — `index.html` (vanilla JS + Leaflet 1.9.4 from cdnjs)
 Single-page app that reads the global `CATALOG` array. Key sections of the inline script:
@@ -53,6 +53,20 @@ Single-page app that reads the global `CATALOG` array. Key sections of the inlin
 - **`showProfile(track, color)`** — renders an SVG elevation chart in `#profile` panel below the map. Uses `requestAnimationFrame` so the SVG has a real bounding rect before drawing. Elevation is read from `track.points[n][2]`. Cumulative distances are recomputed client-side with `hav()`.
 - **`applyFilters()`** — called on every filter change; iterates all items, shows/hides layers, re-renders the list.
 - Layout: `#main` is a flex row; `#right-col` is a flex column containing `#map` (flex:1) and `#profile` (height:175px, hidden until a track is selected). Showing/hiding the profile calls `map.invalidateSize()`.
+
+## Pages and shared styles
+
+All pages share a common top nav and sub-header pattern via `shared.css`:
+
+- `nav` — sticky dark bar (`#1e293b`) with Visor / Editor / Config / Admin links. Active page link uses `style="color:#f8fafc"`.
+- `.page-header` — dark bar (`#0f172a`) below nav, height 50px, with `.page-header-title` and `.page-header-actions`.
+- `.hbtn-nav` — outline button style for use inside `.page-header`.
+
+Every HTML page must include `<link rel="stylesheet" href="/shared.css">`.
+
+Pages use a **light theme** (`--bg: #f0f2f5`, `--surface: #fff`) with dark headers. config.html was migrated from a dark theme to match this.
+
+The stats section (rawPoints, cleanPoints, reduction %, per-activity table) lives in **admin.html** only — it was removed from the visor's DB sidebar tab to avoid duplication. `GET /api/admin/stats` now returns the full details including `cats[]`.
 
 ## GPX file conventions
 - Source tracks live in `TracksGps/` and are never modified by the build.

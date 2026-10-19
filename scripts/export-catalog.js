@@ -12,7 +12,7 @@ const path = require('path');
 const { openDb } = require('./db');
 
 const OUTPUT  = path.join(__dirname, '..', 'catalog-data.js');
-const MAX_PTS = parseInt(process.argv[process.argv.indexOf('--max-points')+1]) || 150;
+const MAX_PTS = parseInt(process.argv[process.argv.indexOf('--max-points')+1]) || 300;
 
 function hav(lat1,lon1,lat2,lon2) {
   const R=6371,D=Math.PI/180;
@@ -58,7 +58,7 @@ function computeStats(pts) {
 const db = openDb();
 
 const tracks = db.prepare(
-  "SELECT id,name,file,zone,date,cleaned,color,activity,sierra,province,ccaa,tags FROM tracks ORDER BY date DESC,name ASC"
+  "SELECT id,name,file,zone,date,cleaned,color,activity,sierra,province,ccaa,tags,ibp_bicycle,ibp_hiking,ibp_running FROM tracks ORDER BY date DESC,name ASC"
 ).all();
 
 if(!tracks.length){
@@ -101,6 +101,9 @@ for(const t of tracks){
     bounds:        stats.bounds,
     center:        stats.center,
     color:         t.color||null,
+    ibp_bicycle:   t.ibp_bicycle  != null ? Math.round(t.ibp_bicycle)  : null,
+    ibp_hiking:    t.ibp_hiking   != null ? Math.round(t.ibp_hiking)   : null,
+    ibp_running:   t.ibp_running  != null ? Math.round(t.ibp_running)  : null,
     points:        disp.map(p=>[
       Math.round(p.lat*100000)/100000,
       Math.round(p.lon*100000)/100000,

@@ -21,10 +21,7 @@
     #sticky-top { flex-shrink:0; }
 
     /* ── Header ────────────────────────────── */
-    #header { height:50px; background:var(--header); color:var(--header-text); display:flex; align-items:center; padding:0 16px; gap:12px; box-shadow:0 2px 8px rgba(0,0,0,.3); z-index:200; }
-    #header-title { font-size:16px; font-weight:700; display:flex; align-items:center; gap:7px; }
-    #header-title svg { opacity:.7; }
-    #header-actions { margin-left:auto; display:flex; gap:8px; align-items:center; }
+    #header { z-index:200; }
     .hbtn { padding:5px 12px; border-radius:5px; font-size:12px; font-weight:500; cursor:pointer; border:1.5px solid; display:flex; align-items:center; gap:5px; transition:background .12s; }
     .hbtn-outline { background:transparent; color:#94a3b8; border-color:#334155; }
     .hbtn-outline:hover { background:#1e293b; color:white; }
@@ -44,12 +41,45 @@
     #tb-count { font-size:12px; color:var(--muted); margin-left:4px; white-space:nowrap; }
     #tb-clear { font-size:12px; color:var(--accent); background:none; border:none; cursor:pointer; padding:2px 4px; border-radius:3px; }
     #tb-clear:hover { background:var(--hover-bg); }
+    /* IBP badge */
+    .ibp-badge { display:inline-block; font-size:11px; font-weight:700; padding:1px 6px; border-radius:4px; white-space:nowrap; }
+    .ibp-0  { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+    .ibp-1  { background:#fefce8; color:#854d0e; border:1px solid #fde68a; }
+    .ibp-2  { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
+    .ibp-3  { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+    .ibp-4  { background:#faf5ff; color:#7e22ce; border:1px solid #e9d5ff; }
+    .ibp-5  { background:#1e293b; color:#e2e8f0; border:1px solid #475569; }
+    /* IBP modal */
+    #ibp-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:2000; align-items:center; justify-content:center; }
+    #ibp-modal.open { display:flex; }
+    #ibp-box { background:#fff; border-radius:12px; padding:24px; width:440px; max-width:95vw; box-shadow:0 8px 40px rgba(0,0,0,.3); display:flex; flex-direction:column; gap:14px; }
+    #ibp-box h3 { font-size:15px; font-weight:700; margin:0; }
+    #ibp-key-row { display:flex; gap:6px; }
+    #ibp-key-input { flex:1; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:12px; font-family:monospace; outline:none; }
+    #ibp-key-input:focus { border-color:var(--accent); }
+    #ibp-log { font-size:11px; font-family:monospace; background:#f8fafc; border:1px solid var(--border); border-radius:6px; padding:8px 10px; max-height:180px; overflow-y:auto; display:none; white-space:pre-wrap; line-height:1.5; }
+    #ibp-log.visible { display:block; }
+    .ibp-log-err  { color:#dc2626; }
+    .ibp-log-warn { color:#d97706; }
+    .ibp-modal-btns { display:flex; gap:8px; margin-top:4px; }
+    #ibp-calc-btn { flex:2; background:var(--accent); color:#fff; border:none; border-radius:6px; padding:7px 14px; font-size:12px; font-weight:600; cursor:pointer; }
+    #ibp-calc-btn:disabled { opacity:.5; cursor:not-allowed; }
+    #ibp-close-btn { flex:1; background:transparent; border:1.5px solid var(--border); border-radius:6px; padding:7px; font-size:12px; cursor:pointer; }
+    /* ── Search chip ───────────────────────── */
+    #search-chip-bar { display:none; padding:4px 16px 6px; background:var(--surface); border-bottom:1px solid var(--border); gap:5px; flex-wrap:wrap; align-items:center; }
+    #search-chip-bar.has-chips { display:flex; }
+    .search-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 5px 2px 8px; border-radius:999px; font-size:11px; background:color-mix(in srgb,var(--accent) 10%,white); color:var(--accent); border:1.5px solid color-mix(in srgb,var(--accent) 30%,var(--border)); max-width:260px; }
+    .search-chip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .search-chip .chip-x { background:none; border:none; cursor:pointer; color:inherit; font-size:14px; line-height:1; padding:0 0 0 2px; opacity:.6; display:flex; }
+    .search-chip .chip-x:hover { opacity:1; }
 
     /* ── Selection bar ─────────────────────── */
     #sel-bar { background:#eff6ff; border-bottom:1px solid #bfdbfe; padding:8px 16px; display:none; align-items:center; gap:10px; font-size:13px; z-index:99; }
     #sel-bar.visible { display:flex; }
     #sel-count-label { font-weight:600; color:var(--accent); }
     #btn-bulk-edit { padding:5px 14px; background:var(--accent); color:white; border:none; border-radius:5px; font-size:12px; font-weight:500; cursor:pointer; }
+    #btn-export-sel { padding:5px 12px; background:none; border:1.5px solid var(--border); border-radius:5px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:5px; }
+    #btn-export-sel:hover { background:var(--hover-bg); }
     #btn-bulk-edit:hover { background:#2563eb; }
     #btn-deselect { padding:5px 10px; background:none; border:1.5px solid var(--border); border-radius:5px; font-size:12px; cursor:pointer; }
     #btn-deselect:hover { background:var(--hover-bg); }
@@ -74,6 +104,7 @@
     th.col-sierra{ width:150px; }
     th.col-dist  { width:65px; text-align:right; }
     th.col-gain  { width:65px; text-align:right; }
+    th.col-ibp   { width:52px; text-align:right; }
     th.col-date  { width:88px; }
     th.col-notes { width:80px; }
 
@@ -205,6 +236,19 @@
     #btn-import-delete-all:hover { background:#450a0a; color:white; }
     #btn-import-close { padding:7px 12px; background:var(--filter-bg); color:var(--text); border:1.5px solid var(--border); border-radius:6px; font-size:12px; cursor:pointer; margin-left:auto; }
     #btn-import-close:hover { background:var(--hover-bg); }
+    /* Import file picker */
+    #import-picker { display:flex; flex-direction:column; gap:10px; }
+    #import-picker-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .import-sel-btn { padding:3px 9px; border:1.5px solid var(--border); border-radius:5px; background:transparent; color:var(--muted); font-size:11px; cursor:pointer; white-space:nowrap; }
+    .import-sel-btn:hover { border-color:var(--text); color:var(--text); }
+    #import-file-list { max-height:220px; overflow-y:auto; background:#0f172a; border-radius:6px; padding:6px 8px; display:flex; flex-direction:column; gap:1px; }
+    #import-file-list::-webkit-scrollbar { width:4px; }
+    #import-file-list::-webkit-scrollbar-thumb { background:#334155; border-radius:2px; }
+    .import-file-item { display:flex; align-items:center; gap:8px; padding:5px 4px; cursor:pointer; border-radius:4px; }
+    .import-file-item:hover { background:rgba(255,255,255,.05); }
+    .import-file-item input[type="checkbox"] { accent-color:#3b82f6; cursor:pointer; flex-shrink:0; width:13px; height:13px; }
+    .import-file-item .ifl-name { font-size:11px; font-family:'Cascadia Code',Consolas,monospace; color:#e2e8f0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .import-file-item .ifl-dir { font-size:10px; color:#475569; flex-shrink:0; }
 
     /* ── Delete-all confirm modal ───────────────── */
     #da-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:500; display:none; align-items:center; justify-content:center; }
@@ -231,6 +275,20 @@
     #btn-bulk-delete { padding:5px 14px; background:transparent; color:#f87171; border:1.5px solid #7f1d1d; border-radius:5px; font-size:12px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:5px; }
     #btn-bulk-delete:hover { background:#450a0a; color:white; }
 
+    /* ── Export GPX modal ───────────────────── */
+    #export-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:2000; align-items:center; justify-content:center; }
+    #export-modal.open { display:flex; }
+    #export-box { background:#fff; border-radius:12px; padding:22px; width:360px; max-width:95vw; box-shadow:0 8px 40px rgba(0,0,0,.3); display:flex; flex-direction:column; gap:14px; }
+    #export-box h3 { font-size:15px; font-weight:700; margin:0; }
+    .export-opt label { display:flex; align-items:center; gap:7px; font-size:13px; cursor:pointer; padding:3px 0; }
+    .export-pts-row { display:flex; align-items:center; gap:6px; margin-left:22px; font-size:11px; color:var(--muted); }
+    #export-pts { width:70px; padding:3px 6px; border:1px solid var(--border); border-radius:5px; font-size:12px; text-align:center; }
+    .export-btns { display:flex; gap:8px; margin-top:2px; }
+    #export-cancel { flex:1; background:transparent; border:1.5px solid var(--border); border-radius:6px; padding:7px; font-size:12px; cursor:pointer; }
+    #export-download { flex:2; background:var(--accent); color:#fff; border:none; border-radius:6px; padding:7px 14px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; }
+    #export-download:hover { background:#2563eb; }
+    #export-download:disabled { opacity:.5; cursor:not-allowed; }
+
     /* ── Toast ──────────────────────────────── */
     #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#1e293b; color:white; padding:9px 18px; border-radius:7px; font-size:13px; z-index:500; opacity:0; transition:opacity .2s; pointer-events:none; white-space:nowrap; }
     #toast.show { opacity:1; }
@@ -241,16 +299,24 @@
       #bulk-panel { width:100%; }
     }
   </style>
+  <link rel="stylesheet" href="/shared.css">
 </head>
 <body>
 
+<nav>
+  <span class="logo">GPX Library</span>
+  <a href="/">Visor</a>
+  <a href="/editor" style="color:#f8fafc">Editor</a>
+  <a href="/config">Config</a>
+  <a href="/admin">Admin</a>
+</nav>
 <div id="sticky-top">
-<header id="header">
-  <div id="header-title">
+<header id="header" class="page-header">
+  <div class="page-header-title">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
     GPX Library — Gestión
   </div>
-  <div id="header-actions">
+  <div class="page-header-actions">
     <button class="hbtn hbtn-outline" id="btn-last-import" title="Filtrar por última importación" style="display:none">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       Última importación
@@ -267,14 +333,10 @@
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
       Enriquecer datos
     </button>
-    <a href="/config" class="hbtn hbtn-outline" style="text-decoration:none">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      Configuración
-    </a>
-    <a href="/" class="hbtn hbtn-outline" style="text-decoration:none">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-      Mapa
-    </a>
+    <button class="hbtn hbtn-outline" id="btn-ibp">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      IBP Index
+    </button>
   </div>
 </header>
 
@@ -282,15 +344,26 @@
 <div id="toolbar">
   <div class="tb-search">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <input type="text" id="search-input" placeholder="Buscar nombre...">
+    <input type="text" id="search-input" placeholder="Buscar nombre..." autocomplete="off">
   </div>
   <select class="tb-select" id="f-activity"><option value="">Todas las actividades</option></select>
   <select class="tb-select" id="f-province"><option value="">Todas las provincias</option></select>
   <select class="tb-select" id="f-ccaa"><option value="">Todas las CCAA</option></select>
   <select class="tb-select" id="f-sierra"><option value="">Todas las sierras</option></select>
+  <select class="tb-select" id="f-ibp">
+    <option value="">Todas las dificultades</option>
+    <option value="0">🟢 Muy fácil (0–50)</option>
+    <option value="1">🟡 Fácil (51–100)</option>
+    <option value="2">🟠 Moderada (101–150)</option>
+    <option value="3">🔴 Dura (151–250)</option>
+    <option value="4">🟣 Muy dura (251–400)</option>
+    <option value="5">⚫ Extrema (>400)</option>
+  </select>
   <button id="tb-clear">× Limpiar</button>
   <span id="tb-count"></span>
 </div>
+
+<div id="search-chip-bar"></div>
 
 <!-- Stats bar -->
 <div id="stats-bar">
@@ -316,6 +389,10 @@
 <div id="sel-bar">
   <span id="sel-count-label">0 seleccionados</span>
   <button id="btn-bulk-edit">Editar seleccionados</button>
+  <button id="btn-export-sel">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Exportar GPX
+  </button>
   <button id="btn-bulk-delete">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
     Borrar seleccionados
@@ -352,20 +429,37 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       Importar desde TracksGps/_TEMP_
     </h3>
-    <div id="import-log"><span class="ll" style="color:#64748b">Pulsa "Iniciar" para comenzar la importación...</span></div>
-    <div id="import-options">
-      <label><input type="checkbox" id="import-force"> Reimportar aunque ya existan (--force)</label>
+
+    <!-- Fase 1: selección de archivos -->
+    <div id="import-picker">
+      <div id="import-picker-toolbar">
+        <span id="import-picker-count" style="font-size:12px;color:var(--muted);flex:1">Cargando...</span>
+        <button class="import-sel-btn" id="import-sel-all">Todos</button>
+        <button class="import-sel-btn" id="import-sel-none">Ninguno</button>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--muted);font-size:12px">
+          <input type="checkbox" id="import-force"> --force
+        </label>
+      </div>
+      <div id="import-file-list"><span class="ll" style="color:#475569">Cargando archivos...</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="btn-import-start">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Importar seleccionados
+        </button>
+        <button id="btn-import-delete-all">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          Borrar todo
+        </button>
+        <button id="btn-import-close" style="margin-left:auto">Cerrar</button>
+      </div>
     </div>
-    <div id="import-actions">
-      <button id="btn-import-start">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Iniciar importación
-      </button>
-      <button id="btn-import-delete-all">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-        Borrar todo
-      </button>
-      <button id="btn-import-close">Cerrar</button>
+
+    <!-- Fase 2: log de ejecución -->
+    <div id="import-log-wrap" style="display:none;flex-direction:column;gap:10px">
+      <div id="import-log"></div>
+      <div style="display:flex;gap:8px">
+        <button id="btn-import-close2" style="margin-left:auto;padding:7px 12px;background:var(--filter-bg);color:var(--text);border:1.5px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer">Cerrar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -400,6 +494,70 @@
   </div>
 </div>
 
+<!-- Export GPX modal -->
+<div id="export-modal">
+  <div id="export-box">
+    <h3>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Exportar GPX
+    </h3>
+    <p id="export-subtitle" style="font-size:12px;color:var(--muted);margin:0"></p>
+    <div class="export-opt">
+      <label><input type="radio" name="export-mode" value="full" checked> Todos los puntos (máxima calidad)</label>
+      <label><input type="radio" name="export-mode" value="simplified"> Resumido —</label>
+      <div class="export-pts-row">
+        <input type="number" id="export-pts" value="500" min="50" max="5000" step="50">
+        <span>puntos por track</span>
+      </div>
+    </div>
+    <div class="export-opt">
+      <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Formato</div>
+      <label><input type="radio" name="export-fmt" value="gpx" checked> GPX único (todos los tracks en un archivo)</label>
+      <label><input type="radio" name="export-fmt" value="zip"> ZIP — un archivo GPX por track</label>
+      <div id="export-layout-row" style="display:none;flex-direction:column;gap:3px;margin-left:22px;margin-top:3px">
+        <label><input type="radio" name="export-layout" value="flat" checked> Plano (sin subcarpetas)</label>
+        <label><input type="radio" name="export-layout" value="tree"> Estructura original (Actividad/Zona/track.gpx)</label>
+      </div>
+    </div>
+    <div class="export-btns">
+      <button id="export-cancel">Cancelar</button>
+      <button id="export-download">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Descargar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- IBP Modal -->
+<div id="ibp-modal">
+  <div id="ibp-box">
+    <h3>⚡ Calcular IBP Index</h3>
+    <p style="font-size:12px;color:var(--muted);margin:0">
+      El IBP Index es calculado por <a href="https://www.ibpindex.com" target="_blank">ibpindex.com</a>.
+      Necesitas una <strong>clave de API gratuita</strong> — regístrate en su web para obtenerla.
+    </p>
+    <div>
+      <label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">API Key</label>
+      <div id="ibp-key-row">
+        <input type="text" id="ibp-key-input" placeholder="Tu clave API de ibpindex.com">
+        <button class="hbtn hbtn-outline" id="ibp-key-save-btn" style="flex-shrink:0">Guardar</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted)">
+      <strong>Calcular para:</strong>
+      <label style="margin-left:8px"><input type="radio" name="ibp-scope" value="selected"> Tracks seleccionados (<span id="ibp-sel-count">0</span>)</label>
+      <label style="margin-left:8px"><input type="radio" name="ibp-scope" value="missing" checked> Sin IBP</label>
+      <label style="margin-left:8px"><input type="radio" name="ibp-scope" value="all"> Todos</label>
+    </div>
+    <div id="ibp-log"></div>
+    <div class="ibp-modal-btns">
+      <button id="ibp-close-btn">Cerrar</button>
+      <button id="ibp-calc-btn">Calcular IBP</button>
+    </div>
+  </div>
+</div>
+
 <!-- Table -->
 <div id="table-wrap">
   <table id="tracks-table">
@@ -413,15 +571,16 @@
         <th class="col-sierra sortable" data-col="sierra">Sierra / Zona</th>
         <th class="col-dist sortable" data-col="distance" style="text-align:right">Dist.</th>
         <th class="col-gain sortable" data-col="elevation_gain" style="text-align:right">D+</th>
+        <th class="col-ibp sortable" data-col="ibp_val" style="text-align:right" title="IBP Index">IBP</th>
         <th class="col-date sortable" data-col="date">Fecha</th>
         <th class="col-notes">Notas</th>
         <th style="width:50px">URL</th>
         <th style="width:30px">Tags</th>
-        <th class="col-act" style="width:72px"></th>
+        <th class="col-act" style="width:90px"></th>
       </tr>
     </thead>
     <tbody id="tracks-body">
-      <tr><td colspan="13" class="empty-td">Cargando...</td></tr>
+      <tr><td colspan="14" class="empty-td">Cargando...</td></tr>
     </tbody>
   </table>
 </div>
@@ -582,7 +741,7 @@ async function loadTracks() {
     updateStats();
   } catch(e) {
     document.getElementById('tracks-body').innerHTML =
-      `<tr><td colspan="13" class="empty-td">⚠ No se pudo cargar. Inicia el servidor con <code>npm start</code>.<br><small>${escHtml(e.message)}</small></td></tr>`;
+      `<tr><td colspan="14" class="empty-td">⚠ No se pudo cargar. Inicia el servidor con <code>npm start</code>.<br><small>${escHtml(e.message)}</small></td></tr>`;
   }
 }
 
@@ -612,6 +771,7 @@ function applyFilters() {
   const fPro = document.getElementById('f-province').value;
   const fCCA = document.getElementById('f-ccaa').value;
   const fSie = document.getElementById('f-sierra').value;
+  const fIbp = document.getElementById('f-ibp').value;
 
   let lastSessionDate = null;
   if (lastImportFilter && allTracks.length > 0) {
@@ -627,34 +787,85 @@ function applyFilters() {
     }
   }
 
-  filtered = allTracks.filter(t =>
-    (!q    || t.name.toLowerCase().includes(q)) &&
-    (!fAct || t.activity === fAct) &&
-    (!fPro || t.province === fPro) &&
-    (!fCCA || t.ccaa     === fCCA) &&
-    (!fSie || t.sierra   === fSie) &&
-    (!lastSessionDate || lastSessionDate(t))
-  );
+  filtered = allTracks.filter(t => {
+    if (q    && !t.name.toLowerCase().includes(q)) return false;
+    if (fAct && t.activity !== fAct) return false;
+    if (fPro && t.province !== fPro) return false;
+    if (fCCA && t.ccaa     !== fCCA) return false;
+    if (fSie && t.sierra   !== fSie) return false;
+    if (fIbp !== '') {
+      const idx = ibpLevelIdx(ibpForTrack(t));
+      if (idx !== parseInt(fIbp)) return false;
+    }
+    if (lastSessionDate && !lastSessionDate(t)) return false;
+    return true;
+  });
   sortFiltered();
   renderTable();
   document.getElementById('tb-count').textContent = `${filtered.length} de ${allTracks.length}`;
   updateSelBar();
+  updateSearchChip();
+}
+
+function updateSearchChip() {
+  const q   = document.getElementById('search-input').value.trim();
+  const bar = document.getElementById('search-chip-bar');
+  bar.innerHTML = '';
+  if (!q) { bar.classList.remove('has-chips'); return; }
+  const chip = document.createElement('div');
+  chip.className = 'search-chip';
+  chip.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><span title="${escHtml(q)}">${escHtml(q)}</span><button class="chip-x" title="Quitar filtro de texto"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+  chip.querySelector('.chip-x').addEventListener('click', () => {
+    document.getElementById('search-input').value = '';
+    applyFilters();
+  });
+  bar.appendChild(chip);
+  bar.classList.add('has-chips');
 }
 
 function sortFiltered() {
   const { col, dir } = sort;
   filtered.sort((a, b) => {
-    const av = a[col] ?? '', bv = b[col] ?? '';
+    const av = col === 'ibp_val' ? (ibpForTrack(a) ?? -1) : (a[col] ?? '');
+    const bv = col === 'ibp_val' ? (ibpForTrack(b) ?? -1) : (b[col] ?? '');
     const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'es');
     return dir === 'asc' ? cmp : -cmp;
   });
+}
+
+// ── IBP helpers ────────────────────────────────────────────────────
+const CYCLING_ACTS = ['Mtb','Gravel','Bikepacking','Ciclismo de carretera'];
+const RUNNING_ACTS = ['Trail Running','Running'];
+const IBP_LEVELS = [
+  { label:'Muy fácil', min:0,   max:50  },
+  { label:'Fácil',     min:51,  max:100 },
+  { label:'Moderada',  min:101, max:150 },
+  { label:'Dura',      min:151, max:250 },
+  { label:'Muy dura',  min:251, max:400 },
+  { label:'Extrema',   min:401, max:Infinity },
+];
+function ibpLevelIdx(val) {
+  if (val == null) return -1;
+  return IBP_LEVELS.findIndex(l => val >= l.min && val <= l.max);
+}
+function ibpForTrack(t) {
+  if (CYCLING_ACTS.includes(t.activity)) return t.ibp_bicycle;
+  if (RUNNING_ACTS.includes(t.activity)) return t.ibp_running;
+  return t.ibp_hiking;
+}
+function ibpBadge(val) {
+  if (val == null) return '<span style="color:#cbd5e1;font-size:11px">—</span>';
+  const v   = Math.round(val);
+  const idx = ibpLevelIdx(v);
+  const lbl = idx >= 0 ? IBP_LEVELS[idx].label : '';
+  return `<span class="ibp-badge ibp-${idx}" title="${lbl}">${v}</span>`;
 }
 
 // ── Render table ───────────────────────────────────────────────────
 function renderTable() {
   const tbody = document.getElementById('tracks-body');
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="13" class="empty-td">Sin resultados. Ajusta los filtros.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" class="empty-td">Sin resultados. Ajusta los filtros.</td></tr>';
     return;
   }
   tbody.innerHTML = filtered.map(t => {
@@ -685,6 +896,7 @@ function renderTable() {
       <td>${sierraCell}</td>
       <td class="col-dist">${t.distance ? `<strong>${t.distance}</strong><span style="font-size:10px;color:var(--muted)"> km</span>` : '—'}</td>
       <td class="col-gain">${t.elevation_gain ? `<strong>${Math.round(t.elevation_gain)}</strong><span style="font-size:10px;color:var(--muted)"> m</span>` : '—'}</td>
+      <td class="col-ibp" style="text-align:right">${ibpBadge(ibpForTrack(t))}</td>
       <td style="font-size:11px;color:var(--muted)">${t.date ? t.date.substring(0,10) : '—'}</td>
       <td class="col-notes" title="${escHtml(t.notes||'')}">${escHtml(t.notes||'')}</td>
       <td>${t.url ? `<a href="${escHtml(t.url)}" target="_blank" class="url-link" title="${escHtml(t.url)}">
@@ -694,6 +906,9 @@ function renderTable() {
       <td class="col-act" style="white-space:nowrap">
         <button class="act-btn edit-btn" data-id="${t.id}" title="Editar">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="act-btn export-btn" data-id="${t.id}" title="Exportar GPX">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         </button>
         <button class="act-btn del-btn" data-id="${t.id}" data-name="${escHtml(t.name)}" title="Borrar" style="color:#f87171">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
@@ -725,6 +940,9 @@ function renderTable() {
       renderTable();
     });
   });
+  tbody.querySelectorAll('.export-btn').forEach(btn => {
+    btn.addEventListener('click', () => openExportModal([parseInt(btn.dataset.id)]));
+  });
   tbody.querySelectorAll('.del-btn').forEach(btn => {
     btn.addEventListener('click', () => confirmDelete([parseInt(btn.dataset.id)], btn.dataset.name));
   });
@@ -742,7 +960,7 @@ function injectEditRow(t) {
   const row = document.createElement('tr');
   row.className = 'inline-edit-row';
   row.dataset.editFor = t.id;
-  row.innerHTML = `<td colspan="13">
+  row.innerHTML = `<td colspan="14">
     <form class="edit-form" id="ef-${t.id}">
       <div class="edit-grid">
         <div class="ef-group"><label class="ef-label">Nombre</label>
@@ -922,13 +1140,13 @@ document.querySelectorAll('thead th.sortable').forEach(th => {
 });
 
 // ── Filter events ──────────────────────────────────────────────────
-['search-input','f-activity','f-province','f-ccaa','f-sierra'].forEach(id => {
+['search-input','f-activity','f-province','f-ccaa','f-sierra','f-ibp'].forEach(id => {
   const el = document.getElementById(id);
   el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', applyFilters);
 });
 document.getElementById('tb-clear').addEventListener('click', () => {
   document.getElementById('search-input').value = '';
-  ['f-activity','f-province','f-ccaa','f-sierra'].forEach(id => document.getElementById(id).value = '');
+  ['f-activity','f-province','f-ccaa','f-sierra','f-ibp'].forEach(id => document.getElementById(id).value = '');
   applyFilters();
 });
 
@@ -1072,71 +1290,144 @@ document.getElementById('enrich-overlay').addEventListener('click', e => {
 });
 
 // ── Import from _TEMP_ ────────────────────────────────────────────
-document.getElementById('btn-open-import').addEventListener('click', () => {
-  document.getElementById('import-overlay').classList.add('open');
-  document.getElementById('import-log').innerHTML = '<span class="ll" style="color:#475569">Pulsa "Iniciar" para importar archivos de TracksGps/_TEMP_...</span>';
-  document.getElementById('btn-import-start').disabled = false;
-});
-document.getElementById('btn-import-close').addEventListener('click', () => {
+function closeImportModal() {
   document.getElementById('import-overlay').classList.remove('open');
   loadTracks();
-});
-document.getElementById('import-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('import-overlay')) {
-    document.getElementById('import-overlay').classList.remove('open');
-    loadTracks();
-  }
-});
+}
 
-async function runImport() {
-  const log   = document.getElementById('import-log');
-  const force = document.getElementById('import-force').checked;
-  const btn   = document.getElementById('btn-import-start');
-  log.innerHTML = '';
-  btn.disabled  = true;
+function importLine(text, cls = '') {
+  const log = document.getElementById('import-log');
+  const d = document.createElement('span');
+  d.className = 'll ' + cls;
+  d.textContent = text;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
 
-  function line(text, cls = '') {
-    const d = document.createElement('span');
-    d.className = 'll ' + cls;
-    d.textContent = text;
-    log.appendChild(d);
-    log.scrollTop = log.scrollHeight;
-  }
-
-  try {
-    const url  = '/api/db/import-temp' + (force ? '?force=1' : '');
-    const resp = await fetch(url, { method: 'POST' });
-    const reader = resp.body.getReader();
-    const dec    = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const evts = buf.split('\n\n'); buf = evts.pop();
-      for (const ev of evts) {
-        const m = ev.match(/^data: (.+)$/m);
-        if (!m) continue;
-        let obj; try { obj = JSON.parse(m[1]); } catch { continue; }
-        if (obj.type === 'start') continue;
-        if (obj.type === 'done') {
-          line(obj.code === 0 ? '✓ Importación completada.' : `✗ Código de salida ${obj.code}`, obj.code === 0 ? 'lo' : 'le');
-          // Regenera catálogo en background
-          triggerCatalogRebuild();
-          break;
-        }
-        const cls = obj.type === 'error' ? 'le' : obj.type === 'warn' ? 'lw' : obj.text?.startsWith('✓') ? 'lo' : obj.text?.startsWith('⚠') ? 'lw' : '';
-        line(obj.text || '', cls);
-      }
+async function streamScript(url, opts, onLine, onDone) {
+  const resp = await fetch(url, opts);
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const evts = buf.split('\n\n'); buf = evts.pop();
+    for (const ev of evts) {
+      const m = ev.match(/^data: (.+)$/m);
+      if (!m) continue;
+      let obj; try { obj = JSON.parse(m[1]); } catch { continue; }
+      if (obj.type === 'start') continue;
+      if (obj.type === 'done') { onDone(obj.code); return; }
+      onLine(obj.text || '', obj.type);
     }
-  } catch (e) {
-    line('✗ ' + e.message, 'le');
-  } finally {
+  }
+  onDone(-1);
+}
+
+async function loadTempFiles() {
+  const list  = document.getElementById('import-file-list');
+  const count = document.getElementById('import-picker-count');
+  const btn   = document.getElementById('btn-import-start');
+  list.innerHTML = '<span class="ll" style="color:#475569">Cargando...</span>';
+  btn.disabled = true;
+  try {
+    const files = await fetch('/api/db/temp-files').then(r => r.json());
+    if (!files.length) {
+      list.innerHTML = '<span class="ll" style="color:#64748b">_TEMP_ está vacía.</span>';
+      count.textContent = '0 archivos';
+      return;
+    }
+    count.textContent = `${files.length} archivo${files.length !== 1 ? 's' : ''}`;
+    list.innerHTML = files.map(f => {
+      const dir = f.rel.includes('/') ? f.rel.slice(0, f.rel.lastIndexOf('/')) : '';
+      return `<label class="import-file-item">
+        <input type="checkbox" class="import-file-cb" value="${f.rel}" checked>
+        <span class="ifl-name">${f.name}</span>
+        ${dir ? `<span class="ifl-dir">${dir}/</span>` : ''}
+      </label>`;
+    }).join('');
     btn.disabled = false;
+  } catch(e) {
+    list.innerHTML = `<span class="ll le">Error: ${e.message}</span>`;
+    count.textContent = 'Error';
   }
 }
 
-document.getElementById('btn-import-start').addEventListener('click', runImport);
+document.getElementById('btn-open-import').addEventListener('click', () => {
+  document.getElementById('import-overlay').classList.add('open');
+  document.getElementById('import-picker').style.display = 'flex';
+  document.getElementById('import-log-wrap').style.display = 'none';
+  loadTempFiles();
+});
+
+document.getElementById('import-sel-all').addEventListener('click', () => {
+  document.querySelectorAll('.import-file-cb').forEach(cb => cb.checked = true);
+});
+document.getElementById('import-sel-none').addEventListener('click', () => {
+  document.querySelectorAll('.import-file-cb').forEach(cb => cb.checked = false);
+});
+
+document.getElementById('btn-import-close').addEventListener('click', closeImportModal);
+document.getElementById('btn-import-close2').addEventListener('click', closeImportModal);
+document.getElementById('import-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('import-overlay')) closeImportModal();
+});
+
+document.getElementById('btn-import-start').addEventListener('click', async () => {
+  const selected = [...document.querySelectorAll('.import-file-cb:checked')].map(cb => cb.value);
+  if (!selected.length) { alert('Selecciona al menos un archivo.'); return; }
+  const force = document.getElementById('import-force').checked;
+
+  // Switch to log view
+  document.getElementById('import-picker').style.display = 'none';
+  document.getElementById('import-log-wrap').style.display = 'flex';
+  document.getElementById('import-log').innerHTML = '';
+
+  let importedIds = [];
+
+  try {
+    await streamScript(
+      '/api/db/import-temp',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: selected, force }) },
+      (text, type) => {
+        const m = text.match(/^IMPORTED_IDS:(.+)$/);
+        if (m) { importedIds = m[1].split(',').map(Number).filter(Boolean); return; }
+        const cls = type === 'error' ? 'le' : type === 'warn' ? 'lw' : text.startsWith('✓') ? 'lo' : text.startsWith('⚠') ? 'lw' : '';
+        importLine(text, cls);
+      },
+      code => {
+        importLine(code === 0 ? '✓ Importación completada.' : `✗ Código de salida ${code}`, code === 0 ? 'lo' : 'le');
+        triggerCatalogRebuild();
+      }
+    );
+  } catch(e) {
+    importLine('✗ ' + e.message, 'le');
+    return;
+  }
+
+  // Auto-calc IBP for imported tracks if API key is configured
+  if (!importedIds.length) return;
+  try {
+    const keyResp = await fetch('/api/config/ibp-key');
+    const keyData = await keyResp.json();
+    if (!keyData.key) return;
+    importLine(`\n⚡ Calculando IBP para ${importedIds.length} track(s) nuevos...`, 'lp');
+    await streamScript(
+      `/api/db/calc-ibp?ids=${importedIds.join(',')}`,
+      { method: 'POST' },
+      (text, type) => {
+        const cls = type === 'error' ? 'le' : text.startsWith('✓') ? 'lo' : text.startsWith('⚠') ? 'lw' : '';
+        importLine(text, cls);
+      },
+      code => {
+        importLine(code === 0 ? '✓ IBP calculado.' : `⚠ IBP: código ${code}`, code === 0 ? 'lo' : 'lw');
+        triggerCatalogRebuild();
+      }
+    );
+  } catch { /* IBP optional, ignore errors */ }
+});
 
 // ── Reorganizar carpetas ───────────────────────────────────────────
 document.getElementById('btn-organize-files').addEventListener('click', () => {
@@ -1339,6 +1630,172 @@ document.getElementById('btn-bulk-delete').addEventListener('click', () => {
 // ── URL pre-selection (ids=1,2,3) ─────────────────────────────────
 const preIds = new URLSearchParams(location.search).get('ids');
 if (preIds) preIds.split(',').forEach(id => { const n = parseInt(id); if (n) selected.add(n); });
+
+// ── Export GPX modal ───────────────────────────────────────────────
+let exportIds = [];
+
+function openExportModal(ids) {
+  exportIds = ids;
+  const n = ids.length;
+  document.getElementById('export-subtitle').textContent =
+    n === 1 ? '1 track seleccionado' : `${n} tracks seleccionados`;
+  document.getElementById('export-modal').classList.add('open');
+}
+
+document.getElementById('btn-export-sel').addEventListener('click', () => {
+  if (!selected.size) return;
+  openExportModal([...selected]);
+});
+
+document.getElementById('export-cancel').addEventListener('click', () => {
+  document.getElementById('export-modal').classList.remove('open');
+});
+
+document.getElementById('export-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('export-modal'))
+    document.getElementById('export-modal').classList.remove('open');
+});
+
+document.querySelectorAll('input[name="export-fmt"]').forEach(r => {
+  r.addEventListener('change', () => {
+    const isZip = document.querySelector('input[name="export-fmt"]:checked').value === 'zip';
+    document.getElementById('export-layout-row').style.display = isZip ? 'flex' : 'none';
+  });
+});
+
+document.getElementById('export-download').addEventListener('click', async () => {
+  const mode   = document.querySelector('input[name="export-mode"]:checked').value;
+  const pts    = parseInt(document.getElementById('export-pts').value) || 500;
+  const format = document.querySelector('input[name="export-fmt"]:checked').value;
+  const layout = document.querySelector('input[name="export-layout"]:checked').value;
+  const btn    = document.getElementById('export-download');
+  btn.disabled = true;
+  btn.textContent = 'Descargando…';
+  try {
+    const resp = await fetch('/api/tracks/export-gpx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: exportIds, mode, pts, format, layout }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const blob = await resp.blob();
+    const cd   = resp.headers.get('Content-Disposition') || '';
+    const m    = cd.match(/filename\*?=(?:UTF-8'')?(.+)/i);
+    const name = m ? decodeURIComponent(m[1].replace(/"/g,'')) : (format === 'zip' ? 'tracks.zip' : 'tracks.gpx');
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+    document.getElementById('export-modal').classList.remove('open');
+  } catch(e) {
+    showToast('Error exportando: ' + e.message, 4000);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Descargar';
+  }
+});
+
+// ── IBP modal ──────────────────────────────────────────────────────
+const ibpModal = document.getElementById('ibp-modal');
+
+document.getElementById('btn-ibp').addEventListener('click', async () => {
+  document.getElementById('ibp-sel-count').textContent = selected.size;
+  const selRadio = ibpModal.querySelector('input[value="selected"]');
+  selRadio.disabled = selected.size === 0;
+  if (selected.size === 0 && selRadio.checked) {
+    ibpModal.querySelector('input[value="missing"]').checked = true;
+  }
+  // Load current key state
+  try {
+    const r = await fetch('/api/config/ibp-key');
+    const d = await r.json();
+    const inp = document.getElementById('ibp-key-input');
+    inp.value = d.hasKey ? '••••••••' : '';
+    inp.dataset.masked = d.hasKey ? '1' : '';
+  } catch {}
+  document.getElementById('ibp-log').classList.remove('visible');
+  document.getElementById('ibp-log').textContent = '';
+  document.getElementById('ibp-calc-btn').disabled = false;
+  ibpModal.classList.add('open');
+});
+
+document.getElementById('ibp-close-btn').addEventListener('click', () => {
+  ibpModal.classList.remove('open');
+  loadTracks();
+});
+
+document.getElementById('ibp-key-input').addEventListener('focus', function() {
+  if (this.dataset.masked) { this.value = ''; this.dataset.masked = ''; }
+});
+
+document.getElementById('ibp-key-save-btn').addEventListener('click', async () => {
+  const key = document.getElementById('ibp-key-input').value.trim();
+  if (!key || key.includes('•')) return;
+  try {
+    const r = await fetch('/api/config/ibp-key', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ key })
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    showToast('✓ API key guardada');
+    document.getElementById('ibp-key-input').value = '••••••••';
+    document.getElementById('ibp-key-input').dataset.masked = '1';
+  } catch(e) { showToast('Error: ' + e.message, 4000); }
+});
+
+document.getElementById('ibp-calc-btn').addEventListener('click', async () => {
+  const scope = ibpModal.querySelector('input[name="ibp-scope"]:checked')?.value || 'missing';
+  const log   = document.getElementById('ibp-log');
+  const btn   = document.getElementById('ibp-calc-btn');
+  log.textContent = '';
+  log.classList.add('visible');
+  btn.disabled = true;
+
+  function appendLog(text, cls = '') {
+    const line = document.createElement('span');
+    if (cls) line.className = cls;
+    line.textContent = text + '\n';
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  let url = '/api/db/calc-ibp';
+  const params = [];
+  if (scope === 'all' || scope === 'selected') params.push('force=1');
+  if (scope === 'selected') params.push('ids=' + [...selected].join(','));
+  if (params.length) url += '?' + params.join('&');
+
+  try {
+    const resp   = await fetch(url, { method:'POST' });
+    const reader = resp.body.getReader();
+    const dec    = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream:true });
+      const evts = buf.split('\n\n'); buf = evts.pop();
+      for (const ev of evts) {
+        const m = ev.match(/^data: (.+)$/m);
+        if (!m) continue;
+        let obj; try { obj = JSON.parse(m[1]); } catch { continue; }
+        if (obj.type === 'start') continue;
+        if (obj.type === 'done') {
+          appendLog(obj.code === 0 ? '✓ Completado.' : `✗ Salió con código ${obj.code}`,
+            obj.code === 0 ? '' : 'ibp-log-err');
+          if (obj.code === 0) { appendLog('Regenerando catálogo…'); triggerCatalogRebuild(); }
+          break;
+        }
+        const cls = obj.type === 'error' ? 'ibp-log-err' : obj.type === 'warn' ? 'ibp-log-warn' : '';
+        appendLog(obj.text || '', cls);
+      }
+    }
+  } catch(e) {
+    appendLog('✗ ' + e.message, 'ibp-log-err');
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // ── Boot ───────────────────────────────────────────────────────────
 loadTracks();
