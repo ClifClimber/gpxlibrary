@@ -44,7 +44,8 @@ Pure Node.js HTTP server. No framework. Routes:
 - `GET /` → `index.html` (visor)
 - `GET /track?id=N` → `track.html`
 - `GET /editor`, `/config`, `/admin` → static HTML pages
-- `GET /api/tracks` — paginated list with filters
+- `GET /api/catalog` — visor catalog (simplified points, stats, bounds, center, tags parsed, ibp rounded; same shape as the old catalog-data.js)
+- `GET /api/tracks` — full track list for the editor (no points)
 - `GET /api/tracks/:id` — full track (parses `tags`/`waypoints_json`, attaches `points` array from DB)
 - `PATCH /api/tracks/:id` — update metadata; calls `updateGpxMetadata()` for name/activity/notes
 - `DELETE /api/tracks/:id`
@@ -63,6 +64,7 @@ Pure Node.js HTTP server. No framework. Routes:
 - `/admin` → `admin.html` — backup/restore/vacuum, IBP calc, stats
 
 ### Visor (`visor.js`)
+- Loads track data by fetching `GET /api/catalog` asynchronously at startup (async IIFE). No longer depends on the global `catalog-data.js` file.
 - Polylines are only added to the map when active or being previewed (hover). When a track is active, other tracks' polylines are suppressed — `previewTrack` is a no-op when `activeIdx !== null`.
 - `activateTrack(i, fitMap)` manages the active polyline + highlights the list row (`.track-item.active`).
 - Filters live in chips + popovers; `applyFilters()` shows/hides markers and updates the list.

@@ -449,6 +449,102 @@ function apiTempFiles(res, srcDir) {
   } catch(e) { res.writeHead(500); res.end(e.message); }
 }
 
+// ── API /catalog ─────────────────────────────────────────────────
+// Returns the same item shape as export-catalog.js but as JSON, computed
+// from the DB on request with simplified points (MAX_PTS per track).
+const MAX_CATALOG_PTS = 300;
+
+function hav(lat1,lon1,lat2,lon2) {
+  const R=6371,D=Math.PI/180;
+  const dl=(lat2-lat1)*D, dn=(lon2-lon1)*D;
+  const a=Math.sin(dl/2)**2+Math.cos(lat1*D)*Math.cos(lat2*D)*Math.sin(dn/2)**2;
+  return R*2*Math.asin(Math.sqrt(a));
+}
+function simplifyCatalog(pts, maxN) {
+  if(pts.length<=maxN) return pts;
+  const out=[],step=(pts.length-1)/(maxN-1);
+  for(let i=0;i<maxN;i++) out.push(pts[Math.round(i*step)]);
+  return out;
+}
+function computeCatalogStats(pts) {
+  let dist=0,gain=0,loss=0,minEle=Infinity,maxEle=-Infinity,hasEle=false;
+  let swLat=Infinity,swLon=Infinity,neLat=-Infinity,neLon=-Infinity;
+  for(const p of pts){
+    if(p.lat<swLat)swLat=p.lat; if(p.lat>neLat)neLat=p.lat;
+    if(p.lon<swLon)swLon=p.lon; if(p.lon>neLon)neLon=p.lon;
+  }
+  for(let i=1;i<pts.length;i++) dist+=hav(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon);
+  for(let i=0;i<pts.length;i++){
+    const e=pts[i].ele;
+    if(e!=null){
+      hasEle=true;
+      if(e<minEle)minEle=e; if(e>maxEle)maxEle=e;
+      if(i>0&&pts[i-1].ele!=null){const d=e-pts[i-1].ele;if(d>0)gain+=d;else loss-=d;}
+    }
+  }
+  return {
+    distance:      Math.round(dist*10)/10,
+    elevationGain: Math.round(gain),
+    elevationLoss: Math.round(loss),
+    minElevation:  hasEle?Math.round(minEle):null,
+    maxElevation:  hasEle?Math.round(maxEle):null,
+    bounds:  [[swLat,swLon],[neLat,neLon]],
+    center:  [Math.round((swLat+neLat)/2*10000)/10000,Math.round((swLon+neLon)/2*10000)/10000],
+  };
+}
+
+function apiCatalog(res) {
+  try {
+    const db = openDb();
+    const tracks = db.prepare(
+      'SELECT id,name,file,zone,date,cleaned,color,activity,sierra,province,ccaa,tags,' +
+      'ibp_bicycle,ibp_hiking,ibp_running FROM tracks ORDER BY date DESC,name ASC'
+    ).all();
+    const fetchRaw   = db.prepare('SELECT lat,lon,ele FROM raw_points   WHERE track_id=? ORDER BY seq');
+    const fetchClean = db.prepare('SELECT lat,lon,ele FROM clean_points WHERE track_id=? ORDER BY seq');
+    const catalog = [];
+    for(const t of tracks){
+      const pts = t.cleaned ? fetchClean.all(t.id) : fetchRaw.all(t.id);
+      if(pts.length<2) continue;
+      const stats = computeCatalogStats(pts);
+      const disp  = simplifyCatalog(pts, MAX_CATALOG_PTS);
+      catalog.push({
+        id:            t.id,
+        name:          t.name,
+        file:          t.file,
+        zone:          t.zone,
+        date:          t.date,
+        activity:      t.activity||null,
+        sierra:        t.sierra||null,
+        province:      t.province||null,
+        ccaa:          t.ccaa||null,
+        tags:          t.tags ? JSON.parse(t.tags) : [],
+        distance:      stats.distance,
+        elevationGain: stats.elevationGain,
+        elevationLoss: stats.elevationLoss,
+        minElevation:  stats.minElevation,
+        maxElevation:  stats.maxElevation,
+        bounds:        stats.bounds,
+        center:        stats.center,
+        color:         t.color||null,
+        ibp_bicycle:   t.ibp_bicycle  != null ? Math.round(t.ibp_bicycle)  : null,
+        ibp_hiking:    t.ibp_hiking   != null ? Math.round(t.ibp_hiking)   : null,
+        ibp_running:   t.ibp_running  != null ? Math.round(t.ibp_running)  : null,
+        points:        disp.map(p=>[
+          Math.round(p.lat*100000)/100000,
+          Math.round(p.lon*100000)/100000,
+          p.ele!=null?Math.round(p.ele):null,
+        ]),
+      });
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(catalog));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
 // ── API /tracks ───────────────────────────────────────────────────
 function apiGetTracks(res) {
   try {
@@ -1129,6 +1225,9 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { res.writeHead(500); res.end(JSON.stringify({ error: e.message })); }
     return;
   }
+
+  if (pathname === '/api/catalog' && method === 'GET')
+    return apiCatalog(res);
 
   if (pathname === '/api/tracks' && method === 'GET')
     return apiGetTracks(res);

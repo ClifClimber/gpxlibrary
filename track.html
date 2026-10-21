@@ -1372,9 +1372,6 @@ async function saveTags(tags) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tags: JSON.stringify(tags) }),
   });
-  // Regenerate catalog in background so filters update on next page load
-  fetch('/api/db/export', { method: 'POST' }).catch(() => {});
-  setTimeout(() => localStorage.setItem('catalog_ts', Date.now()), 2500);
 }
 function addTag() {
   const inp = document.getElementById('tag-input');
