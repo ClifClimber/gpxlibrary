@@ -331,19 +331,37 @@
               <h3>Caché batch-sierra</h3>
               <div class="op-btns">
                 <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">
-                  TTL <input type="number" class="db-num" id="osm-cache-ttl" value="30" min="1" max="365"> días
+                  TTL <input type="number" class="db-num" id="osm-cache-ttl" value="365" min="1" max="3650"> días
                 </label>
-                <button class="btn btn-ghost btn-sm" id="btn-osm-cache-refresh" title="Actualizar lista">↻</button>
-                <button class="btn btn-primary btn-sm" id="btn-osm-precache" title="Descarga datos Overpass y enriquece todos los tracks">⬇ Descargar y enriquecer</button>
-                <button class="btn btn-ghost btn-sm" id="btn-osm-precache-force" title="Re-descarga aunque la caché sea reciente y re-enriquece todo">↻ Forzar todo</button>
-                <button class="btn btn-ghost btn-sm" id="btn-osm-cache-only" title="Solo descarga la caché, sin modificar los tracks">Solo caché</button>
+                <button class="btn btn-ghost btn-sm" id="btn-osm-cache-refresh" title="Actualizar tabla de caché">↻</button>
                 <button class="btn btn-danger btn-sm" id="btn-osm-cache-clear">Limpiar caché</button>
               </div>
             </div>
             <div id="osm-cache-table" style="margin-top:6px">
               <div style="color:var(--muted);font-size:13px">—</div>
             </div>
-            <p style="margin-top:8px"><b>Descargar y enriquecer</b>: descarga datos Overpass para cada sierra y aplica el enriquecimiento a todos sus tracks en el mismo paso. Las zonas ya en caché no vuelven a consultar la red. <b>Proceso lento</b>: ~1 consulta/sierra nueva con pausa de 2.5 s entre ellas.</p>
+
+            <div style="display:flex;flex-direction:column;gap:7px;margin-top:12px">
+              <button class="btn btn-primary btn-sm" id="btn-osm-precache" style="justify-content:flex-start;gap:8px">
+                <span>⬇ Descargar y enriquecer todas las zonas</span>
+              </button>
+              <p style="margin:0 0 2px 2px;font-size:11px;color:var(--muted)">Consulta Overpass por cada sierra y aplica los tipos de camino a todos sus tracks. Las zonas ya en caché no vuelven a consultar la red. <b>Lento</b>: ~1 consulta/zona nueva.</p>
+
+              <button class="btn btn-ghost btn-sm" id="btn-osm-enrich-only" style="justify-content:flex-start">
+                ✓ Solo enriquecer (usar caché existente)
+              </button>
+              <p style="margin:0 0 2px 2px;font-size:11px;color:var(--muted)">Aplica los tipos de camino a todos los tracks usando la caché que ya tienes descargada. No consulta la red. Perfecto si ya descargaste las zonas y quieres enriquecer tracks nuevos o reimportar.</p>
+
+              <button class="btn btn-ghost btn-sm" id="btn-osm-cache-only" style="justify-content:flex-start">
+                ☁ Solo descargar caché (sin enriquecer tracks)
+              </button>
+              <p style="margin:0 0 2px 2px;font-size:11px;color:var(--muted)">Descarga y guarda los datos Overpass de todas las sierras pero no modifica los tracks. Útil para pre-calentar la caché fuera de horas de uso.</p>
+
+              <button class="btn btn-ghost btn-sm" id="btn-osm-precache-force" style="justify-content:flex-start">
+                ↻ Forzar re-descarga completa
+              </button>
+              <p style="margin:0 0 0 2px;font-size:11px;color:var(--muted)">Re-descarga Overpass para todas las zonas aunque la caché sea reciente y re-enriquece todos los tracks. Usa solo si los datos OSM de tus zonas han cambiado.</p>
+            </div>
           </div>
 
           <div class="op-item" id="osm-local-panel" hidden>
@@ -1015,11 +1033,11 @@ let osmSettings = {};
 async function loadOsmStrategy() {
   try {
     osmSettings = await fetch('/api/config/osm-strategy').then(r => r.json());
-  } catch { osmSettings = { strategy: 'per-track', cacheTtlDays: 30 }; }
+  } catch { osmSettings = { strategy: 'per-track', cacheTtlDays: 365 }; }
   const radio = document.querySelector(`input[name="osm-strategy"][value="${osmSettings.strategy || 'per-track'}"]`);
   if (radio) radio.checked = true;
   const ttl = document.getElementById('osm-cache-ttl');
-  if (ttl) ttl.value = osmSettings.cacheTtlDays || 30;
+  if (ttl) ttl.value = osmSettings.cacheTtlDays || 365;
   updateOsmPanels();
 }
 
@@ -1104,16 +1122,22 @@ document.getElementById('btn-osm-precache').addEventListener('click', function()
     .finally(() => { this.disabled = false; loadOsmCache(); });
 });
 
-document.getElementById('btn-osm-precache-force').addEventListener('click', function() {
-  if (!confirm('¿Re-descargar Overpass para TODAS las sierras y re-enriquecer todos sus tracks?')) return;
+document.getElementById('btn-osm-enrich-only').addEventListener('click', function() {
   this.disabled = true;
-  streamScript('/api/db/osm-precache?force=1', 'OSM: forzar descarga y enriquecimiento (todo)')
+  streamScript('/api/db/osm-precache?enrich-only=1', 'OSM: enriquecer desde caché')
     .finally(() => { this.disabled = false; loadOsmCache(); });
 });
 
 document.getElementById('btn-osm-cache-only').addEventListener('click', function() {
   this.disabled = true;
   streamScript('/api/db/osm-precache?cache-only=1', 'OSM: solo descargar caché')
+    .finally(() => { this.disabled = false; loadOsmCache(); });
+});
+
+document.getElementById('btn-osm-precache-force').addEventListener('click', function() {
+  if (!confirm('¿Re-descargar Overpass para TODAS las zonas aunque la caché sea reciente?')) return;
+  this.disabled = true;
+  streamScript('/api/db/osm-precache?force=1', 'OSM: forzar re-descarga completa')
     .finally(() => { this.disabled = false; loadOsmCache(); });
 });
 

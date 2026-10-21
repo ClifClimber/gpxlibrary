@@ -508,7 +508,7 @@ function computeCatalogPts(pts) {
 function buildCatalog() {
   const db = openDb();
   const tracks = db.prepare(
-    'SELECT id,name,file,zone,date,cleaned,color,activity,sierra,province,ccaa,tags,' +
+    'SELECT id,name,file,zone,date,cleaned,color,activity,sierra,ccaa,tags,' +
     'ibp_bicycle,ibp_hiking,ibp_running,' +
     'distance,elevation_gain,elevation_loss,min_elevation,max_elevation,' +
     'sw_lat,sw_lon,ne_lat,ne_lon,center_lat,center_lon,catalog_pts,road_types ' +
@@ -541,7 +541,6 @@ function buildCatalog() {
       date:          t.date,
       activity:      t.activity||null,
       sierra:        t.sierra||null,
-      province:      t.province||null,
       ccaa:          t.ccaa||null,
       tags:          t.tags ? JSON.parse(t.tags) : [],
       distance:      t.distance,
@@ -1344,13 +1343,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === '/api/db/osm-precache' && (method === 'GET' || method === 'POST')) {
-    const force     = searchParams.get('force') === '1';
-    const cacheOnly = searchParams.get('cache-only') === '1';
-    const sierra    = searchParams.get('sierra');
-    const args      = [];
-    if (force)     args.push('--force');
-    if (cacheOnly) args.push('--cache-only');
-    if (sierra)    { args.push('--sierra'); args.push(sierra); }
+    const force       = searchParams.get('force') === '1';
+    const cacheOnly   = searchParams.get('cache-only') === '1';
+    const enrichOnly  = searchParams.get('enrich-only') === '1';
+    const sierra      = searchParams.get('sierra');
+    const args        = [];
+    if (force)       args.push('--force');
+    if (cacheOnly)   args.push('--cache-only');
+    if (enrichOnly)  args.push('--enrich-only');
+    if (sierra)      { args.push('--sierra'); args.push(sierra); }
     return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-precache.js'), args);
   }
 

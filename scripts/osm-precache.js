@@ -2,10 +2,11 @@
 'use strict';
 // Descarga datos Overpass por sierra y, por defecto, aplica el enriquecimiento
 // a todos los tracks de cada zona en el mismo paso.
-// Uso: node scripts/osm-precache.js [--force] [--cache-only] [--sierra "Sierra de Guadarrama"]
-//   --force       : re-descarga aunque la caché sea reciente
-//   --cache-only  : solo guarda la caché, no modifica los tracks
-//   --sierra X    : procesa solo ese grupo
+// Uso: node scripts/osm-precache.js [--force] [--cache-only] [--enrich-only] [--sierra X]
+//   --force        : re-descarga aunque la caché sea reciente
+//   --cache-only   : solo guarda la caché, no modifica los tracks
+//   --enrich-only  : solo enriquece desde caché existente, sin consultar Overpass
+//   --sierra X     : procesa solo ese grupo
 
 const fs   = require('fs');
 const path = require('path');
@@ -17,11 +18,12 @@ const DELAY_MS     = 2500;
 const MAX_BBOX_DEG = 3.5;
 
 async function main() {
-  const args      = process.argv.slice(2);
-  const force     = args.includes('--force');
-  const cacheOnly = args.includes('--cache-only');
-  const sierraIdx = args.indexOf('--sierra');
-  const sierraArg = sierraIdx !== -1 ? args[sierraIdx + 1] : null;
+  const args        = process.argv.slice(2);
+  const force       = args.includes('--force');
+  const cacheOnly   = args.includes('--cache-only');
+  const enrichOnly  = args.includes('--enrich-only');
+  const sierraIdx   = args.indexOf('--sierra');
+  const sierraArg   = sierraIdx !== -1 ? args[sierraIdx + 1] : null;
 
   const db = openDb();
 
@@ -51,8 +53,8 @@ async function main() {
     ? rows.filter(r => r.group_key.toLowerCase() === sierraArg.toLowerCase())
     : rows;
 
-  const mode = cacheOnly ? 'solo caché' : 'caché + enriquecimiento';
-  console.log(`\nDescargando OSM para ${groups.length} grupos (${mode})…`);
+  const mode = enrichOnly ? 'solo enriquecer desde caché' : cacheOnly ? 'solo caché' : 'caché + enriquecimiento';
+  console.log(`\nProcesando ${groups.length} grupos (${mode})…`);
   fs.mkdirSync(CACHE_DIR, { recursive: true });
 
   let enriched = 0, cachedGroups = 0, skipped = 0, failed = 0;
@@ -61,7 +63,41 @@ async function main() {
     const g    = groups[i];
     const file = path.join(CACHE_DIR, slugify(g.group_key) + '.json');
 
-    // Determine whether we need a fresh Overpass query
+    // --enrich-only: only use existing cache, never query Overpass
+    if (enrichOnly) {
+      if (!fs.existsSync(file)) {
+        console.log(`[${i+1}/${groups.length}] ${g.group_key} — sin caché, saltando`);
+        skipped++;
+        continue;
+      }
+      let ways;
+      try {
+        ways = JSON.parse(fs.readFileSync(file, 'utf8')).ways || [];
+      } catch {
+        console.log(`[${i+1}/${groups.length}] ${g.group_key} — error leyendo caché, saltando`);
+        skipped++;
+        continue;
+      }
+      const ageH = (() => { try { return Math.round((Date.now() - JSON.parse(fs.readFileSync(file,'utf8')).ts) / 3600000); } catch { return '?'; } })();
+      console.log(`[${i+1}/${groups.length}] ${g.group_key} (${g.track_count} tracks) — caché ${ageH}h`);
+      const tracks = db.prepare(
+        `SELECT id, name, cleaned, sw_lat, sw_lon, ne_lat, ne_lon
+         FROM tracks WHERE COALESCE(sierra, province, 'sin-zona') = ? AND sw_lat IS NOT NULL`
+      ).all(g.group_key);
+      let groupOk = 0;
+      for (const t of tracks) {
+        const pts = fetchTrackPts(t, db);
+        if (pts.length < 2) continue;
+        applyWaysToTrack(t, pts, ways, db);
+        groupOk++;
+      }
+      console.log(`  ✓ ${groupOk} tracks enriquecidos`);
+      enriched += groupOk;
+      cachedGroups++;
+      continue;
+    }
+
+    // Normal flow: determine whether we need a fresh Overpass query
     let ways = null;
     let fromCache = false;
 
