@@ -511,7 +511,7 @@ function buildCatalog() {
     'SELECT id,name,file,zone,date,cleaned,color,activity,sierra,province,ccaa,tags,' +
     'ibp_bicycle,ibp_hiking,ibp_running,' +
     'distance,elevation_gain,elevation_loss,min_elevation,max_elevation,' +
-    'sw_lat,sw_lon,ne_lat,ne_lon,center_lat,center_lon,catalog_pts ' +
+    'sw_lat,sw_lon,ne_lat,ne_lon,center_lat,center_lon,catalog_pts,road_types ' +
     'FROM tracks ORDER BY date DESC,name ASC'
   ).all();
   const fetchRaw   = db.prepare('SELECT lat,lon,ele FROM raw_points   WHERE track_id=? ORDER BY seq');
@@ -555,6 +555,7 @@ function buildCatalog() {
       ibp_bicycle:   t.ibp_bicycle  != null ? Math.round(t.ibp_bicycle)  : null,
       ibp_hiking:    t.ibp_hiking   != null ? Math.round(t.ibp_hiking)   : null,
       ibp_running:   t.ibp_running  != null ? Math.round(t.ibp_running)  : null,
+      hasOsm:        !!(t.road_types && t.road_types !== '{}'),
       points,
     });
   }

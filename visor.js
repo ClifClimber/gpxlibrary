@@ -686,6 +686,7 @@ function trackItemHtml(track, ri) {
         <span><b>${nf1.format(track.distance)}</b> km</span>
         <span>↑ <b>${nf0.format(track.elevationGain)}</b> m</span>
         ${ibpHtml}
+        ${track.hasOsm ? '<span class="ti-osm" title="Tipos de camino OSM disponibles">OSM</span>' : ''}
         <span title="${track.circular ? 'Circular' : 'Lineal'}">${track.circular ? '🔄' : '↔'}</span>
       </div>
     </div>
