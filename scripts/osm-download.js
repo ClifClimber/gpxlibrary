@@ -15,9 +15,9 @@ const RAW_PBF = path.join(OSM_DIR, 'spain-latest.osm.pbf');
 const HW_PBF  = path.join(OSM_DIR, 'spain-highways.osm.pbf');
 const SPAIN_URL = 'https://download.geofabrik.de/europe/spain-latest.osm.pbf';
 
-function log(text)   { process.stdout.write('data: ' + JSON.stringify({ type: 'log',   text }) + '\n\n'); }
-function logOk(text) { process.stdout.write('data: ' + JSON.stringify({ type: 'log',   text: '✓ ' + text }) + '\n\n'); }
-function logErr(text){ process.stdout.write('data: ' + JSON.stringify({ type: 'error', text }) + '\n\n'); }
+function log(text)   { console.log(text); }
+function logOk(text) { console.log('✓ ' + text); }
+function logErr(text){ console.error('✗ ' + text); }
 
 function fmtMB(bytes) { return (bytes / 1048576).toFixed(0) + ' MB'; }
 

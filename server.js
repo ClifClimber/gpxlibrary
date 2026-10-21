@@ -1338,11 +1338,11 @@ const server = http.createServer(async (req, res) => {
     return apiRunScript(res, path.join(ROOT,'scripts','enrich-road-types.js'), args);
   }
 
-  if (pathname === '/api/db/osm-download' && method === 'GET') {
+  if (pathname === '/api/db/osm-download' && (method === 'GET' || method === 'POST')) {
     return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-download.js'), []);
   }
 
-  if (pathname === '/api/db/osm-precache' && method === 'GET') {
+  if (pathname === '/api/db/osm-precache' && (method === 'GET' || method === 'POST')) {
     const force  = searchParams.get('force') === '1';
     const sierra = searchParams.get('sierra');
     const args   = [];
