@@ -290,6 +290,72 @@
         </div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-head">
+        <h2>Estrategia de enriquecimiento OSM</h2>
+        <button class="btn btn-primary btn-sm" id="btn-save-osm-strategy">Guardar</button>
+      </div>
+      <div class="card-body">
+        <div class="ops-grid">
+
+          <div class="op-item">
+            <div class="op-head"><h3>Método activo</h3></div>
+            <div style="display:flex;flex-direction:column;gap:12px;margin-top:6px">
+              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+                <input type="radio" name="osm-strategy" value="per-track" style="margin-top:2px;accent-color:var(--accent)">
+                <div>
+                  <div style="font-size:13px;font-weight:600">Por track</div>
+                  <div style="font-size:12px;color:var(--muted);margin-top:1px">Una consulta Overpass por track. Simple, sin caché. ~1 min/track. No requiere configuración adicional.</div>
+                </div>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+                <input type="radio" name="osm-strategy" value="batch-sierra" style="margin-top:2px;accent-color:var(--accent)">
+                <div>
+                  <div style="font-size:13px;font-weight:600">Batch por sierra <span style="font-size:10px;font-weight:700;background:var(--success,#16a34a);color:white;padding:1px 7px;border-radius:99px;letter-spacing:.04em">Recomendado</span></div>
+                  <div style="font-size:12px;color:var(--muted);margin-top:1px">Agrupa tracks por sierra, una consulta Overpass por grupo. Resultados en caché en disco. Primera vez igual de lento; los siguientes enriquecimientos en la misma zona son casi instantáneos.</div>
+                </div>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+                <input type="radio" name="osm-strategy" value="local-osm" style="margin-top:2px;accent-color:var(--accent)">
+                <div>
+                  <div style="font-size:13px;font-weight:600">OSM local (osmium-tool)</div>
+                  <div style="font-size:12px;color:var(--muted);margin-top:1px">Consulta un PBF de España descargado localmente. Sin límites de red, completamente offline. Requiere osmium-tool instalado y ~200 MB de datos.</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="op-item" id="osm-batch-panel" hidden>
+            <div class="op-head">
+              <h3>Caché batch-sierra</h3>
+              <div class="op-btns">
+                <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">
+                  TTL <input type="number" class="db-num" id="osm-cache-ttl" value="30" min="1" max="365"> días
+                </label>
+                <button class="btn btn-ghost btn-sm" id="btn-osm-cache-refresh" title="Actualizar lista">↻</button>
+                <button class="btn btn-danger btn-sm" id="btn-osm-cache-clear">Limpiar caché</button>
+              </div>
+            </div>
+            <div id="osm-cache-table" style="margin-top:6px">
+              <div style="color:var(--muted);font-size:13px">—</div>
+            </div>
+          </div>
+
+          <div class="op-item" id="osm-local-panel" hidden>
+            <div class="op-head">
+              <h3>Datos OSM locales</h3>
+              <div class="op-btns">
+                <button class="btn btn-primary btn-sm" id="btn-osm-download">⬇ Descargar datos (~900 MB)</button>
+              </div>
+            </div>
+            <div id="osm-local-status" style="margin-top:6px;font-size:13px;color:var(--muted)">Comprobando…</div>
+            <p>Descarga datos de España desde Geofabrik y filtra las vías con osmium-tool. El archivo resultante ocupa ~200 MB. Requiere osmium-tool en el PATH.</p>
+          </div>
+
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Tab: Acerca de ── -->
@@ -308,7 +374,7 @@
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.4.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.5.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">21 octubre 2026</div>
         </div>
       </div>
@@ -327,8 +393,22 @@
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v1.4.0</span>
+            <span class="cl-version">v1.5.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">21 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li>Sistema de estrategias OSM intercambiables — selector en Admin para elegir entre tres métodos sin tocar código</li>
+            <li><b>Batch por sierra</b>: agrupa tracks por sierra, una consulta Overpass por grupo + caché en disco (<code>data/osm-cache/</code>) con TTL configurable — ideal cuando hay múltiples tracks en la misma zona</li>
+            <li><b>OSM local (osmium-tool)</b>: consulta un PBF de España descargado; sin límites de red ni esperas — requiere osmium-tool y ~200 MB de datos</li>
+            <li><code>scripts/osm-shared.js</code> — lógica común extraída: Haversine, matching, Overpass HTTP, escritura a BD</li>
+            <li><code>scripts/osm-download.js</code> — descarga Geofabrik + filtro osmium accionable desde Admin con barra de progreso</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v1.4.0</span>
             <span class="cl-date">21 oct 2026</span>
           </div>
           <ul class="cl-list">
@@ -924,6 +1004,97 @@ fetch('/api/admin/version').then(r => r.json()).then(d => {
   const el = document.getElementById('about-version');
   if (el) el.textContent = 'v' + d.version;
 }).catch(() => {});
+
+// ── OSM strategy section ────────────────────────────────────────────
+let osmSettings = {};
+
+async function loadOsmStrategy() {
+  try {
+    osmSettings = await fetch('/api/config/osm-strategy').then(r => r.json());
+  } catch { osmSettings = { strategy: 'per-track', cacheTtlDays: 30 }; }
+  const radio = document.querySelector(`input[name="osm-strategy"][value="${osmSettings.strategy || 'per-track'}"]`);
+  if (radio) radio.checked = true;
+  const ttl = document.getElementById('osm-cache-ttl');
+  if (ttl) ttl.value = osmSettings.cacheTtlDays || 30;
+  updateOsmPanels();
+}
+
+function updateOsmPanels() {
+  const strategy = document.querySelector('input[name="osm-strategy"]:checked')?.value || 'per-track';
+  document.getElementById('osm-batch-panel').hidden  = strategy !== 'batch-sierra';
+  document.getElementById('osm-local-panel').hidden  = strategy !== 'local-osm';
+  if (strategy === 'batch-sierra') loadOsmCache();
+  if (strategy === 'local-osm')   loadOsmLocalStatus();
+}
+
+document.querySelectorAll('input[name="osm-strategy"]').forEach(r => {
+  r.addEventListener('change', updateOsmPanels);
+});
+
+document.getElementById('btn-save-osm-strategy').addEventListener('click', async () => {
+  const strategy    = document.querySelector('input[name="osm-strategy"]:checked')?.value || 'per-track';
+  const cacheTtlDays = parseInt(document.getElementById('osm-cache-ttl').value) || 30;
+  const btn = document.getElementById('btn-save-osm-strategy');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    const r = await fetch('/api/config/osm-strategy', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ strategy, cacheTtlDays }),
+    });
+    if (r.ok) { toast(`Estrategia OSM guardada: ${strategy}`); osmSettings = await r.json(); }
+    else toast('Error al guardar', true);
+  } finally { btn.disabled = false; btn.textContent = 'Guardar'; }
+});
+
+async function loadOsmCache() {
+  const el = document.getElementById('osm-cache-table');
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando…</div>';
+  try {
+    const entries = await fetch('/api/admin/osm-cache').then(r => r.json());
+    if (!entries.length) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:13px">Sin caché todavía.</div>';
+      return;
+    }
+    el.innerHTML = `<table class="table" style="font-size:12px;margin-top:4px">
+      <thead><tr><th>Sierra</th><th class="num">Tamaño</th><th class="num">Antigüedad</th></tr></thead>
+      <tbody>${entries.map(e => `<tr>
+        <td style="font-family:ui-monospace,Consolas,monospace">${e.name}</td>
+        <td class="num">${fmtSize(e.size)}</td>
+        <td class="num" style="color:${e.ageHours > (osmSettings.cacheTtlDays||30)*24 ? 'var(--warn,#b45309)' : 'var(--muted)'}">${e.ageHours < 1 ? '<1h' : e.ageHours < 48 ? e.ageHours+'h' : Math.round(e.ageHours/24)+'d'}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  } catch { el.innerHTML = '<div style="color:var(--danger,#b91c1c);font-size:13px">Error al cargar caché</div>'; }
+}
+
+document.getElementById('btn-osm-cache-refresh').addEventListener('click', loadOsmCache);
+
+document.getElementById('btn-osm-cache-clear').addEventListener('click', async () => {
+  if (!confirm('¿Limpiar toda la caché OSM? Se volverá a consultar Overpass en el próximo enriquecimiento.')) return;
+  const r = await fetch('/api/admin/osm-cache', { method: 'DELETE' });
+  if (r.ok) { toast('Caché OSM eliminada'); loadOsmCache(); }
+  else toast('Error al limpiar', true);
+});
+
+async function loadOsmLocalStatus() {
+  const el = document.getElementById('osm-local-status');
+  try {
+    const d = await fetch('/api/admin/osm-local-status').then(r => r.json());
+    if (d.exists) {
+      const date = new Date(d.mtime).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+      el.innerHTML = `<span style="color:var(--success,#16a34a)">✓ Disponible</span> — ${fmtSize(d.size)}, actualizado ${date}`;
+    } else {
+      el.innerHTML = '<span style="color:var(--warn,#b45309)">⚠ No descargado todavía</span>';
+    }
+  } catch { el.textContent = 'Error al comprobar estado'; }
+}
+
+document.getElementById('btn-osm-download').addEventListener('click', function() {
+  this.disabled = true;
+  streamScript('/api/db/osm-download', 'Descargar datos OSM España')
+    .finally(() => { this.disabled = false; loadOsmLocalStatus(); });
+});
+
+loadOsmStrategy();
 </script>
 </body>
 </html>

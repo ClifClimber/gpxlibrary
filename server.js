@@ -1338,6 +1338,81 @@ const server = http.createServer(async (req, res) => {
     return apiRunScript(res, path.join(ROOT,'scripts','enrich-road-types.js'), args);
   }
 
+  if (pathname === '/api/db/osm-download' && method === 'GET') {
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-download.js'), []);
+  }
+
+  // ── OSM settings ─────────────────────────────────────────────────
+  const OSM_SETTINGS = path.join(ROOT, 'osm-settings.json');
+  function readOsmSettings() {
+    try { if (fs.existsSync(OSM_SETTINGS)) return JSON.parse(fs.readFileSync(OSM_SETTINGS, 'utf8')); } catch {}
+    return { strategy: 'per-track', cacheTtlDays: 30 };
+  }
+
+  if (pathname === '/api/config/osm-strategy' && method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(readOsmSettings()));
+  }
+
+  if (pathname === '/api/config/osm-strategy' && method === 'POST') {
+    try {
+      const body = await parseBody(req);
+      const valid = ['per-track', 'batch-sierra', 'local-osm'];
+      if (!valid.includes(body.strategy)) {
+        res.writeHead(400); return res.end(JSON.stringify({ error: 'estrategia inválida' }));
+      }
+      const settings = { ...readOsmSettings(), ...body };
+      fs.writeFileSync(OSM_SETTINGS, JSON.stringify(settings, null, 2));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, ...settings }));
+    } catch(e) {
+      res.writeHead(500); return res.end(JSON.stringify({ error: e.message }));
+    }
+  }
+
+  if (pathname === '/api/admin/osm-cache' && method === 'GET') {
+    const cacheDir = path.join(ROOT, 'data', 'osm-cache');
+    try {
+      const files = fs.existsSync(cacheDir) ? fs.readdirSync(cacheDir).filter(f => f.endsWith('.json')) : [];
+      const entries = files.map(f => {
+        const fp   = path.join(cacheDir, f);
+        const stat = fs.statSync(fp);
+        let ts = 0;
+        try { ts = JSON.parse(fs.readFileSync(fp, 'utf8')).ts || 0; } catch {}
+        return { name: f.replace('.json', ''), file: f, size: stat.size, ts,
+                 ageHours: Math.round((Date.now() - ts) / 3600000) };
+      });
+      entries.sort((a, b) => a.name.localeCompare(b.name));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(entries));
+    } catch(e) {
+      res.writeHead(500); return res.end(JSON.stringify({ error: e.message }));
+    }
+  }
+
+  if (pathname === '/api/admin/osm-cache' && method === 'DELETE') {
+    const cacheDir = path.join(ROOT, 'data', 'osm-cache');
+    try {
+      if (fs.existsSync(cacheDir)) {
+        fs.readdirSync(cacheDir).filter(f => f.endsWith('.json'))
+          .forEach(f => fs.unlinkSync(path.join(cacheDir, f)));
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true }));
+    } catch(e) {
+      res.writeHead(500); return res.end(JSON.stringify({ error: e.message }));
+    }
+  }
+
+  if (pathname === '/api/admin/osm-local-status' && method === 'GET') {
+    const pbfPath = path.join(ROOT, 'data', 'osm', 'spain-highways.osm.pbf');
+    const exists  = fs.existsSync(pbfPath);
+    const size    = exists ? fs.statSync(pbfPath).size : 0;
+    const mtime   = exists ? fs.statSync(pbfPath).mtime : null;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ exists, size, mtime }));
+  }
+
   // ── Config routes ────────────────────────────────────────────────
   if (pathname === '/api/config/activity-counts' && method === 'GET') {
     const db = openDb();
