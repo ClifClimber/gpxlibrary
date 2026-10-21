@@ -6,3 +6,6 @@ ibp.key
 
 # Archivos generados automáticamente
 catalog-data.js
+*.db
+*.db-wal
+*.db-shm
