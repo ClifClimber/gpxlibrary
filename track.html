@@ -6,389 +6,18 @@
   <title>Track — GPX Library</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <style>
-    :root {
-      --accent: #3b82f6;
-      --bg: #f0f2f5;
-      --card: #fff;
-      --border: #e2e8f0;
-      --text: #1e293b;
-      --muted: #64748b;
-      --header: #0f172a;
-    }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      font-size: 14px;
-      line-height: 1.5;
-    }
-
-    /* ── Header ─────────────────────────────────────────────────── */
-    #header { position: sticky; top: 48px; z-index: 1000; }
-    #track-title {
-      flex: 1; font-size: 15px; font-weight: 700;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-
-    /* ── Two-column layout ──────────────────────────────────────── */
-    #main-layout {
-      display: flex;
-      height: calc(100vh - 50px);
-    }
-    #left-col {
-      width: 560px;
-      min-width: 320px;
-      flex-shrink: 0;
-      overflow-y: auto;
-      border-right: 1px solid var(--border);
-    }
-    #right-col {
-      flex: 1;
-      position: relative;
-    }
-
-    /* ── Map ────────────────────────────────────────────────────── */
-    #map { height: 100%; width: 100%; background: #dde3ea; }
-
-    /* ── Content ────────────────────────────────────────────────── */
-    #content {
-      padding: 18px 18px 48px;
-    }
-
-    /* ── Stats row ──────────────────────────────────────────────── */
-    #stats-row {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 10px; margin-bottom: 18px;
-    }
-    .stat-card {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 15px 12px 13px; text-align: center;
-    }
-    .stat-card.accent {
-      border-color: var(--tc, var(--accent));
-      background: color-mix(in srgb, var(--tc, var(--accent)) 6%, white);
-    }
-    .stat-val {
-      font-size: 24px; font-weight: 800; color: var(--text); line-height: 1;
-    }
-    .stat-card.accent .stat-val { color: var(--tc, var(--accent)); }
-    .stat-unit { font-size: 11px; color: var(--muted); font-weight: 500; }
-    .stat-lbl {
-      font-size: 10px; color: var(--muted); margin-top: 4px;
-      text-transform: uppercase; letter-spacing: .05em;
-    }
-
-    /* ── Section card ───────────────────────────────────────────── */
-    .section {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; margin-bottom: 14px; overflow: hidden;
-    }
-    .section-head {
-      padding: 9px 16px; font-size: 10px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
-      border-bottom: 1px solid var(--border); background: #f8fafc;
-    }
-
-    /* ── Elevation profile ──────────────────────────────────────── */
-    #profile-wrap { position: relative; padding: 14px 14px 8px; }
-    #profile-svg { display: block; width: 100%; height: 170px; }
-    #profile-tip {
-      position: absolute; pointer-events: none;
-      background: rgba(15,23,42,.88); color: white;
-      font-size: 11px; padding: 4px 10px; border-radius: 5px;
-      white-space: nowrap; display: none; z-index: 10;
-      transform: translate(-50%, calc(-100% - 10px));
-    }
-
-    /* ── Details grid ───────────────────────────────────────────── */
-    #details-grid {
-      padding: 14px 16px;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 14px;
-    }
-    .d-lbl {
-      font-size: 10px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .06em; color: var(--muted); margin-bottom: 4px;
-    }
-    .d-val { font-size: 13px; font-weight: 500; color: var(--text); }
-    .act-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600;
-      background: color-mix(in srgb, var(--tc, var(--accent)) 12%, white);
-      color: color-mix(in srgb, var(--tc, var(--accent)) 80%, #111);
-      border: 1px solid color-mix(in srgb, var(--tc, var(--accent)) 28%, var(--border));
-    }
-
-    /* ── Notes ──────────────────────────────────────────────────── */
-    #notes-body {
-      padding: 14px 16px; font-size: 13.5px; line-height: 1.75;
-      color: var(--text); white-space: pre-wrap;
-    }
-
-    /* ── Tags ───────────────────────────────────────────────────── */
-    #tags-wrap { padding: 10px 16px 14px; }
-    #tags-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; min-height: 10px; }
-    .track-tag {
-      display: inline-flex; align-items: center; gap: 4px;
-      background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 999px;
-      padding: 3px 8px 3px 10px; font-size: 12px; font-weight: 500; color: #2563eb;
-    }
-    .tag-del {
-      background: none; border: none; cursor: pointer; color: #93c5fd; font-size: 14px;
-      line-height: 1; padding: 0; display: flex; align-items: center;
-    }
-    .tag-del:hover { color: #2563eb; }
-    #tag-input-row { display: flex; gap: 6px; }
-    #tag-input {
-      flex: 1; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px;
-      font-size: 13px; background: white; color: var(--text); outline: none;
-    }
-    #tag-input:focus { border-color: var(--accent); }
-    #tag-add-btn {
-      padding: 5px 12px; background: var(--accent); color: white; border: none;
-      border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
-    }
-    #tag-add-btn:hover { background: #2563eb; }
-
-    /* ── Edit button ────────────────────────────────────────────── */
-    #edit-row {
-      display: flex; justify-content: flex-end; margin-bottom: 14px;
-    }
-    #edit-btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 600;
-      background: var(--card); border: 1.5px solid var(--border);
-      color: var(--text); cursor: pointer;
-      transition: background .12s, border-color .12s;
-    }
-    #edit-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
-
-    /* ── Edit modal ─────────────────────────────────────────────── */
-    #edit-overlay {
-      display: none; position: fixed; inset: 0; z-index: 2000;
-      background: rgba(0,0,0,.45); align-items: center; justify-content: center;
-    }
-    #edit-overlay.open { display: flex; }
-    #edit-modal {
-      background: var(--card); border-radius: 12px; width: min(560px, 96vw);
-      max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,.3);
-      display: flex; flex-direction: column;
-    }
-    #edit-modal-head {
-      padding: 16px 20px 14px; border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 10px;
-    }
-    #edit-modal-head h2 { flex: 1; font-size: 15px; font-weight: 700; }
-    #edit-modal-close {
-      background: none; border: none; cursor: pointer; color: var(--muted);
-      font-size: 20px; line-height: 1; padding: 0 2px;
-    }
-    #edit-modal-close:hover { color: var(--text); }
-    #edit-modal-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
-    .ef-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .06em; color: var(--muted); margin-bottom: 5px; }
-    .ef-input, .ef-textarea {
-      width: 100%; padding: 8px 11px; border: 1.5px solid var(--border);
-      border-radius: 6px; font-size: 13px; font-family: inherit;
-      background: var(--bg); color: var(--text); outline: none;
-      transition: border-color .12s;
-    }
-    .ef-input:focus, .ef-textarea:focus { border-color: var(--accent); background: #fff; }
-    .ef-textarea { min-height: 90px; resize: vertical; }
-    .ef-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    #edit-modal-foot {
-      padding: 12px 20px 16px; border-top: 1px solid var(--border);
-      display: flex; gap: 10px; justify-content: flex-end;
-    }
-    .ef-cancel {
-      padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500;
-      background: var(--bg); border: 1.5px solid var(--border); color: var(--muted);
-      cursor: pointer; transition: background .12s;
-    }
-    .ef-cancel:hover { background: #e2e8f0; }
-    .ef-save {
-      padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 600;
-      background: var(--accent); border: none; color: white;
-      cursor: pointer; transition: background .12s; display: flex; align-items: center; gap: 6px;
-    }
-    .ef-save:hover { background: #2563eb; }
-    .ef-save:disabled { opacity: .6; cursor: not-allowed; }
-    #edit-msg { font-size: 12px; margin-right: auto; padding: 6px 0; }
-    #edit-msg.ok  { color: #16a34a; }
-    #edit-msg.err { color: #ef4444; }
-
-    /* ── Time stats ─────────────────────────────────────────────── */
-    #time-row { display: flex; gap: 10px; margin-bottom: 16px; }
-    .time-card {
-      flex: 1; background: #f8fafc; border: 1px solid var(--border);
-      border-radius: 7px; padding: 10px 14px;
-    }
-    .time-val { font-size: 18px; font-weight: 700; color: #1e293b; }
-    .time-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
-
-    /* ── Climbs list ─────────────────────────────────────────────── */
-    .climb-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 8px 10px; border-radius: 7px; cursor: pointer;
-      border: 1px solid transparent; transition: background .1s;
-    }
-    .climb-item:hover  { background: #f8fafc; border-color: var(--border); }
-    .climb-item.active { background: #eff6ff; border-color: #bfdbfe; }
-    .climb-grade-bar { width: 5px; height: 34px; border-radius: 3px; flex-shrink: 0; }
-    .climb-num  { font-size: 11px; color: var(--muted); min-width: 22px; }
-    .climb-info { flex: 1; }
-    .climb-gain { font-weight: 600; font-size: 14px; color: #1e293b; }
-    .climb-sub  { font-size: 11px; color: var(--muted); margin-top: 1px; }
-    .climb-pct  { font-size: 15px; font-weight: 700; min-width: 42px; text-align: right; }
-
-    /* ── Road bar (below map in right column) ───────────────────── */
-    #road-bar-map { display: flex; height: 6px; }
-    #road-bar-map .type-seg { cursor: default; }
-    #road-bar-map .type-seg:hover { opacity: .8; }
-
-    /* ── Road / surface type breakdown ─────────────────────────── */
-    .type-bar { display: flex; height: 9px; border-radius: 5px; overflow: hidden; margin: 8px 0 12px; }
-    .type-seg { height: 100%; transition: opacity .15s; }
-    .type-seg:hover { opacity: .75; }
-    .type-list { display: flex; flex-direction: column; gap: 6px; }
-    .type-row { display: flex; align-items: center; gap: 9px; font-size: 13px; }
-    .type-swatch { width: 14px; height: 10px; border-radius: 3px; flex-shrink: 0; }
-    .type-label { flex: 1; color: #334155; }
-    .type-km { color: #64748b; font-variant-numeric: tabular-nums; min-width: 58px; text-align: right; }
-    .enrich-btn {
-      display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
-      padding: 5px 12px; border-radius: 5px; border: 1px solid var(--border);
-      background: #fff; color: #334155; font-size: 12px; cursor: pointer;
-    }
-    .enrich-btn:hover { background: #f8fafc; }
-    .enrich-btn:disabled { opacity: .5; cursor: not-allowed; }
-
-    /* ── Source link ────────────────────────────────────────────── */
-    #source-link {
-      display: flex; align-items: center; gap: 8px;
-      padding: 14px 16px; text-decoration: none;
-      color: var(--accent); font-size: 13px; font-weight: 500;
-      transition: background .12s;
-    }
-    #source-link:hover { background: #eff6ff; }
-    #source-host { color: #94a3b8; font-size: 11px; margin-left: 4px; }
-
-    /* ── Loading ────────────────────────────────────────────────── */
-    #loading {
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 14px; padding: 80px 0; color: var(--muted);
-    }
-    .spin {
-      width: 32px; height: 32px; border-radius: 50%;
-      border: 3px solid var(--border); border-top-color: var(--accent);
-      animation: spin .75s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Tab navigation ─────────────────────────────────────────── */
-    #tab-nav-wrap { position: relative; margin-bottom: 20px; }
-    #tab-nav {
-      display: flex; overflow-x: auto; gap: 6px;
-      padding: 12px 14px 10px; border-bottom: 1px solid var(--border);
-      scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent;
-    }
-    #tab-nav::-webkit-scrollbar { height: 3px; }
-    #tab-nav::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
-    #tab-nav::-webkit-scrollbar-track { background: transparent; }
-    .tab-btn {
-      flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 5px;
-      padding: 9px 13px 8px; background: #f1f5f9; border: 1.5px solid transparent;
-      border-radius: 10px; font-size: 11px; font-weight: 600; color: #64748b; cursor: pointer;
-      white-space: nowrap; transition: all .15s; line-height: 1;
-    }
-    .tab-btn svg { opacity: .7; transition: opacity .15s; }
-    .tab-btn:hover { background: #e2e8f0; color: #334155; }
-    .tab-btn:hover svg { opacity: 1; }
-    .tab-btn.active { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
-    .tab-btn.active svg { opacity: 1; }
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; }
-
-    /* ── Waypoints ───────────────────────────────────────────────── */
-    .wp-item {
-      display: flex; align-items: center; gap: 12px;
-      padding: 12px 0; border-bottom: 1px solid var(--border);
-    }
-    .wp-item:last-child { border-bottom: none; }
-    .wp-dot {
-      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 700; color: white;
-    }
-    .wp-info { flex: 1; }
-    .wp-label { font-weight: 600; font-size: 13px; color: #1e293b; }
-    .wp-coords { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: monospace; }
-    .wp-maps { font-size: 12px; color: var(--accent); text-decoration: none; white-space: nowrap; }
-    .wp-maps:hover { text-decoration: underline; }
-
-    /* ── Weather widget ──────────────────────────────────────────── */
-    #weather-wrap { display: flex; flex-direction: column; gap: 12px; }
-    #weather-main { display: flex; align-items: center; gap: 16px; }
-    .wx-icon { font-size: 52px; line-height: 1; }
-    .wx-temp { font-size: 42px; font-weight: 700; color: #1e293b; }
-    .wx-desc { font-size: 15px; color: #334155; margin-top: 2px; }
-    #weather-details {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 6px;
-    }
-    .wx-detail { background: #f8fafc; border: 1px solid var(--border); border-radius: 7px; padding: 10px 14px; }
-    .wx-detail-val { font-size: 17px; font-weight: 700; color: #1e293b; }
-    .wx-detail-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
-    #weather-location { font-size: 11px; color: var(--muted); margin-top: 4px; }
-    #weather-forecast { display: flex; gap: 8px; margin-top: 4px; overflow-x: auto; }
-    .wx-day { flex: 1; min-width: 70px; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px; text-align: center; }
-    .wx-day-name { font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 4px; text-transform: capitalize; }
-    .wx-day-icon { font-size: 24px; line-height: 1.2; }
-    .wx-day-range { font-size: 11px; color: #334155; margin-top: 4px; font-weight: 600; }
-    .wx-day-prec { font-size: 10px; color: #64748b; margin-top: 2px; }
-
-    @media (max-width: 900px) {
-      #main-layout { flex-direction: column; height: auto; }
-      #left-col { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
-      #right-col { height: 55vw; min-height: 260px; }
-      #stats-row { grid-template-columns: repeat(3, 1fr); }
-      #weather-details { grid-template-columns: repeat(2, 1fr); }
-      .tab-btn { padding: 10px 12px; font-size: 12px; }
-    }
-  </style>
   <link rel="stylesheet" href="/shared.css">
+  <link rel="stylesheet" href="/track.css">
 </head>
 <body>
 
 <nav>
   <span class="logo">GPX Library</span>
   <a href="/" style="color:#f8fafc">Visor</a>
-  <a href="/editor">Editor</a>
+  <a href="/editor">Catálogo</a>
   <a href="/config">Config</a>
   <a href="/admin">Admin</a>
 </nav>
-<header id="header" class="page-header">
-  <span id="track-title">Cargando…</span>
-  <div id="header-actions" style="display:flex;gap:6px;align-items:center;margin-left:auto;flex-shrink:0">
-    <div id="export-wrap" style="position:relative;display:none">
-      <button id="btn-export" style="display:flex;align-items:center;gap:5px;padding:5px 11px;background:transparent;color:#94a3b8;border:1.5px solid #334155;border-radius:5px;font-size:12px;font-weight:500;cursor:pointer" title="Exportar GPX">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        GPX
-      </button>
-      <div id="export-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);min-width:190px;z-index:100;overflow:hidden">
-        <button class="exp-opt" data-mode="full" style="display:block;width:100%;text-align:left;padding:9px 14px;font-size:12px;background:none;border:none;cursor:pointer;border-bottom:1px solid #f1f5f9">
-          Todos los puntos
-        </button>
-        <button class="exp-opt" data-mode="simplified" style="display:block;width:100%;text-align:left;padding:9px 14px;font-size:12px;background:none;border:none;cursor:pointer">
-          Resumido (500 pts)
-        </button>
-      </div>
-    </div>
-  </div>
-</header>
 
 <!-- Edit modal -->
 <div id="edit-overlay">
@@ -402,30 +31,37 @@
         <div class="ef-label">Nombre</div>
         <input id="ef-name" class="ef-input" type="text">
       </div>
-      <div class="ef-row2">
-        <div>
-          <div class="ef-label">Actividad</div>
-          <input id="ef-activity" class="ef-input" type="text" placeholder="ciclismo, senderismo, mtb…">
-        </div>
+      <div>
+        <div class="ef-label">Actividad</div>
+        <input id="ef-activity" class="ef-input" type="text" list="ef-activity-list">
       </div>
       <div class="ef-row2">
         <div>
           <div class="ef-label">Sierra / Parque</div>
-          <input id="ef-sierra" class="ef-input" type="text">
+          <input id="ef-sierra" class="ef-input" type="text" list="ef-sierra-list">
         </div>
         <div>
           <div class="ef-label">Provincia</div>
-          <input id="ef-province" class="ef-input" type="text">
+          <input id="ef-province" class="ef-input" type="text" list="ef-province-list">
         </div>
       </div>
       <div class="ef-row2">
         <div>
           <div class="ef-label">Comunidad (CCAA)</div>
-          <input id="ef-ccaa" class="ef-input" type="text">
+          <input id="ef-ccaa" class="ef-input" type="text" list="ef-ccaa-list">
         </div>
         <div>
           <div class="ef-label">URL fuente</div>
           <input id="ef-url" class="ef-input" type="url" placeholder="https://…">
+        </div>
+      </div>
+      <div>
+        <div class="ef-label">Etiquetas</div>
+        <div id="ef-tags-list"></div>
+        <div id="ef-tag-row">
+          <input id="ef-tag-input" class="ef-input" type="text" placeholder="Nueva etiqueta…" maxlength="40" autocomplete="off">
+          <div id="ef-tag-suggestions"></div>
+          <button type="button" id="ef-tag-add-btn" onclick="efAddTag()">Añadir</button>
         </div>
       </div>
       <div>
@@ -444,15 +80,53 @@
   </div>
 </div>
 
-<div id="main-layout">
-  <div id="left-col">
-    <div id="content">
-      <div id="loading"><div class="spin"></div>Cargando…</div>
-    </div>
-  </div>
-  <div id="right-col">
-    <div id="map"></div>
-    <div id="road-bar-map"></div>
+<div id="app">
+  <div id="map"></div>
+  <div id="overlay">
+    <aside id="panel" class="floating">
+      <div id="panel-head">
+        <div id="ph-top">
+          <a id="back-link" class="icon-btn" href="/" title="Ver en el visor">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          </a>
+          <span id="track-act"></span>
+          <div id="ph-actions">
+            <button class="ph-btn" id="edit-btn" onclick="openEditModal()" hidden>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Editar
+            </button>
+            <div id="export-wrap" style="display:none">
+              <button class="ph-btn primary" id="btn-export" title="Exportar GPX">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                GPX
+              </button>
+              <div id="export-dropdown" style="display:none">
+                <button class="exp-opt" data-mode="full">Todos los puntos</button>
+                <button class="exp-opt" data-mode="simplified">Resumido (500 pts)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <h1 id="track-title">Cargando…</h1>
+        <div id="track-sub"></div>
+      </div>
+      <div id="content">
+        <div id="loading"><div class="spin"></div>Cargando…</div>
+      </div>
+    </aside>
+
+    <section id="profile-sheet" class="floating empty">
+      <div id="ps-head">
+        <span id="ps-title">Perfil de elevación</span>
+        <span id="ps-hint">Arrastra para medir un tramo · doble clic para quitarlo</span>
+      </div>
+      <div id="road-bar-map" title="Tipos de camino"></div>
+      <div id="profile-wrap"><svg id="profile-svg"></svg><div id="profile-tip"></div></div>
+      <div id="sel-bar">
+        <span id="sel-stats"></span>
+        <button id="sel-clear">Quitar selección</button>
+      </div>
+    </section>
   </div>
 </div>
 
@@ -474,12 +148,15 @@ const ACT = {
   'running':       { color: '#ec4899', icon: '🏃' },
 };
 
+let DB_ACT_COLORS = {};
 function actInfo(a) {
-  if (!a) return { color: '#3b82f6', icon: '📍' };
-  return ACT[a.toLowerCase()] || { color: '#3b82f6', icon: '📍' };
+  const base = (a && ACT[a.toLowerCase()]) || { color: '#006783', icon: '📍' };
+  let custom = null;
+  try { custom = JSON.parse(localStorage.getItem('gpx-act-colors') || '{}')[a]; } catch {}
+  return { color: custom || DB_ACT_COLORS[a] || base.color, icon: base.icon };
 }
 
-const CYCLING_ACTS_T = ['Mtb','Gravel','Bikepacking','Ciclismo de carretera'];
+const CYCLING_ACTS_T = ['MTB','MTB Enduro','Mtb','Gravel','Bikepacking','Ciclismo de carretera'];
 const RUNNING_ACTS_T = ['Trail Running','Running'];
 const IBP_LEVELS_T = [
   { label:'Muy fácil', desc:'Recorridos planos o con escaso desnivel acumulado.',           min:0,   max:50,       color:'#16a34a', bg:'#f0fdf4' },
@@ -517,6 +194,70 @@ function fmt(n, dec = 0) {
   return (+n).toLocaleString('es-ES', { maximumFractionDigits: dec, minimumFractionDigits: dec });
 }
 
+// ── Tag suggestions ───────────────────────────────────────────────
+let allTagsGlobal = [];
+fetch('/api/tags').then(r => r.json()).then(tags => { allTagsGlobal = tags; }).catch(() => {});
+
+function initTagSuggestions() {
+  const inp  = document.getElementById('tag-input');
+  const box  = document.getElementById('tag-suggestions');
+  if (!inp || !box) return;
+  let focusIdx = -1;
+
+  function positionBox() {
+    const rect = inp.getBoundingClientRect();
+    box.style.top  = (rect.bottom + 3) + 'px';
+    box.style.left = rect.left + 'px';
+    box.style.width = rect.width + 'px';
+  }
+
+  async function renderSuggestions(val) {
+    if (!allTagsGlobal.length) {
+      try { allTagsGlobal = await fetch('/api/tags').then(r => r.json()); } catch {}
+    }
+    const q = val.trim().toLowerCase().replace(/\s+/g, '-');
+    const current = getTags();
+    const matches = allTagsGlobal.filter(t => t !== val && (q === '' || t.includes(q)));
+    if (!matches.length) { box.classList.remove('open'); return; }
+    focusIdx = -1;
+    box.innerHTML = matches.map(t => {
+      const already = current.includes(t);
+      return `<div class="tag-sug-item${already ? ' tag-sug-already' : ''}" data-tag="${esc(t)}">${esc(t)}${already ? ' ✓' : ''}</div>`;
+    }).join('');
+    positionBox();
+    box.classList.add('open');
+    box.querySelectorAll('.tag-sug-item:not(.tag-sug-already)').forEach(el => {
+      el.addEventListener('mousedown', e => {
+        e.preventDefault();
+        inp.value = el.dataset.tag;
+        box.classList.remove('open');
+        addTag();
+      });
+    });
+  }
+
+  inp.addEventListener('input', () => renderSuggestions(inp.value));
+  inp.addEventListener('focus', () => renderSuggestions(inp.value));
+  inp.addEventListener('blur',  () => setTimeout(() => box.classList.remove('open'), 150));
+  document.getElementById('content')?.addEventListener('scroll', () => { if (box.classList.contains('open')) positionBox(); });
+  inp.addEventListener('keydown', e => {
+    const items = box.querySelectorAll('.tag-sug-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusIdx = Math.min(focusIdx + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('focused', i === focusIdx));
+      if (items[focusIdx]) inp.value = items[focusIdx].dataset.tag;
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusIdx = Math.max(focusIdx - 1, -1);
+      items.forEach((el, i) => el.classList.toggle('focused', i === focusIdx));
+      if (focusIdx >= 0 && items[focusIdx]) inp.value = items[focusIdx].dataset.tag;
+    } else if (e.key === 'Escape') {
+      box.classList.remove('open');
+    }
+  });
+}
+
 // ── Load ─────────────────────────────────────────────────────────
 const params  = new URLSearchParams(location.search);
 const trackId = parseInt(params.get('id'));
@@ -524,9 +265,27 @@ const trackId = parseInt(params.get('id'));
 if (!trackId) {
   document.getElementById('loading').innerHTML = '<p style="color:#ef4444">Falta el parámetro <code>?id=</code></p>';
 } else {
-  fetch(`/api/tracks/${trackId}`)
-    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-    .then(t => { render(t); document.getElementById('export-wrap').style.display = ''; })
+  const actsP = fetch('/api/config/activities').then(r => r.json())
+    .then(acts => {
+      acts.forEach(a => {
+        if (a.color) DB_ACT_COLORS[a.name] = a.color;
+        const dl = document.getElementById('ef-activity-list');
+        if (dl) { const o = document.createElement('option'); o.value = a.name; dl.appendChild(o); }
+      });
+    })
+    .catch(() => {});
+  fetch('/api/geo').then(r => r.json()).then(geo => {
+    [['ef-sierra-list', geo.zones], ['ef-province-list', geo.provinces], ['ef-ccaa-list', geo.ccaa]].forEach(([id, items]) => {
+      const dl = document.getElementById(id);
+      if (!dl || !items) return;
+      items.forEach(v => { const o = document.createElement('option'); o.value = v; dl.appendChild(o); });
+    });
+  }).catch(() => {});
+  Promise.all([
+    fetch(`/api/tracks/${trackId}`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+    actsP,
+  ])
+    .then(([t]) => { render(t); document.getElementById('export-wrap').style.display = ''; initTagSuggestions(); initEfTagSuggestions(); })
     .catch(e => { document.getElementById('loading').innerHTML = `<p style="color:#ef4444">Error: ${esc(e.message)}</p>`; });
 }
 
@@ -593,11 +352,17 @@ function render(t) {
   document.documentElement.style.setProperty('--tc', color);
 
   // Header
-  document.getElementById('track-title').textContent = t.name;
+  updateHeader(t);
+  document.getElementById('edit-btn').hidden = false;
+  if (t.file) document.getElementById('back-link').href = `/?file=${encodeURIComponent(t.file)}`;
+
+  const hasEle = t.points && t.points.some(p => p[2] != null);
+  document.getElementById('profile-sheet').classList.toggle('empty', !hasEle);
 
   // Map (capture map + line for hover sync)
   const mi = initMap(t, color);
   gMap = mi.map; gLine = mi.line;
+  requestAnimationFrame(() => fitTrack(t));
 
   // Content
   document.getElementById('loading').remove();
@@ -608,35 +373,65 @@ function render(t) {
   if (ffl && t.file) {
     ffl.addEventListener('click', e => {
       e.preventDefault();
-      const folder = 'D:/proyectos/gpxlibrary/' + t.file.replace(/[^/]+$/, '');
-      window.open('file:///' + folder, '_blank');
+      fetch('/api/open-folder?path=' + encodeURIComponent(t.file)).catch(() => {});
     });
   }
+
+  // Endpoint markers (always visible)
+  requestAnimationFrame(() => showEndpointMarkers());
 
   // Road bar (div exists in DOM now)
   updateMapBar(t);
 
-  // Draw profile into the (possibly hidden) Altimetría tab
-  if (t.points && t.points.some(p => p[2] != null)) {
-    setTimeout(() => drawProfile(t, color), 80);
-  }
+  if (hasEle) requestAnimationFrame(() => drawProfile(t, color));
 }
+
+function updateHeader(t) {
+  const { icon } = actInfo(t.activity);
+  document.getElementById('track-title').textContent = t.name;
+  document.getElementById('track-act').textContent = t.activity ? `${icon} ${t.activity}` : '';
+  const date = t.date ? new Date(t.date + 'T00:00:00').toLocaleDateString('es-ES', { year:'numeric', month:'short', day:'numeric' }) : '';
+  document.getElementById('track-sub').textContent = [t.sierra, t.province, date].filter(Boolean).join(' · ');
+}
+
+// Keep fitted bounds clear of the floating panel and the profile sheet
+function mapPadding() {
+  if (window.innerWidth <= 900) return { padding: [24, 24] };
+  const appR  = document.getElementById('app').getBoundingClientRect();
+  const left  = document.getElementById('panel').getBoundingClientRect().right - appR.left + 24;
+  const sheet = document.getElementById('profile-sheet');
+  const bottom = sheet.classList.contains('empty') ? 24 : appR.bottom - sheet.getBoundingClientRect().top + 20;
+  return { paddingTopLeft: [left, 24], paddingBottomRight: [64, bottom] };
+}
+function fitTrack(t) {
+  if (!gMap) return;
+  if (t.bounds && t.bounds[0]) gMap.fitBounds(t.bounds, mapPadding());
+  else if (gLine) gMap.fitBounds(gLine.getBounds(), mapPadding());
+}
+
+let gResizeT = null;
+window.addEventListener('resize', () => {
+  clearTimeout(gResizeT);
+  gResizeT = setTimeout(() => { if (gTrack && gElePts) { clearHL(); drawProfile(gTrack, gColor); } }, 200);
+});
 
 // ── Map ──────────────────────────────────────────────────────────
 function initMap(t, color) {
   const map = L.map('map', { zoomControl: false });
   const tileLayers = {
-    'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',  { attribution:'© OpenStreetMap', maxZoom:19 }),
-    'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',    { attribution:'© OpenTopoMap',   maxZoom:17 }),
-    'Satélite (Esri)': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:19 }),
+    'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19 }),
+    'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',   { attribution:'© OpenTopoMap', maxZoom:17 }),
+    'IGN Topográfico': L.tileLayer('https://www.ign.es/wmts/mapa-raster?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=MTN&STYLE=default&FORMAT=image/jpeg&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', { attribution:'© <a href="https://www.ign.es">IGN España</a>', maxZoom:20 }),
     'Google Maps':     L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
     'Google Satélite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
     'Google Híbrido':  L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
-    'CartoDB Claro':   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',  { attribution:'© CartoDB', maxZoom:19 }),
-    'CartoDB Oscuro':  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',   { attribution:'© CartoDB', maxZoom:19 }),
   };
-  tileLayers['OpenStreetMap'].addTo(map);
+  let baseName = 'OpenStreetMap';
+  try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}
+  tileLayers[baseName].addTo(map);
+  map.on('baselayerchange', e => { try { localStorage.setItem('visor-base-layer', e.name); } catch {} });
   L.control.layers(tileLayers, null, { position:'topright', collapsed:true }).addTo(map);
+  L.control.zoom({ position:'topright' }).addTo(map);
 
   if (!t.points || t.points.length < 2) {
     if (t.center_lat) map.setView([t.center_lat, t.center_lon], 13);
@@ -653,11 +448,7 @@ function initMap(t, color) {
   L.marker(lls[0], { icon: mk('#22c55e') }).addTo(map);
   L.marker(lls[lls.length-1], { icon: mk('#ef4444') }).addTo(map);
 
-  if (t.bounds && t.bounds[0]) {
-    map.fitBounds(t.bounds, { padding: [30,30] });
-  } else {
-    map.fitBounds(L.latLngBounds(lls), { padding: [30,30] });
-  }
+  map.fitBounds(t.bounds && t.bounds[0] ? t.bounds : L.latLngBounds(lls), { padding: [30,30] });
   return { map, line };
 }
 
@@ -666,10 +457,18 @@ let gMap = null, gLine = null, gHoverMk = null, gTrack = null;
 let gElePts = null;   // elevation-filtered points, set by drawProfile
 let gSelHL  = null;   // segment highlight featureGroup
 let gColor  = '#3b82f6'; // track color, set by render()
+let gClimbs = [];          // detected climbs, set by buildContent
+let gClimbLayers = null;   // gradient map + climb labels overlay
+let gRoadTypeLayers = null;// road-type coloring overlay
+let gActiveRoadType = null;
+let gWptMarkers = null;        // GPX waypoint markers layer
+let gEndpointMarkers = null;   // A/B start-end markers (puntos tab)
+let gClimbMapVisible = false;  // whether gradient overlay is shown on map
+let gRoadTypeMapVisible = false;// whether road type overlay is shown on map
 
 function hlByIdx(i1, i2) {
   if (!gMap || !gElePts || i1 >= i2) return;
-  const color = gTrack ? actInfo(gTrack.activity).color : '#3b82f6';
+  const color = gColor;
   const lls = gElePts.slice(i1, i2 + 1).map(p => [p[0], p[1]]);
   if (!gSelHL) {
     gSelHL = L.featureGroup([
@@ -684,6 +483,233 @@ function hlByIdx(i1, i2) {
 
 function clearHL() {
   if (gSelHL) { gSelHL.remove(); gSelHL = null; }
+}
+
+// ── Gradient map & road-type overlay ─────────────────────────────
+function gradColorDown(pct) {
+  if (pct <  3) return '#7dd3fc';
+  if (pct <  6) return '#38bdf8';
+  if (pct <  9) return '#0ea5e9';
+  if (pct < 12) return '#0284c7';
+  return '#0369a1';
+}
+
+function showGradientMap(pts) {
+  clearClimbLayers();
+  if (!pts || pts.length < 2 || !gMap) return;
+  gClimbLayers = L.layerGroup();
+
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (pts[i][2] == null || pts[i+1][2] == null) continue;
+    const dist = hav(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]);
+    if (dist < 0.0005) continue;
+    const eleDiff = pts[i+1][2] - pts[i][2];
+    const grad = Math.min(40, Math.abs(eleDiff / (dist * 1000)) * 100);
+    const color = eleDiff > 0.5 ? gradColor(grad) : (eleDiff < -0.5 ? gradColorDown(grad) : '#94a3b8');
+    L.polyline([[pts[i][0], pts[i][1]], [pts[i+1][0], pts[i+1][1]]], {
+      color, weight: 5, opacity: 0.9
+    }).addTo(gClimbLayers);
+  }
+
+  for (const c of gClimbs) {
+    const lls = pts.slice(c.i1, c.i2 + 1).map(p => [p[0], p[1]]);
+    if (lls.length < 2) continue;
+    const mid = lls[Math.floor(lls.length / 2)];
+    const gc  = gradColor(c.grad);
+    L.marker(mid, {
+      icon: L.divIcon({
+        html: `<div style="background:${gc};color:#fff;font-size:10px;font-weight:700;padding:2px 5px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4)">▲${c.grad}%</div>`,
+        className: '', iconAnchor: [20, 10],
+      })
+    }).addTo(gClimbLayers);
+  }
+
+  if (gLine) gLine.setStyle({ opacity: 0.15 });
+  gClimbLayers.addTo(gMap);
+}
+
+function clearClimbLayers() {
+  if (gClimbLayers) { gClimbLayers.remove(); gClimbLayers = null; }
+  if (gLine) gLine.setStyle({ opacity: 0.9 });
+  gClimbMapVisible = false;
+}
+
+function showRoadTypesOnMap(t) {
+  clearRoadTypeLayers();
+  if (!t.road_type_seq || !t.points || t.points.length < 2 || !gMap) return;
+  let roadSegs;
+  try { roadSegs = JSON.parse(t.road_type_seq); } catch { return; }
+
+  const pts = t.points;
+  const dists = [0];
+  for (let i = 1; i < pts.length; i++)
+    dists.push(dists[i-1] + hav(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]));
+  const total = dists[dists.length - 1] || 1;
+  const fracs = dists.map(d => d / total);
+
+  gRoadTypeLayers = L.layerGroup();
+  for (const seg of roadSegs) {
+    if (seg.t === 'unknown') continue;
+    const m = HW_META[seg.t];
+    if (!m) continue;
+    const i0 = fracs.findIndex(f => f >= seg.f0 - 0.005);
+    let i1 = -1;
+    for (let i = fracs.length - 1; i >= 0; i--) { if (fracs[i] <= seg.f1 + 0.005) { i1 = i; break; } }
+    if (i0 === -1 || i1 === -1 || i1 <= i0) continue;
+    const segPts = pts.slice(i0, i1 + 1).map(p => [p[0], p[1]]);
+    if (segPts.length < 2) continue;
+    const pl = L.polyline(segPts, { color: m.color, weight: 6, opacity: 0.85 });
+    pl._roadType = seg.t;
+    pl.addTo(gRoadTypeLayers);
+  }
+  if (gLine) gLine.setStyle({ opacity: 0.15 });
+  gRoadTypeLayers.addTo(gMap);
+}
+
+function clearRoadTypeLayers() {
+  if (gRoadTypeLayers) { gRoadTypeLayers.remove(); gRoadTypeLayers = null; }
+  if (gLine) gLine.setStyle({ opacity: 0.9 });
+  gRoadTypeMapVisible = false;
+}
+
+function toggleRoadTypesOnMap() {
+  const btn = document.getElementById('road-map-btn');
+  if (gRoadTypeMapVisible) {
+    clearRoadTypeLayers();
+    if (btn) { btn.textContent = 'Mostrar en mapa'; btn.classList.remove('active'); }
+  } else {
+    if (gTrack?.road_type_seq) showRoadTypesOnMap(gTrack);
+    gRoadTypeMapVisible = true;
+    if (btn) { btn.textContent = 'Ocultar del mapa'; btn.classList.add('active'); }
+  }
+}
+
+function symIcon(sym) {
+  const s = (sym || '').toLowerCase();
+  if (s.includes('summit') || s.includes('peak'))     return '⛰️';
+  if (s.includes('camp'))                              return '⛺';
+  if (s.includes('food') || s.includes('restaurant')) return '🍽️';
+  if (s.includes('water') || s.includes('drink'))     return '💧';
+  if (s.includes('parking'))                           return '🅿️';
+  if (s.includes('photo'))                             return '📷';
+  if (s.includes('flag'))                              return '🚩';
+  if (s.includes('danger') || s.includes('warning'))  return '⚠️';
+  return '📍';
+}
+
+const WPT_PIN_SVG = `<svg width="20" height="28" viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 1C5.03 1 1 5.03 1 10c0 7.17 9 17 9 17s9-9.83 9-17C19 5.03 14.97 1 10 1z" fill="#6366f1" stroke="white" stroke-width="1.5"/><circle cx="10" cy="10" r="3.5" fill="white"/></svg>`;
+
+function showWaypointMarkers() {
+  if (!gTrack?.waypoints?.length || !gMap) return;
+  clearWptMarkers();
+  gWptMarkers = L.layerGroup();
+  gTrack.waypoints.forEach((w, i) => {
+    const icon  = L.divIcon({ className: '', html: `<div class="wpt-map-pin">${WPT_PIN_SVG}</div>`, iconSize: [20, 28], iconAnchor: [10, 28] });
+    const lines = [w.name, w.ele != null ? w.ele + ' m' : null, w.desc].filter(Boolean);
+    L.marker([w.lat, w.lon], { icon })
+      .bindPopup(lines.join('<br>') || `Punto ${i + 1}`)
+      .addTo(gWptMarkers);
+  });
+  gWptMarkers.addTo(gMap);
+}
+
+function showEndpointMarkers() {
+  clearEndpointMarkers();
+  if (!gTrack?.points?.length || !gMap) return;
+  gEndpointMarkers = L.layerGroup();
+  const pts = gTrack.points;
+  const mkIcon = (letter, bg) => L.divIcon({
+    className: '',
+    html: `<div class="endpoint-pin" style="background:${bg}">${letter}</div>`,
+    iconSize: [28, 28], iconAnchor: [14, 14],
+  });
+  const sp = pts[0];
+  const ep = pts[pts.length - 1];
+  if (sp) L.marker([sp[0], sp[1]], { icon: mkIcon('A', 'rgba(34,197,94,0.8)') }).bindPopup('Inicio').addTo(gEndpointMarkers);
+  if (ep) L.marker([ep[0], ep[1]], { icon: mkIcon('B', 'rgba(239,68,68,0.8)')  }).bindPopup('Final').addTo(gEndpointMarkers);
+  gEndpointMarkers.addTo(gMap);
+}
+
+function clearEndpointMarkers() {
+  if (gEndpointMarkers) { gEndpointMarkers.remove(); gEndpointMarkers = null; }
+}
+
+function showClimbsOnMap() {
+  clearClimbLayers();
+  if (!gElePts || !gClimbs.length || !gMap) return;
+  gClimbLayers = L.layerGroup();
+  for (const c of gClimbs) {
+    const lls = gElePts.slice(c.i1, c.i2 + 1).map(p => [p[0], p[1]]);
+    if (lls.length < 2) continue;
+    const gc = gradColor(c.grad);
+    L.polyline(lls, { color: gc, weight: 6, opacity: 0.9 }).addTo(gClimbLayers);
+    const mid = lls[Math.floor(lls.length / 2)];
+    L.marker(mid, {
+      icon: L.divIcon({
+        html: `<div style="background:${gc};color:#fff;font-size:10px;font-weight:700;padding:2px 5px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4)">▲${c.grad}%</div>`,
+        className: '', iconAnchor: [20, 10],
+      })
+    }).addTo(gClimbLayers);
+  }
+  if (gLine) gLine.setStyle({ opacity: 0.25 });
+  gClimbLayers.addTo(gMap);
+}
+
+function toggleClimbsOnMap() {
+  const btn = document.getElementById('climbs-map-btn');
+  if (gClimbMapVisible) {
+    clearClimbLayers();
+    gClimbMapVisible = false;
+    if (btn) { btn.textContent = 'Mostrar en mapa'; btn.classList.remove('active'); }
+  } else {
+    showClimbsOnMap();
+    gClimbMapVisible = true;
+    if (btn) { btn.textContent = 'Ocultar del mapa'; btn.classList.add('active'); }
+  }
+}
+
+function clearWptMarkers() {
+  if (gWptMarkers) { gWptMarkers.remove(); gWptMarkers = null; }
+}
+
+function toggleWptMarkers() {
+  const btn = document.getElementById('wpt-toggle-btn');
+  if (gWptMarkers) {
+    clearWptMarkers();
+    if (btn) { btn.textContent = 'Mostrar en mapa'; btn.classList.remove('active'); }
+  } else {
+    showWaypointMarkers();
+    if (btn) { btn.textContent = 'Ocultar del mapa'; btn.classList.add('active'); }
+  }
+}
+
+function wptClick(i) {
+  if (!gTrack?.waypoints || !gMap) return;
+  const w = gTrack.waypoints[i];
+  if (!w) return;
+  if (!gWptMarkers) {
+    toggleWptMarkers();
+  }
+  gMap.setView([w.lat, w.lon], Math.max(gMap.getZoom(), 14));
+  let j = 0;
+  gWptMarkers?.eachLayer(marker => { if (j++ === i) marker.openPopup(); });
+}
+
+function highlightRoadType(type) {
+  if (!gRoadTypeLayers) return;
+  if (gActiveRoadType === type) {
+    gActiveRoadType = null;
+    gRoadTypeLayers.eachLayer(l => l.setStyle({ opacity: 0.85, weight: 6 }));
+    document.querySelectorAll('.type-row.active-type').forEach(el => el.classList.remove('active-type'));
+  } else {
+    gActiveRoadType = type;
+    gRoadTypeLayers.eachLayer(l => {
+      const active = l._roadType === type;
+      l.setStyle({ opacity: active ? 1.0 : 0.08, weight: active ? 8 : 4 });
+    });
+    document.querySelectorAll('.type-row.active-type').forEach(el => el.classList.remove('active-type'));
+    document.querySelector(`.type-row[data-type="${type}"]`)?.classList.add('active-type');
+  }
 }
 
 // ── Climb detection ───────────────────────────────────────────────
@@ -811,7 +837,7 @@ function buildTypeSection(dataStr, meta) {
   const list = entries.map(([type, km]) => {
     const m = meta[type] || { label: type, color: '#cccccc' };
     const kmStr = km < 1 ? `${Math.round(km*1000)} m` : `${km.toFixed(1)} km`;
-    return `<div class="type-row"><div class="type-swatch" style="background:${m.color}"></div><div class="type-label">${esc(m.label)}:</div><div class="type-km">${kmStr}</div></div>`;
+    return `<div class="type-row" data-type="${esc(type)}" onclick="highlightRoadType('${esc(type)}')" title="Resaltar en mapa"><div class="type-swatch" style="background:${m.color}"></div><div class="type-label">${esc(m.label)}:</div><div class="type-km">${kmStr}</div></div>`;
   }).join('');
   return `<div class="type-bar">${bar}</div><div class="type-list">${list}</div>`;
 }
@@ -831,30 +857,21 @@ function buildContent(t, color, icon) {
 
   // Pre-compute climbs for the HTML template
   const climbs = hasPts ? detectClimbs(t.points) : [];
+  gClimbs = climbs;
 
-  const timeRow = (t.moving_time > 0) ? `
-    <div id="time-row">
-      <div class="time-card">
-        <div class="time-val">${formatDur(t.moving_time)}</div>
-        <div class="time-lbl">Tiempo en marcha</div>
-      </div>
-      <div class="time-card">
-        <div class="time-val">${formatDur(t.stopped_time || 0)}</div>
-        <div class="time-lbl">Tiempo parado</div>
-      </div>
-      <div class="time-card">
-        <div class="time-val">${t.distance && t.moving_time ? (t.distance / (t.moving_time / 3600)).toFixed(1) : '—'} km/h</div>
-        <div class="time-lbl">Velocidad media</div>
-      </div>
-    </div>` : '';
+  const fmtDur = s => { if (!s) return '—'; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h?`${h}h ${String(m).padStart(2,'0')}min`:`${m}min`; };
+  const circular = t.circular != null ? (t.circular ? '🔄 Circular' : '↔ Lineal') : null;
 
   const details = [
-    t.activity ? `<div><div class="d-lbl">Actividad</div><div class="d-val"><span class="act-badge">${icon} ${esc(t.activity)}</span></div></div>` : '',
-    t.zone     ? `<div><div class="d-lbl">Zona</div><div class="d-val">${esc(t.zone)}</div></div>` : '',
+    circular   ? `<div><div class="d-lbl">Tipo de recorrido</div><div class="d-val">${circular}</div></div>` : '',
     t.sierra   ? `<div><div class="d-lbl">Sierra / Parque</div><div class="d-val">${esc(t.sierra)}</div></div>` : '',
-    t.province ? `<div><div class="d-lbl">Provincia</div><div class="d-val">${esc(t.province)}</div></div>` : '',
+    t.zone     ? `<div><div class="d-lbl">Zona</div><div class="d-val">${esc(t.zone)}</div></div>` : '',
     t.ccaa     ? `<div><div class="d-lbl">Comunidad</div><div class="d-val">${esc(t.ccaa)}</div></div>` : '',
-    t.min_elevation != null ? `<div><div class="d-lbl">Alt. mínima</div><div class="d-val">${minA} m</div></div>` : '',
+    t.province ? `<div><div class="d-lbl">Provincia</div><div class="d-val">${esc(t.province)}</div></div>` : '',
+    t.date     ? `<div><div class="d-lbl">Fecha</div><div class="d-val">${date}</div></div>` : '',
+    t.moving_time ? `<div><div class="d-lbl">Tiempo en marcha</div><div class="d-val">${fmtDur(t.moving_time)}</div></div>` : '',
+    (t.moving_time && t.stopped_time > 0) ? `<div><div class="d-lbl">Tiempo total</div><div class="d-val">${fmtDur(t.moving_time + t.stopped_time)}</div></div>` : '',
+    t.stopped_time > 0 ? `<div><div class="d-lbl">Tiempo parado</div><div class="d-val">${fmtDur(t.stopped_time)}</div></div>` : '',
     t.raw_count ? `<div><div class="d-lbl">Puntos GPS</div><div class="d-val">${fmt(t.raw_count)}</div></div>` : '',
   ].filter(Boolean).join('');
 
@@ -895,14 +912,16 @@ function buildContent(t, color, icon) {
 
   // ── Tab: Resumen ──────────────────────────────────────────────
   const tabResumen = `
-    <div id="stats-row">
+    <div class="stats-row">
       <div class="stat-card accent"><div class="stat-val">${dist}</div><div class="stat-unit">km</div><div class="stat-lbl">Distancia</div></div>
       <div class="stat-card"><div class="stat-val">${gain}</div><div class="stat-unit">m</div><div class="stat-lbl">Desnivel +</div></div>
       <div class="stat-card"><div class="stat-val">${loss}</div><div class="stat-unit">m</div><div class="stat-lbl">Desnivel −</div></div>
-      <div class="stat-card"><div class="stat-val">${maxA}</div><div class="stat-unit">m</div><div class="stat-lbl">Cota máx.</div></div>
-      <div class="stat-card"><div class="stat-val" style="font-size:16px;padding-top:4px">${date}</div><div class="stat-lbl" style="margin-top:6px">Fecha</div></div>
     </div>
-    ${timeRow}
+    <div class="stats-row row2">
+      <div class="stat-card"><div class="stat-val">${minA}</div><div class="stat-unit">m</div><div class="stat-lbl">Cota mín.</div></div>
+      <div class="stat-card"><div class="stat-val">${maxA}</div><div class="stat-unit">m</div><div class="stat-lbl">Cota máx.</div></div>
+      <div class="stat-card"><div class="stat-val" style="font-size:16px;padding-top:3px"><span class="act-badge" style="font-size:12px">${icon} ${esc(t.activity||'—')}</span></div><div class="stat-lbl" style="margin-top:4px">Actividad</div></div>
+    </div>
     ${ibpSection}
     ${details ? `<div class="section"><div class="section-head">Detalles</div><div id="details-grid">${details}</div></div>` : ''}
     ${t.notes ? `<div class="section"><div class="section-head">Notas</div><div id="notes-body">${esc(t.notes)}</div></div>` : ''}
@@ -910,8 +929,7 @@ function buildContent(t, color, icon) {
       <div class="section-head">Archivo</div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <code style="font-size:11px;background:#f1f5f9;padding:4px 8px;border-radius:4px;color:#475569;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.file||'')}</code>
-        <a href="#" id="file-folder-link" style="font-size:12px;color:#3b82f6;white-space:nowrap;text-decoration:none" title="Abrir carpeta">📂 Carpeta</a>
-        <a href="/editor?edit=${t.id}" style="font-size:12px;color:#64748b;white-space:nowrap;text-decoration:none">✏️ Editar</a>
+        <a href="#" id="file-folder-link" style="font-size:12px;color:#3b82f6;white-space:nowrap;text-decoration:none" title="Abrir carpeta en explorador">📂 Carpeta</a>
       </div>
     </div>
     <div class="section" id="tags-section">
@@ -920,6 +938,7 @@ function buildContent(t, color, icon) {
         <div id="tags-list">${(t.tags||[]).map(tag=>`<span class="track-tag" data-tag="${esc(tag)}">${esc(tag)}<button class="tag-del" onclick="removeTag('${esc(tag)}')" title="Quitar">×</button></span>`).join('')}</div>
         <div id="tag-input-row">
           <input id="tag-input" type="text" placeholder="Nueva etiqueta…" maxlength="40" autocomplete="off">
+          <div id="tag-suggestions"></div>
           <button id="tag-add-btn" onclick="addTag()">Añadir</button>
         </div>
       </div>
@@ -933,6 +952,25 @@ function buildContent(t, color, icon) {
   const sp = t.points?.[0], ep2 = t.points?.[t.points.length - 1];
   const fmtCoord = p => p ? `${p[0].toFixed(5)}, ${p[1].toFixed(5)}` : '—';
   const mapsLink = p => p ? `https://www.google.com/maps?q=${p[0]},${p[1]}` : null;
+  const wpts = Array.isArray(t.waypoints) ? t.waypoints : [];
+  const wptSection = wpts.length ? `
+    <div class="section-head" style="margin-top:18px;display:flex;align-items:center;justify-content:space-between">
+      <span>Puntos de paso GPX <span class="badge">${wpts.length}</span></span>
+      <button class="btn btn-outline btn-sm" id="wpt-toggle-btn" onclick="toggleWptMarkers()">Mostrar en mapa</button>
+    </div>
+    <div class="wpt-list">
+      ${wpts.map((w, i) => `
+        <div class="wpt-row" onclick="wptClick(${i})">
+          <div class="wpt-sym">${symIcon(w.sym)}</div>
+          <div class="wpt-info">
+            <div class="wpt-name">${esc(w.name || `Punto ${i+1}`)}</div>
+            ${(w.ele != null || w.desc) ? `<div class="wpt-sub">${[w.ele != null ? w.ele + ' m' : null, w.desc ? esc(w.desc) : null].filter(Boolean).join(' · ')}</div>` : ''}
+          </div>
+          <div class="wpt-coords">${w.lat.toFixed(5)}, ${w.lon.toFixed(5)}</div>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
   const tabPuntos = `
     <div class="wp-item">
       <div class="wp-dot" style="background:#22c55e">A</div>
@@ -944,6 +982,7 @@ function buildContent(t, color, icon) {
       <div class="wp-info"><div class="wp-label">Fin</div><div class="wp-coords">${fmtCoord(ep2)}</div></div>
       ${ep2 ? `<a class="wp-maps" href="${mapsLink(ep2)}" target="_blank" rel="noopener">Ver en Maps →</a>` : ''}
     </div>
+    ${wptSection}
   `;
 
   // ── Tab: Tipos de camino ──────────────────────────────────────
@@ -953,26 +992,21 @@ function buildContent(t, color, icon) {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
     ${hwHTML || sfHTML ? 'Actualizar datos OSM' : 'Obtener datos OSM'}
   </button>`;
+  const roadMapBtn = (hwHTML || sfHTML) && t.road_type_seq
+    ? `<div class="climb-map-bar"><button class="btn btn-outline btn-sm" id="road-map-btn" onclick="toggleRoadTypesOnMap()">Mostrar en mapa</button></div>`
+    : '';
   const tabCaminos = `<div id="road-section">
+    ${roadMapBtn}
     ${hwHTML ? `<div class="section-head">Tipos de camino</div>${hwHTML}` : '<p style="font-size:13px;color:#94a3b8;margin:0 0 8px">Sin datos de OpenStreetMap todavía.</p>'}
     ${sfHTML ? `<div class="section-head" style="margin-top:20px">Superficie</div>${sfHTML}` : ''}
     ${enrichBtn}
   </div>`;
 
-  // ── Tab: Altimetría ───────────────────────────────────────────
-  const tabAlt = hasPts ? `
-    <div class="section-head" style="margin-bottom:8px">Perfil de elevación
-      <span style="font-size:9px;font-weight:400;color:#94a3b8;margin-left:6px">Arrastra para seleccionar un tramo</span>
-    </div>
-    <div id="profile-wrap"><svg id="profile-svg"></svg><div id="profile-tip"></div></div>
-    <div id="sel-bar" style="display:none;padding:5px 14px;font-size:11px;color:#64748b;background:#eff6ff;border-top:1px solid #bfdbfe;gap:12px;align-items:center">
-      <span id="sel-stats"></span>
-      <button id="sel-clear" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#3b82f6;font-size:12px;padding:0">✕ Quitar selección</button>
-    </div>
-  ` : '<p style="color:#94a3b8;font-size:13px">Este track no tiene datos de elevación.</p>';
-
   // ── Tab: Subidas ──────────────────────────────────────────────
-  const tabSubidas = climbs.length ? climbs.map((c, i) => {
+  const climbMapBar = climbs.length ? `<div class="climb-map-bar">
+    <button class="btn btn-outline btn-sm" id="climbs-map-btn" onclick="toggleClimbsOnMap()">Mostrar en mapa</button>
+  </div>` : '';
+  const tabSubidas = climbMapBar + (climbs.length ? climbs.map((c, i) => {
     const gc = gradColor(c.grad);
     return `<div class="climb-item" data-i1="${c.i1}" data-i2="${c.i2}" onclick="climbClick(this)">
       <div class="climb-grade-bar" style="background:${gc}"></div>
@@ -980,7 +1014,7 @@ function buildContent(t, color, icon) {
       <div class="climb-info"><div class="climb-gain">▲ ${c.gain} m</div><div class="climb-sub">${c.km} km</div></div>
       <div class="climb-pct" style="color:${gc}">${c.grad}%</div>
     </div>`;
-  }).join('') : '<p style="color:#94a3b8;font-size:13px">No se han detectado subidas significativas.</p>';
+  }).join('') : '<p style="color:#94a3b8;font-size:13px">No se han detectado subidas significativas.</p>');
 
   // ── Tab: Tiempo ───────────────────────────────────────────────
   const tabTiempo = `<div id="weather-panel" style="color:#94a3b8;font-size:13px">Cargando datos meteorológicos…</div>`;
@@ -989,7 +1023,6 @@ function buildContent(t, color, icon) {
     ['resumen',   'Resumen'],
     ['puntos',    'Puntos de paso'],
     ['caminos',   'Tipos de camino'],
-    ['altimetria','Altimetría'],
     ...(climbs.length ? [['subidas', `Subidas (${climbs.length})`]] : []),
     ['tiempo',    'Tiempo hoy'],
   ];
@@ -1004,13 +1037,6 @@ function buildContent(t, color, icon) {
   };
 
   return `
-    <div id="edit-row">
-      <button id="edit-btn" onclick="openEditModal()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        Editar
-      </button>
-    </div>
-
     <div id="tab-nav-wrap">
       <div id="tab-nav">
         ${tabs.map(([id, label], i) =>
@@ -1022,7 +1048,6 @@ function buildContent(t, color, icon) {
     <div id="tab-resumen"    class="tab-panel active">${tabResumen}</div>
     <div id="tab-puntos"     class="tab-panel">${tabPuntos}</div>
     <div id="tab-caminos"    class="tab-panel">${tabCaminos}</div>
-    <div id="tab-altimetria" class="tab-panel">${tabAlt}</div>
     ${climbs.length ? `<div id="tab-subidas" class="tab-panel">${tabSubidas}</div>` : ''}
     <div id="tab-tiempo"     class="tab-panel">${tabTiempo}</div>
   `;
@@ -1045,8 +1070,8 @@ function drawProfile(t, color) {
   const minE = Math.min(...eles), maxE = Math.max(...eles), rngE = (maxE - minE) || 1;
 
   const rect = svgEl.getBoundingClientRect();
-  const W = rect.width || 700, H = 170;
-  const P = { t: 14, r: 18, b: 30, l: 54 };
+  const W = rect.width || 700, H = 150;
+  const P = { t: 10, r: 14, b: 24, l: 46 };
   const CW = W - P.l - P.r, CH = H - P.t - P.b;
   const toX = d => P.l + (d / totalDist) * CW;
   const toY = e => P.t + (1 - (e - minE) / rngE) * CH;
@@ -1079,14 +1104,13 @@ function drawProfile(t, color) {
         <stop offset="100%" stop-color="rgb(${cr},${cg},${cb})" stop-opacity=".03"/>
       </linearGradient>
     </defs>
-    <rect x="${P.l}" y="${P.t}" width="${CW}" height="${CH}" fill="#f8fafc" rx="2"/>
     ${yTicks.map(k => `
-      <line x1="${P.l}" y1="${k.y.toFixed(1)}" x2="${P.l+CW}" y2="${k.y.toFixed(1)}" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="${P.l}" y1="${k.y.toFixed(1)}" x2="${P.l+CW}" y2="${k.y.toFixed(1)}" stroke="#eef2f6" stroke-width="1"/>
       <text x="${P.l-6}" y="${(k.y+4).toFixed(1)}" text-anchor="end" font-size="10" fill="#94a3b8">${k.val}</text>
     `).join('')}
     ${xTicks.map(k => `
       <line x1="${k.x.toFixed(1)}" y1="${P.t+CH}" x2="${k.x.toFixed(1)}" y2="${P.t+CH+4}" stroke="#cbd5e1" stroke-width="1"/>
-      <text x="${k.x.toFixed(1)}" y="${H-5}" text-anchor="middle" font-size="10" fill="#94a3b8">${k.val}km</text>
+      <text x="${k.x.toFixed(1)}" y="${H-5}" text-anchor="middle" font-size="10" fill="#94a3b8">${k.val} km</text>
     `).join('')}
     <path d="${areaD}" fill="url(#${gid})"/>
     <path d="${lineD}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
@@ -1153,6 +1177,7 @@ function drawProfile(t, color) {
 
   // ── Map → profile ─────────────────────────────────────────────
   if (gLine) {
+    gLine.off('mousemove').off('mouseout');
     gLine.on('mousemove', e => {
       const ll = e.latlng;
       let best = 0, bestD2 = Infinity;
@@ -1250,15 +1275,13 @@ function drawProfile(t, color) {
 // ── Tab switching ────────────────────────────────────────────────
 function switchTab(name) {
   clearHL();
+  clearClimbLayers();
+  clearRoadTypeLayers();
+  gActiveRoadType = null;
   document.querySelectorAll('.climb-item.active').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.type-row.active-type').forEach(el => el.classList.remove('active-type'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
-  if (name === 'altimetria') {
-    // Re-draw profile now that the panel is visible and has real dimensions
-    requestAnimationFrame(() => {
-      if (gTrack) drawProfile(gTrack, gColor);
-    });
-  }
   if (name === 'tiempo') loadWeather();
 }
 
@@ -1363,6 +1386,7 @@ function addTag() {
   renderTags(tags);
   saveTags(tags);
   inp.value = '';
+  document.getElementById('tag-suggestions')?.classList.remove('open');
 }
 function removeTag(tag) {
   const tags = getTags().filter(t => t !== tag);
@@ -1381,7 +1405,7 @@ function climbClick(el) {
   hlByIdx(i1, i2);
   if (gMap && gElePts && i2 < gElePts.length) {
     const lls = gElePts.slice(i1, i2 + 1).map(p => [p[0], p[1]]);
-    gMap.fitBounds(L.latLngBounds(lls), { padding: [50, 50], maxZoom: 15 });
+    gMap.fitBounds(L.latLngBounds(lls), { ...mapPadding(), maxZoom: 15 });
   }
 }
 
@@ -1405,13 +1429,16 @@ async function enrichRoadTypes() {
           if (!sec) return;
           const hwHTML = buildTypeSection(t.road_types, HW_META);
           const sfHTML = buildTypeSection(t.surface_types, SF_META);
+          const hasMap = (hwHTML || sfHTML) && t.road_type_seq;
           sec.innerHTML = `
+            ${hasMap ? `<div class="climb-map-bar"><button class="btn btn-outline btn-sm" id="road-map-btn" onclick="toggleRoadTypesOnMap()">Mostrar en mapa</button></div>` : ''}
             ${hwHTML ? `<div class="section-head">Tipos de camino</div>${hwHTML}` : '<p style="font-size:13px;color:#94a3b8;margin:0 0 4px">Sin cobertura OSM en esta zona.</p>'}
             ${sfHTML ? `<div class="section-head" style="margin-top:20px">Superficie</div>${sfHTML}` : ''}
             <button class="enrich-btn" onclick="enrichRoadTypes()" id="enrich-btn" style="margin-top:12px">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
               Actualizar datos OSM
             </button>`;
+          if (t.road_type_seq && gRoadTypeMapVisible) showRoadTypesOnMap(t);
         });
     }
   };
@@ -1419,6 +1446,74 @@ async function enrichRoadTypes() {
     es.close();
     if (btn) { btn.disabled = false; btn.textContent = 'Reintentar'; }
   };
+}
+
+// ── Edit modal — tags ─────────────────────────────────────────────
+function efGetTags() {
+  return [...document.querySelectorAll('#ef-tags-list .ef-tag')].map(el => el.dataset.tag);
+}
+function efRenderTags(tags) {
+  document.getElementById('ef-tags-list').innerHTML = tags.map(tag =>
+    `<span class="ef-tag" data-tag="${esc(tag)}">#${esc(tag)}<button class="ef-tag-del" onclick="efRemoveTag('${esc(tag).replace(/'/g,"\\'")}')">×</button></span>`
+  ).join('');
+}
+function efAddTag() {
+  const inp = document.getElementById('ef-tag-input');
+  const val = inp.value.trim().toLowerCase().replace(/\s+/g, '-');
+  if (!val) return;
+  const tags = efGetTags();
+  if (tags.includes(val)) { inp.value = ''; return; }
+  tags.push(val);
+  efRenderTags(tags);
+  inp.value = '';
+  document.getElementById('ef-tag-suggestions')?.classList.remove('open');
+}
+function efRemoveTag(tag) { efRenderTags(efGetTags().filter(t => t !== tag)); }
+
+function initEfTagSuggestions() {
+  const inp = document.getElementById('ef-tag-input');
+  const box = document.getElementById('ef-tag-suggestions');
+  if (!inp || !box) return;
+  let focusIdx = -1;
+
+  function posBox() {
+    const r = inp.getBoundingClientRect();
+    box.style.top = (r.bottom + 3) + 'px'; box.style.left = r.left + 'px'; box.style.width = r.width + 'px';
+  }
+  async function showSug(val) {
+    if (!allTagsGlobal.length) { try { allTagsGlobal = await fetch('/api/tags').then(r => r.json()); } catch {} }
+    const q = val.trim().toLowerCase().replace(/\s+/g, '-');
+    const cur = efGetTags();
+    const matches = allTagsGlobal.filter(t => q === '' || t.includes(q));
+    if (!matches.length) { box.classList.remove('open'); return; }
+    focusIdx = -1;
+    box.innerHTML = matches.map(t => {
+      const already = cur.includes(t);
+      return `<div class="tag-sug-item${already ? ' tag-sug-already' : ''}" data-tag="${esc(t)}">${esc(t)}${already ? ' ✓' : ''}</div>`;
+    }).join('');
+    posBox();
+    box.classList.add('open');
+    box.querySelectorAll('.tag-sug-item:not(.tag-sug-already)').forEach(el => {
+      el.addEventListener('mousedown', e => { e.preventDefault(); inp.value = el.dataset.tag; box.classList.remove('open'); efAddTag(); });
+    });
+  }
+  inp.addEventListener('input',  () => showSug(inp.value));
+  inp.addEventListener('focus',  () => showSug(inp.value));
+  inp.addEventListener('blur',   () => setTimeout(() => box.classList.remove('open'), 150));
+  inp.addEventListener('keydown', e => {
+    const items = box.querySelectorAll('.tag-sug-item');
+    if (e.key === 'Enter')     { e.preventDefault(); efAddTag(); return; }
+    if (e.key === 'Escape')    { box.classList.remove('open'); return; }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault(); focusIdx = Math.min(focusIdx + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('focused', i === focusIdx));
+      if (items[focusIdx]) inp.value = items[focusIdx].dataset.tag;
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault(); focusIdx = Math.max(focusIdx - 1, -1);
+      items.forEach((el, i) => el.classList.toggle('focused', i === focusIdx));
+      if (focusIdx >= 0 && items[focusIdx]) inp.value = items[focusIdx].dataset.tag;
+    }
+  });
 }
 
 // ── Edit modal ────────────────────────────────────────────────────
@@ -1433,8 +1528,13 @@ function openEditModal() {
   document.getElementById('ef-ccaa').value     = t.ccaa      || '';
   document.getElementById('ef-url').value      = t.url       || '';
   document.getElementById('ef-notes').value    = t.notes     || '';
+  let tags = [];
+  try { tags = Array.isArray(t.tags) ? t.tags : JSON.parse(t.tags || '[]'); } catch {}
+  efRenderTags(tags);
+  document.getElementById('ef-tag-input').value = '';
+  document.getElementById('ef-tag-suggestions')?.classList.remove('open');
   document.getElementById('edit-msg').textContent = '';
-  document.getElementById('edit-msg').className   = 'edit-msg';
+  document.getElementById('edit-msg').className   = '';
   document.getElementById('edit-overlay').classList.add('open');
   document.getElementById('ef-name').focus();
 }
@@ -1456,6 +1556,7 @@ document.getElementById('ef-save-btn').addEventListener('click', async () => {
   btn.disabled = true;
   msg.textContent = 'Guardando…'; msg.className = '';
 
+  const modalTags = efGetTags();
   const body = {
     name:     document.getElementById('ef-name').value.trim()     || null,
     activity: document.getElementById('ef-activity').value.trim() || null,
@@ -1464,6 +1565,7 @@ document.getElementById('ef-save-btn').addEventListener('click', async () => {
     ccaa:     document.getElementById('ef-ccaa').value.trim()     || null,
     url:      document.getElementById('ef-url').value.trim()      || null,
     notes:    document.getElementById('ef-notes').value           || null,
+    tags:     JSON.stringify(modalTags),
   };
 
   try {
@@ -1473,12 +1575,17 @@ document.getElementById('ef-save-btn').addEventListener('click', async () => {
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
     // Update local state
     Object.assign(gTrack, body);
-    // Update header title if name changed
-    if (body.name) document.getElementById('track-title').textContent = body.name;
-    msg.textContent = '✓ Guardado'; msg.className = 'ok';
-    setTimeout(closeEditModal, 900);
+    gTrack.tags = modalTags;
+    if (d.movedFile) gTrack.file = d.movedFile.to;
+    // Update header and sync panel tags list
+    updateHeader(gTrack);
+    renderTags(modalTags);
+    const moved = d.movedFile ? ` · movido a ${d.movedFile.to.split('/').slice(0,3).join('/')}` : '';
+    msg.textContent = '✓ Guardado' + moved; msg.className = 'ok';
+    setTimeout(closeEditModal, moved ? 2200 : 900);
   } catch (e) {
     msg.textContent = 'Error: ' + e.message; msg.className = 'err';
   } finally {
@@ -1486,5 +1593,9 @@ document.getElementById('ef-save-btn').addEventListener('click', async () => {
   }
 });
 </script>
+<datalist id="ef-activity-list"></datalist>
+<datalist id="ef-sierra-list"></datalist>
+<datalist id="ef-province-list"></datalist>
+<datalist id="ef-ccaa-list"></datalist>
 </body>
 </html>

@@ -18,11 +18,15 @@ const { updateGpxMetadata }       = require('./gpx-utils');
 const TRACKS_DIR = path.join(__dirname, '..', 'TracksGps');
 const TEMP_DIR   = path.join(TRACKS_DIR, '_TEMP_');
 const REVIEW_DIR = path.join(TEMP_DIR, '_REVIEW_');
+
 const FORCE      = process.argv.includes('--force');
+const KEEP_SRC   = process.argv.includes('--keep');   // copy only, don't delete source
 const filesIdx   = process.argv.indexOf('--files');
 const FILTER_FILES = filesIdx !== -1
   ? new Set(process.argv[filesIdx + 1].split('|'))
   : null;
+const srcIdx  = process.argv.indexOf('--src');
+const SRC_DIR = srcIdx !== -1 ? path.resolve(process.argv[srcIdx + 1]) : TEMP_DIR;
 
 // ── Sierras (cargadas desde BD en tiempo de ejecución) ──────────────
 let SIERRAS = [];
@@ -106,7 +110,7 @@ function inferActivity(name, dist, gain) {
   if (n.includes('senderism') || /\bcaminata\b/.test(n)) return { act: 'Senderismo',             conf: 'high' };
   if (/\bcamino\b/.test(n) && !n.includes('carretera')) return { act: 'Senderismo',               conf: 'high' };
   if (n.includes('carretera') || n.includes('ciclism'))  return { act: 'Ciclismo de carretera',  conf: 'high' };
-  if (n.includes('mtb') || n.includes('mountain bike') || n.includes('btt')) return { act: 'Mtb', conf: 'high' };
+  if (n.includes('mtb') || n.includes('mountain bike') || n.includes('btt')) return { act: 'MTB', conf: 'high' };
   if (n.includes('bikepacking'))                         return { act: 'Bikepacking',             conf: 'high' };
   if (n.includes('kayak') || n.includes('pirag'))        return { act: 'Kayak',                  conf: 'high' };
 
@@ -128,6 +132,16 @@ function inferActivity(name, dist, gain) {
   return gpk > 60
     ? { act: 'Senderismo', conf: 'medium' }
     : { act: 'Senderismo', conf: 'low'    };
+}
+
+// ── IBP (Índice Bicicleta Pedestre) ──────────────────────────────────
+// Fórmulas derivadas empíricamente de tracks reales con elevación corregida
+function computeIBP(dist_km, gain_m) {
+  return {
+    ibp_hiking:  Math.round(1.664 * dist_km + 0.0603 * gain_m),
+    ibp_bicycle: Math.round(0.162 * dist_km + 0.074  * gain_m),
+    ibp_running: Math.round(2.181 * dist_km + 0.148  * gain_m),
+  };
 }
 
 // ── Nombre seguro para carpetas Windows ─────────────────────────────
@@ -200,23 +214,61 @@ function parseGpx(content, filePath) {
     pos = ce !== -1 ? ce + 8 : te + 1;
   }
 
+  // Parse waypoints (<wpt>)
+  const waypoints = [];
+  let wpos = 0;
+  while (true) {
+    const ws = content.indexOf('<wpt', wpos);
+    if (ws === -1) break;
+    const wte = content.indexOf('>', ws);
+    if (wte === -1) break;
+    const wce  = content.indexOf('</wpt>', wte);
+    const wtag  = content.substring(ws, wte + 1);
+    const wbody = wce !== -1 ? content.substring(wte + 1, wce) : '';
+    const wlatM = wtag.match(/\blat="([^"]+)"/);
+    const wlonM = wtag.match(/\blon="([^"]+)"/);
+    if (wlatM && wlonM) {
+      const wlat = parseFloat(wlatM[1]), wlon = parseFloat(wlonM[1]);
+      if (!isNaN(wlat) && !isNaN(wlon)) {
+        const wNameM = wbody.match(/<name>([\s\S]*?)<\/name>/);
+        const wEleM  = wbody.match(/<ele>([^<]+)<\/ele>/);
+        const wSymM  = wbody.match(/<sym>([^<]+)<\/sym>/);
+        const wDescM = wbody.match(/<desc>([\s\S]*?)<\/desc>/);
+        waypoints.push({
+          lat: wlat, lon: wlon,
+          ele:  wEleM  ? parseFloat(wEleM[1])     : null,
+          name: wNameM ? unesc(wNameM[1])           : null,
+          sym:  wSymM  ? wSymM[1].trim()            : null,
+          desc: wDescM ? unesc(wDescM[1])           : null,
+        });
+      }
+    }
+    wpos = wce !== -1 ? wce + 6 : wte + 1;
+  }
+
   if (points.length < 2) return null;
 
   let dist = 0;
   for (let i = 1; i < points.length; i++)
     dist += hav(points[i-1].lat, points[i-1].lon, points[i].lat, points[i].lon);
 
+  const circular = hav(points[0].lat, points[0].lon, points[points.length-1].lat, points[points.length-1].lon) < 0.5 ? 1 : 0;
+
   let gain = 0, loss = 0, minEle = Infinity, maxEle = -Infinity, hasEle = false;
+  let lastAccEle = null;
   for (let i = 0; i < points.length; i++) {
     const e = points[i].ele;
     if (e != null && !isNaN(e)) {
       hasEle = true;
       if (e < minEle) minEle = e;
       if (e > maxEle) maxEle = e;
-      if (i > 0 && points[i-1].ele != null) {
-        const d = e - points[i-1].ele;
-        if (d > 0) gain += d; else loss -= d;
-      }
+      if (lastAccEle != null) {
+        const d = e - lastAccEle;
+        if (Math.abs(d) >= 8) {
+          if (d > 0) gain += d; else loss -= d;
+          lastAccEle = e;
+        }
+      } else { lastAccEle = e; }
     }
   }
 
@@ -238,11 +290,11 @@ function parseGpx(content, filePath) {
     swLat, swLon, neLat, neLon,
     centerLat: Math.round((swLat+neLat)/2 * 10000)/10000,
     centerLon: Math.round((swLon+neLon)/2 * 10000)/10000,
-    points,
+    circular, points, waypoints,
   };
 }
 
-// ── Mover archivo con manejo de colisiones ────────────────────────────
+// ── Mover (o copiar) archivo con manejo de colisiones ─────────────────
 function moveFile(src, destDir) {
   fs.mkdirSync(destDir, { recursive: true });
   const base = path.basename(src);
@@ -254,8 +306,12 @@ function moveFile(src, destDir) {
     while (fs.existsSync(path.join(destDir, `${stem}_${n}${ext}`))) n++;
     dest = path.join(destDir, `${stem}_${n}${ext}`);
   }
-  try { fs.renameSync(src, dest); }
-  catch { fs.copyFileSync(src, dest); fs.unlinkSync(src); }
+  if (KEEP_SRC) {
+    fs.copyFileSync(src, dest);
+  } else {
+    try { fs.renameSync(src, dest); }
+    catch { fs.copyFileSync(src, dest); fs.unlinkSync(src); }
+  }
   return dest;
 }
 
@@ -276,14 +332,16 @@ function collectTempGpx(dir) {
 (async () => {
   loadSierrasFromDb(); // carga sierras desde config_sierras en BD
 
-  if (!fs.existsSync(TEMP_DIR)) {
-    console.log('⚠  No existe TracksGps/_TEMP_ — crea la carpeta y coloca los GPX dentro.');
+  if (!fs.existsSync(SRC_DIR)) {
+    console.log(`⚠  No existe la carpeta origen: ${SRC_DIR}`);
     process.exit(0);
   }
 
-  let files = collectTempGpx(TEMP_DIR);
+  console.log(`Carpeta origen: ${SRC_DIR}${KEEP_SRC ? ' (modo copia — archivos originales conservados)' : ' (modo mover — archivos originales se borrarán)'}`);
+
+  let files = collectTempGpx(SRC_DIR);
   if (FILTER_FILES) {
-    files = files.filter(f => FILTER_FILES.has(path.relative(TEMP_DIR, f).replace(/\\/g, '/')));
+    files = files.filter(f => FILTER_FILES.has(path.relative(SRC_DIR, f).replace(/\\/g, '/')));
   }
   if (!files.length) {
     console.log('✓ No hay archivos que importar.');
@@ -297,12 +355,16 @@ function collectTempGpx(dir) {
     db.prepare('SELECT file FROM tracks').all().map(r => r.file)
   );
 
+  // Limpiar el flag de importación reciente antes de marcar los nuevos
+  db.prepare('UPDATE tracks SET is_recent_import=0 WHERE is_recent_import=1').run();
+
   const upsertTrack = db.prepare(`
     INSERT INTO tracks
       (name,file,zone,date,distance,elevation_gain,elevation_loss,
        min_elevation,max_elevation,sw_lat,sw_lon,ne_lat,ne_lon,
-       center_lat,center_lon,raw_count,cleaned,activity,sierra,province,ccaa,url)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)
+       center_lat,center_lon,raw_count,cleaned,activity,sierra,province,ccaa,url,circular,
+       ibp_bicycle,ibp_hiking,ibp_running,is_recent_import)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,1)
     ON CONFLICT(file) DO UPDATE SET
       name=excluded.name, zone=excluded.zone,
       date=excluded.date, distance=excluded.distance,
@@ -314,14 +376,19 @@ function collectTempGpx(dir) {
       raw_count=excluded.raw_count, activity=excluded.activity,
       sierra=excluded.sierra, province=excluded.province, ccaa=excluded.ccaa,
       url=COALESCE(excluded.url, tracks.url),
-      imported_at=datetime('now'), cleaned=0, clean_count=NULL, cleaned_at=NULL
+      circular=excluded.circular,
+      ibp_bicycle=COALESCE(excluded.ibp_bicycle, tracks.ibp_bicycle),
+      ibp_hiking=COALESCE(excluded.ibp_hiking, tracks.ibp_hiking),
+      ibp_running=COALESCE(excluded.ibp_running, tracks.ibp_running),
+      imported_at=datetime('now'), cleaned=0, clean_count=NULL, cleaned_at=NULL,
+      is_recent_import=1
   `);
   const insertRaw   = db.prepare('INSERT OR REPLACE INTO raw_points(track_id,seq,lat,lon,ele) VALUES(?,?,?,?,?)');
   const deleteRaw   = db.prepare('DELETE FROM raw_points   WHERE track_id=?');
   const deleteClean = db.prepare('DELETE FROM clean_points WHERE track_id=?');
   const getTrackId  = db.prepare('SELECT id FROM tracks WHERE file=?');
 
-  function importTrack(track, relFile, activity, sierra, province, ccaa) {
+  function importTrack(track, relFile, activity, sierra, province, ccaa, ibp) {
     let trackId;
     withTransaction(() => {
       const parts = relFile.split('/');
@@ -333,7 +400,8 @@ function collectTempGpx(dir) {
         track.swLat, track.swLon, track.neLat, track.neLon,
         track.centerLat, track.centerLon, track.points.length,
         activity ?? null, sierra ?? null, province ?? null, ccaa ?? null,
-        track.url ?? null
+        track.url ?? null, track.circular ?? 0,
+        ibp.ibp_bicycle ?? null, ibp.ibp_hiking ?? null, ibp.ibp_running ?? null
       );
       const row = getTrackId.get(relFile);
       trackId = row.id;
@@ -342,6 +410,10 @@ function collectTempGpx(dir) {
       for (let i = 0; i < track.points.length; i++) {
         const p = track.points[i];
         insertRaw.run(row.id, i, p.lat, p.lon, p.ele ?? null);
+      }
+      if (track.waypoints && track.waypoints.length > 0) {
+        db.prepare('UPDATE tracks SET waypoints_json=? WHERE id=?')
+          .run(JSON.stringify(track.waypoints), row.id);
       }
     });
     return trackId;
@@ -420,8 +492,10 @@ function collectTempGpx(dir) {
     }
 
     // ── Paso 6: Importar a BD y escribir atributos al GPX ───────────
+    const ibp = computeIBP(track.distance, track.elevationGain);
+    console.log(`  IBP        : h=${ibp.ibp_hiking}  b=${ibp.ibp_bicycle}  r=${ibp.ibp_running}`);
     try {
-      const newId = importTrack(track, relFile, act, sierra, province, ccaa);
+      const newId = importTrack(track, relFile, act, sierra, province, ccaa, ibp);
       importedIds.push(newId);
       imported++;
       console.log(`  ✓ Importado (id=${newId})`);

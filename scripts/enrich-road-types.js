@@ -179,6 +179,8 @@ async function enrichTrack(track, db) {
   }
 
   const hwDist = {}, sfDist = {};
+  const rawSegs = [];
+  let cumDist = 0;
   for (let i = 0; i < pts.length - 1; i++) {
     const mid = { lat: (pts[i].lat + pts[i+1].lat) / 2, lon: (pts[i].lon + pts[i+1].lon) / 2 };
     const d   = hav(pts[i].lat, pts[i].lon, pts[i+1].lat, pts[i+1].lon);
@@ -187,14 +189,31 @@ async function enrichTrack(track, db) {
     const sf  = way?.tags?.surface  || 'unknown';
     hwDist[hw] = (hwDist[hw] || 0) + d;
     sfDist[sf] = (sfDist[sf] || 0) + d;
+    rawSegs.push({ type: hw, dist: d });
+    cumDist += d;
+  }
+
+  // Merge consecutive same-type segments into compact fraction-based array
+  const roadSegs = [];
+  if (cumDist > 0 && rawSegs.length > 0) {
+    let runType = rawSegs[0].type, runStart = 0, runCum = 0;
+    for (const seg of rawSegs) {
+      if (seg.type !== runType) {
+        roadSegs.push({ t: runType, f0: +(runStart / cumDist).toFixed(4), f1: +(runCum / cumDist).toFixed(4) });
+        runType = seg.type;
+        runStart = runCum;
+      }
+      runCum += seg.dist;
+    }
+    roadSegs.push({ t: runType, f0: +(runStart / cumDist).toFixed(4), f1: 1.0 });
   }
 
   // Round to 2 dp
   for (const k of Object.keys(hwDist)) hwDist[k] = Math.round(hwDist[k] * 100) / 100;
   for (const k of Object.keys(sfDist)) sfDist[k] = Math.round(sfDist[k] * 100) / 100;
 
-  db.prepare(`UPDATE tracks SET road_types=?, surface_types=?, road_types_at=datetime('now') WHERE id=?`)
-    .run(JSON.stringify(hwDist), JSON.stringify(sfDist), track.id);
+  db.prepare(`UPDATE tracks SET road_types=?, surface_types=?, road_type_seq=?, road_types_at=datetime('now') WHERE id=?`)
+    .run(JSON.stringify(hwDist), JSON.stringify(sfDist), roadSegs.length ? JSON.stringify(roadSegs) : null, track.id);
 
   return true;
 }

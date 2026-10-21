@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpsies="http://www.gpsies.com/GPX/1/0" creator="GPSies http://www.gpsies.com - AltaVia2-Etapa8" version="1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.gpsies.com/GPX/1/0 http://www.gpsies.com/gpsies.xsd">
+  <metadata>
+    <name>AltaVia2-Etapa8</name>
+    <link href="http://www.gpsies.com/map.do?fileId=ojzapgnleeudyikg">
+      <text>AltaVia2-Etapa8 on GPSies.com</text>
+    </link>
+    <time>2011-09-02T09:12:25Z</time>
+    <extensions>
+      <gpsies:property>one-way trip</gpsies:property>
+      <gpsies:trackLengthMeter>4952.96791225412</gpsies:trackLengthMeter>
+      <gpsies:totalAscentMeter>541.0</gpsies:totalAscentMeter>
+      <gpsies:totalDescentMeter>815.0</gpsies:totalDescentMeter>
+      <gpsies:minHeightMeter>1345.0</gpsies:minHeightMeter>
+      <gpsies:maxHeightMeter>2117.0</gpsies:maxHeightMeter>
+    </extensions>
+  </metadata>
+  <trk>
+    <link href="http://www.gpsies.com/map.do?fileId=ojzapgnleeudyikg"/>
+    
+    <type>Montañismo</type>
+    <name>AltaVia2-Etapa8 on GPSies.com</name>
+    
+    <trkseg>
+      <trkpt lat="46.23393310" lon="11.90127080">
+        <ele>1619.0000</ele>
+        <time>2011-09-02T09:12:25Z</time>
+      </trkpt>
+      <trkpt lat="46.23262690" lon="11.90075580">
+        <ele>1617.0000</ele>
+        <time>2011-09-02T09:13:20Z</time>
+      </trkpt>
+      <trkpt lat="46.23167690" lon="11.90058420">
+        <ele>1619.0000</ele>
+        <time>2011-09-02T09:13:58Z</time>
+      </trkpt>
+      <trkpt lat="46.23072700" lon="11.90058420">
+        <ele>1611.0000</ele>
+        <time>2011-09-02T09:14:36Z</time>
+      </trkpt>
+      <trkpt lat="46.22930200" lon="11.90075580">
+        <ele>1565.0000</ele>
+        <time>2011-09-02T09:15:33Z</time>
+      </trkpt>
+      <trkpt lat="46.22799570" lon="11.90075580">
+        <ele>1576.0000</ele>
+        <time>2011-09-02T09:16:26Z</time>
+      </trkpt>
+      <trkpt lat="46.22538310" lon="11.89972590">
+        <ele>1683.0000</ele>
+        <time>2011-09-02T09:18:14Z</time>
+      </trkpt>
+      <trkpt lat="46.22502680" lon="11.89938250">
+        <ele>1665.0000</ele>
+        <time>2011-09-02T09:18:31Z</time>
+      </trkpt>
+      <trkpt lat="46.22348290" lon="11.89938250">
+        <ele>1719.0000</ele>
+        <time>2011-09-02T09:19:33Z</time>
+      </trkpt>
+      <trkpt lat="46.22098880" lon="11.89852420">
+        <ele>1796.0000</ele>
+        <time>2011-09-02T09:21:16Z</time>
+      </trkpt>
+      <trkpt lat="46.21896970" lon="11.89783760">
+        <ele>1802.0000</ele>
+        <time>2011-09-02T09:22:39Z</time>
+      </trkpt>
+      <trkpt lat="46.21801950" lon="11.89732260">
+        <ele>1788.0000</ele>
+        <time>2011-09-02T09:23:19Z</time>
+      </trkpt>
+      <trkpt lat="46.21742560" lon="11.89732260">
+        <ele>1797.0000</ele>
+        <time>2011-09-02T09:23:43Z</time>
+      </trkpt>
+      <trkpt lat="46.21623780" lon="11.89715090">
+        <ele>1970.0000</ele>
+        <time>2011-09-02T09:24:31Z</time>
+      </trkpt>
+      <trkpt lat="46.21540640" lon="11.89715090">
+        <ele>2006.0000</ele>
+        <time>2011-09-02T09:25:04Z</time>
+      </trkpt>
+      <trkpt lat="46.21433730" lon="11.89715090">
+        <ele>2070.0000</ele>
+        <time>2011-09-02T09:25:47Z</time>
+      </trkpt>
+      <trkpt lat="46.21172400" lon="11.89663590">
+        <ele>2025.0000</ele>
+        <time>2011-09-02T09:27:32Z</time>
+      </trkpt>
+      <trkpt lat="46.21029850" lon="11.89543430">
+        <ele>2091.0000</ele>
+        <time>2011-09-02T09:28:38Z</time>
+      </trkpt>
+      <trkpt lat="46.20994220" lon="11.89457600">
+        <ele>2117.0000</ele>
+        <time>2011-09-02T09:29:06Z</time>
+      </trkpt>
+      <trkpt lat="46.20875420" lon="11.89440430">
+        <ele>2097.0000</ele>
+        <time>2011-09-02T09:29:54Z</time>
+      </trkpt>
+      <trkpt lat="46.20673470" lon="11.89440430">
+        <ele>2058.0000</ele>
+        <time>2011-09-02T09:31:15Z</time>
+      </trkpt>
+      <trkpt lat="46.20495270" lon="11.89491930">
+        <ele>2002.0000</ele>
+        <time>2011-09-02T09:32:28Z</time>
+      </trkpt>
+      <trkpt lat="46.20376460" lon="11.89629260">
+        <ele>2061.0000</ele>
+        <time>2011-09-02T09:33:28Z</time>
+      </trkpt>
+      <trkpt lat="46.20281410" lon="11.89697930">
+        <ele>2024.0000</ele>
+        <time>2011-09-02T09:34:11Z</time>
+      </trkpt>
+      <trkpt lat="46.20233890" lon="11.89818090">
+        <ele>1930.0000</ele>
+        <time>2011-09-02T09:34:49Z</time>
+      </trkpt>
+      <trkpt lat="46.20126960" lon="11.89903920">
+        <ele>1814.0000</ele>
+        <time>2011-09-02T09:35:38Z</time>
+      </trkpt>
+      <trkpt lat="46.19913100" lon="11.89921090">
+        <ele>1630.0000</ele>
+        <time>2011-09-02T09:37:04Z</time>
+      </trkpt>
+      <trkpt lat="46.19711110" lon="11.89886750">
+        <ele>1540.0000</ele>
+        <time>2011-09-02T09:38:25Z</time>
+      </trkpt>
+      <trkpt lat="46.19627930" lon="11.89869590">
+        <ele>1577.0000</ele>
+        <time>2011-09-02T09:38:59Z</time>
+      </trkpt>
+      <trkpt lat="46.19544750" lon="11.90109910">
+        <ele>1438.0000</ele>
+        <time>2011-09-02T09:40:14Z</time>
+      </trkpt>
+      <trkpt lat="46.19473460" lon="11.90161410">
+        <ele>1404.0000</ele>
+        <time>2011-09-02T09:40:45Z</time>
+      </trkpt>
+      <trkpt lat="46.19390280" lon="11.90109910">
+        <ele>1378.0000</ele>
+        <time>2011-09-02T09:41:22Z</time>
+      </trkpt>
+      <trkpt lat="46.19283340" lon="11.90041250">
+        <ele>1345.0000</ele>
+        <time>2011-09-02T09:42:09Z</time>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>
+

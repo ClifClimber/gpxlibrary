@@ -69,6 +69,38 @@ function parseGpx(content, filePath) {
     pos = ce !== -1 ? ce + 8 : te + 1;
   }
 
+  // Parse waypoints (<wpt>)
+  const waypoints = [];
+  let wpos = 0;
+  while (true) {
+    const ws = content.indexOf('<wpt', wpos);
+    if (ws === -1) break;
+    const wte = content.indexOf('>', ws);
+    if (wte === -1) break;
+    const wce  = content.indexOf('</wpt>', wte);
+    const wtag  = content.substring(ws, wte + 1);
+    const wbody = wce !== -1 ? content.substring(wte + 1, wce) : '';
+    const wlatM = wtag.match(/\blat="([^"]+)"/);
+    const wlonM = wtag.match(/\blon="([^"]+)"/);
+    if (wlatM && wlonM) {
+      const wlat = parseFloat(wlatM[1]), wlon = parseFloat(wlonM[1]);
+      if (!isNaN(wlat) && !isNaN(wlon)) {
+        const wNameM = wbody.match(/<name>([\s\S]*?)<\/name>/);
+        const wEleM  = wbody.match(/<ele>([^<]+)<\/ele>/);
+        const wSymM  = wbody.match(/<sym>([^<]+)<\/sym>/);
+        const wDescM = wbody.match(/<desc>([\s\S]*?)<\/desc>/);
+        waypoints.push({
+          lat: wlat, lon: wlon,
+          ele:  wEleM  ? parseFloat(wEleM[1])     : null,
+          name: wNameM ? unesc(wNameM[1])           : null,
+          sym:  wSymM  ? wSymM[1].trim()            : null,
+          desc: wDescM ? unesc(wDescM[1])           : null,
+        });
+      }
+    }
+    wpos = wce !== -1 ? wce + 6 : wte + 1;
+  }
+
   if (points.length < 2) return null;
 
   let dist = 0;
@@ -111,7 +143,8 @@ function parseGpx(content, filePath) {
     swLat, swLon, neLat, neLon,
     centerLat: Math.round((swLat+neLat)/2 * 10000)/10000,
     centerLon: Math.round((swLon+neLon)/2 * 10000)/10000,
-    points,
+    circular: hav(points[0].lat, points[0].lon, points[points.length-1].lat, points[points.length-1].lon) < 0.5 ? 1 : 0,
+    points, waypoints,
   };
 }
 
@@ -140,8 +173,8 @@ const upsertTrack = db.prepare(`
   INSERT INTO tracks
     (name,file,zone,date,distance,elevation_gain,elevation_loss,
      min_elevation,max_elevation,sw_lat,sw_lon,ne_lat,ne_lon,
-     center_lat,center_lon,raw_count,cleaned)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)
+     center_lat,center_lon,raw_count,cleaned,circular)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)
   ON CONFLICT(file) DO UPDATE SET
     name=excluded.name, zone=excluded.zone,
     date=excluded.date, distance=excluded.distance,
@@ -150,7 +183,7 @@ const upsertTrack = db.prepare(`
     sw_lat=excluded.sw_lat, sw_lon=excluded.sw_lon,
     ne_lat=excluded.ne_lat, ne_lon=excluded.ne_lon,
     center_lat=excluded.center_lat, center_lon=excluded.center_lon,
-    raw_count=excluded.raw_count,
+    raw_count=excluded.raw_count, circular=excluded.circular,
     imported_at=datetime('now'), cleaned=0, clean_count=NULL, cleaned_at=NULL
 `);
 const insertRaw   = db.prepare('INSERT OR REPLACE INTO raw_points(track_id,seq,lat,lon,ele) VALUES(?,?,?,?,?)');
@@ -165,7 +198,8 @@ function importTrack(track) {
       track.distance, track.elevationGain, track.elevationLoss,
       track.minElevation ?? null, track.maxElevation ?? null,
       track.swLat, track.swLon, track.neLat, track.neLon,
-      track.centerLat, track.centerLon, track.points.length
+      track.centerLat, track.centerLon, track.points.length,
+      track.circular ?? 0
     );
     const row = getTrackId.get(track.file);
     deleteRaw.run(row.id);
@@ -173,6 +207,10 @@ function importTrack(track) {
     for (let i = 0; i < track.points.length; i++) {
       const p = track.points[i];
       insertRaw.run(row.id, i, p.lat, p.lon, p.ele ?? null);
+    }
+    if (track.waypoints && track.waypoints.length > 0) {
+      db.prepare('UPDATE tracks SET waypoints_json=? WHERE id=?')
+        .run(JSON.stringify(track.waypoints), row.id);
     }
   });
 }

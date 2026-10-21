@@ -72,21 +72,25 @@ const DEFAULT_SIERRAS = [
 
 function _migrate(db) {
   const newCols = [
-    ['activity',      'TEXT'],
-    ['province',      'TEXT'],
-    ['ccaa',          'TEXT'],
-    ['sierra',        'TEXT'],
-    ['notes',         'TEXT'],
-    ['url',           'TEXT'],
-    ['road_types',    'TEXT'],
-    ['surface_types', 'TEXT'],
-    ['road_types_at', 'TEXT'],
-    ['moving_time',   'INTEGER'],
-    ['stopped_time',  'INTEGER'],
-    ['tags',          'TEXT'],
-    ['ibp_bicycle',   'REAL'],
-    ['ibp_hiking',    'REAL'],
-    ['ibp_running',   'REAL'],
+    ['activity',          'TEXT'],
+    ['province',          'TEXT'],
+    ['ccaa',              'TEXT'],
+    ['sierra',            'TEXT'],
+    ['notes',             'TEXT'],
+    ['url',               'TEXT'],
+    ['road_types',        'TEXT'],
+    ['surface_types',     'TEXT'],
+    ['road_types_at',     'TEXT'],
+    ['moving_time',       'INTEGER'],
+    ['stopped_time',      'INTEGER'],
+    ['tags',              'TEXT'],
+    ['ibp_bicycle',       'REAL'],
+    ['ibp_hiking',        'REAL'],
+    ['ibp_running',       'REAL'],
+    ['is_recent_import',  'INTEGER DEFAULT 0'],
+    ['circular',          'INTEGER DEFAULT 0'],
+    ['road_type_seq',     'TEXT'],
+    ['waypoints_json',    'TEXT'],
   ];
   for (const [col, type] of newCols) {
     try { db.exec(`ALTER TABLE tracks ADD COLUMN ${col} ${type}`); } catch {}
@@ -94,6 +98,26 @@ function _migrate(db) {
   ['activity','province','ccaa','sierra'].forEach(c => {
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_tracks_${c} ON tracks(${c})`); } catch {}
   });
+
+  // One-time: compute circular from first/last raw point for all tracks
+  // Uses flat-earth approximation: cos(40°)^2 ≈ 0.41, 0.5km ≈ 0.0045 deg
+  try {
+    db.exec(`
+      UPDATE tracks SET circular = (
+        SELECT CASE WHEN (
+          (p1.lat - p2.lat)*(p1.lat - p2.lat) +
+          (p1.lon - p2.lon)*(p1.lon - p2.lon)*0.41
+        ) < 0.00002025 THEN 1 ELSE 0 END
+        FROM raw_points p1
+        JOIN raw_points p2 ON p2.track_id = p1.track_id
+        WHERE p1.track_id = tracks.id
+          AND p1.seq = 0
+          AND p2.seq = (SELECT MAX(seq) FROM raw_points WHERE track_id = tracks.id)
+          AND p1.seq != p2.seq
+      )
+      WHERE id IN (SELECT DISTINCT track_id FROM raw_points)
+    `);
+  } catch {}
 
   // Eliminar columna category si todavía existe
   try {

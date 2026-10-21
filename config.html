@@ -4,201 +4,107 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GPX Library — Configuración</title>
-<style>
-:root {
-  --bg:      #f0f2f5;
-  --bg2:     #fff;
-  --bg3:     #e2e8f0;
-  --border:  #e2e8f0;
-  --header:  #0f172a;
-  --header-text: #f8fafc;
-  --text:    #1e293b;
-  --text2:   #64748b;
-  --accent:  #3b82f6;
-  --danger:  #ef4444;
-  --success: #22c55e;
-  --radius:  8px;
-}
-* { box-sizing:border-box; margin:0; padding:0; }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font: 14px/1.5 system-ui, sans-serif;
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 48px);
-  overflow: hidden;
-}
-.hbtn {
-  display: inline-flex; align-items: center; gap:5px;
-  padding: 5px 12px; border-radius:6px; font-size:12px; font-weight:500;
-  border: 1.5px solid; cursor: pointer; text-decoration:none;
-  transition: background .15s;
-}
-.hbtn-outline { background:transparent; color:#94a3b8; border-color:#334155; }
-.hbtn-outline:hover { background:#1e293b; color:#fff; }
-.hbtn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.hbtn-primary:hover { background: #2563eb; }
-/* Tabs */
-#tabs { display:flex; gap:2px; padding:12px 18px 0; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--bg); }
-.tab {
-  padding: 8px 18px; cursor:pointer; font-size:13px; font-weight:500;
-  border-radius:6px 6px 0 0; color:var(--text2);
-  border: 1px solid transparent; border-bottom:none;
-  margin-bottom: -1px;
-  transition: color .15s;
-}
-.tab.active { background:var(--bg2); border-color:var(--border); color:var(--text); }
-.tab:not(.active):hover { color:var(--text); }
-/* Content */
-#content { flex:1; overflow-y:auto; padding:20px 18px; }
-.panel { display:none; }
-.panel.active { display:block; }
-/* Section header */
-.section-header { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
-.section-header h2 { font-size:15px; font-weight:600; }
-.section-desc { color:var(--text2); font-size:12px; margin-bottom:16px; }
-/* Table */
-.cfg-table { width:100%; border-collapse:collapse; font-size:13px; }
-.cfg-table th {
-  text-align:left; padding:8px 10px; font-size:11px; font-weight:600;
-  color:var(--text2); text-transform:uppercase; letter-spacing:.05em;
-  border-bottom: 1px solid var(--border);
-}
-.cfg-table td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
-.cfg-table tr:hover td { background: rgba(0,0,0,.02); }
-.cfg-table tr.editing td { background: rgba(59,130,246,.06); }
-/* Badge */
-.badge-act {
-  display:inline-block; padding:2px 8px; border-radius:99px;
-  font-size:11px; font-weight:600; color:#fff;
-}
-/* Inactive row */
-tr.inactive td { opacity: .4; }
-/* Actions */
-.row-actions { display:flex; gap:6px; }
-.btn-sm {
-  padding:3px 9px; border-radius:5px; font-size:11px; font-weight:500;
-  border:1px solid var(--border); cursor:pointer; background:transparent; color:var(--text);
-  transition: background .12s;
-}
-.btn-sm:hover { background:var(--bg3); }
-.btn-sm.danger { color:var(--danger); border-color:var(--danger); }
-.btn-sm.danger:hover { background:rgba(239,68,68,.1); }
-.btn-sm.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-.btn-sm.primary:hover { background:#2563eb; }
-/* Inline edit form */
-.edit-row td { padding:4px 10px 10px !important; }
-.edit-form { display:grid; gap:8px; background:var(--bg2); padding:12px 14px; border-radius:var(--radius); border:1px solid var(--border); }
-.edit-form label { font-size:11px; color:var(--text2); font-weight:600; }
-.edit-form input[type=text], .edit-form input[type=number] {
-  width:100%; background:var(--bg); border:1px solid var(--border); border-radius:5px;
-  color:var(--text); padding:6px 9px; font-size:13px; outline:none;
-}
-.edit-form input:focus { border-color:var(--accent); }
-.form-row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
-.form-row .f-field { flex:1; min-width:120px; }
-.form-row .f-field label { display:block; margin-bottom:3px; }
-/* Color picker */
-.color-pick-wrap { display:flex; flex-direction:column; gap:5px; }
-.color-swatches { display:flex; flex-wrap:wrap; gap:5px; }
-.swatch {
-  width:22px; height:22px; border-radius:50%; cursor:pointer;
-  border:2px solid transparent; transition:border-color .12s, transform .12s;
-  flex-shrink:0;
-}
-.swatch:hover { transform:scale(1.15); }
-.swatch.selected { border-color:#1e293b; }
-.color-input-row { display:flex; align-items:center; gap:6px; }
-.color-input-row input[type=color] { width:30px; height:26px; border:none; background:none; cursor:pointer; padding:0; }
-.color-input-row input[type=text] { width:90px; }
-/* Keywords */
-.kw-help { font-size:10px; color:var(--text2); }
-/* Icon upload */
-.icon-upload-wrap { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.icon-preview { width:36px; height:36px; border-radius:50%; border:2px solid var(--border); object-fit:cover; display:none; }
-.icon-preview.has-icon { display:block; }
-.icon-upload-label {
-  display:inline-flex; align-items:center; gap:5px; padding:5px 10px;
-  border:1px solid var(--border); border-radius:5px; cursor:pointer; font-size:12px;
-  background:var(--bg); color:var(--text2); transition:border-color .12s;
-}
-.icon-upload-label:hover { border-color:var(--accent); color:var(--accent); }
-.icon-clear-btn { background:none; border:none; cursor:pointer; color:var(--danger); font-size:11px; padding:2px 5px; border-radius:3px; }
-.icon-clear-btn:hover { background:rgba(220,38,38,.1); }
-/* Bbox */
-.bbox-grid { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; }
-.bbox-grid .f-field label { display:block; margin-bottom:3px; }
-/* Toggle active */
-.toggle-active { cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
-.toggle-active input { accent-color:var(--accent); width:15px; height:15px; cursor:pointer; }
-/* Add row */
-.add-row { margin-top:16px; }
-/* Empty */
-.empty-msg { text-align:center; padding:32px; color:var(--text2); font-size:13px; }
-/* Province chips */
-.chip-grid { display:flex; flex-wrap:wrap; gap:6px; }
-.chip {
-  background:var(--bg3); border:1px solid var(--border);
-  border-radius:99px; padding:3px 12px; font-size:12px; color:var(--text2);
-}
-/* Toast */
-#toast {
-  position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
-  background:#1e40af; color:#fff; padding:8px 18px; border-radius:8px;
-  font-size:13px; opacity:0; pointer-events:none;
-  transition: opacity .2s, transform .2s;
-  z-index:999;
-}
-#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-
-</style>
 <link rel="stylesheet" href="/shared.css">
+<style>
+/* Config — maquetación propia. Tokens y componentes en shared.css */
+:root { --text2: var(--muted); --bg2: var(--surface); --bg3: var(--soft); }
+#config-tabs { margin-bottom: 2px; }
+.panel { display: none; }
+.panel.active { display: block; }
+.section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.section-header h2 { font-size: 16px; font-weight: 600; flex: 1; }
+.section-desc { margin-bottom: 14px; }
+.panel-card { padding: 18px 18px 8px; }
+.panel-card + .panel-card { margin-top: 16px; }
+.cfg-table th:first-child, .cfg-table td:first-child { padding-left: 4px; }
+.cfg-table tr.editing td { background: var(--active-bg); }
+tr.inactive td { opacity: .4; }
+.badge-act { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.empty-msg { text-align: center; padding: 32px; color: var(--muted); }
+
+/* Formulario de edición en línea */
+.edit-row td { padding: 4px 4px 14px !important; background: transparent !important; }
+.edit-form { display: grid; gap: 12px; background: var(--hover-bg); padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--line); }
+.edit-form label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.edit-form input[type=text], .edit-form input[type=number] {
+  width: 100%; height: 34px; padding: 0 10px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; font-size: 13px; outline: none;
+}
+.edit-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.form-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.form-row .f-field { flex: 1; min-width: 120px; }
+.form-row .f-field label { display: block; margin-bottom: 4px; }
+.kw-help { font-size: 11px; color: var(--muted); }
+.toggle-active { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-transform: none !important; letter-spacing: 0 !important; font-size: 13px !important; color: var(--ink) !important; }
+.toggle-active input { accent-color: var(--ink); width: 15px; height: 15px; cursor: pointer; }
+
+/* Selector de color */
+.color-pick-wrap { display: flex; flex-direction: column; gap: 8px; }
+.color-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .12s; flex-shrink: 0; }
+.swatch:hover { transform: scale(1.15); }
+.swatch.selected { border-color: var(--ink); box-shadow: 0 0 0 2px #fff inset; }
+.color-input-row { display: flex; align-items: center; gap: 6px; }
+.color-input-row input[type=color] { width: 32px; height: 28px; border: none; background: none; cursor: pointer; padding: 0; }
+.color-input-row input[type=text] { width: 100px !important; }
+
+/* Icono personalizado */
+.icon-upload-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.icon-preview { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--line); object-fit: cover; display: none; }
+.icon-preview.has-icon { display: block; }
+.icon-upload-label { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 8px; cursor: pointer; font-size: 12px !important; font-weight: 600 !important; background: var(--soft); color: var(--ink) !important; text-transform: none !important; letter-spacing: 0 !important; }
+.icon-upload-label:hover { background: #e2e8f0; }
+.icon-clear-btn { background: none; border: none; cursor: pointer; color: var(--danger); font-size: 12px; padding: 4px 6px; border-radius: 6px; }
+.icon-clear-btn:hover { background: #fee2e2; }
+
+.bbox-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.bbox-grid .f-field label { display: block; margin-bottom: 4px; }
+.chip-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+@media (max-width: 700px) { .bbox-grid { grid-template-columns: 1fr 1fr; } }
+</style>
 </head>
 <body>
 
 <nav>
   <span class="logo">GPX Library</span>
   <a href="/">Visor</a>
-  <a href="/editor">Editor</a>
+  <a href="/editor">Catálogo</a>
   <a href="/config" style="color:#f8fafc">Config</a>
   <a href="/admin">Admin</a>
 </nav>
-<div class="page-header">
-  <div class="page-header-title">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    GPX Library — Configuración
+<main class="page">
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">Configuración</h1>
+      <div class="page-sub">Actividades, zonas y datos geográficos usados para clasificar los tracks</div>
+    </div>
   </div>
-  <div class="page-header-actions">
-    <a href="/" class="hbtn-nav">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-      Mapa
-    </a>
-  </div>
-</div>
 
-<div id="tabs">
-  <div class="tab active" data-tab="activities">Actividades</div>
-  <div class="tab" data-tab="sierras">Sierras / Zonas</div>
-  <div class="tab" data-tab="geo">Provincias &amp; CCAA</div>
+<div id="config-tabs" class="seg-tabs">
+  <button class="seg-tab tab active" data-tab="activities">Actividades</button>
+  <button class="seg-tab tab" data-tab="sierras">Sierras / Zonas</button>
+  <button class="seg-tab tab" data-tab="geo">Provincias &amp; CCAA</button>
 </div>
 
 <div id="content">
 
   <!-- ── Actividades ── -->
-  <div id="panel-activities" class="panel active">
+  <div id="panel-activities" class="panel active card panel-card">
     <div class="section-header">
       <h2>Actividades</h2>
-      <button class="hbtn hbtn-primary" id="btn-add-act">+ Nueva actividad</button>
+      <button class="btn btn-primary" id="btn-add-act">+ Nueva actividad</button>
     </div>
     <p class="section-desc">Lista de tipos de actividad. Las <strong>palabras clave</strong> se usan para clasificar automáticamente los tracks durante la importación (separadas por comas, se comparan en minúsculas).</p>
     <div id="act-loading" style="color:var(--text2);padding:20px">Cargando…</div>
-    <table class="cfg-table" id="act-table" style="display:none">
+    <table class="table cfg-table" id="act-table" style="display:none">
       <thead>
         <tr>
           <th>Nombre</th>
           <th style="width:50px">Icono</th>
           <th>Palabras clave</th>
+          <th style="width:72px;text-align:right">Tracks</th>
           <th style="width:70px">Activa</th>
           <th style="width:110px"></th>
         </tr>
@@ -208,14 +114,14 @@ tr.inactive td { opacity: .4; }
   </div>
 
   <!-- ── Sierras ── -->
-  <div id="panel-sierras" class="panel">
+  <div id="panel-sierras" class="panel card panel-card">
     <div class="section-header">
       <h2>Sierras / Zonas geográficas</h2>
-      <button class="hbtn hbtn-primary" id="btn-add-sierra">+ Nueva sierra</button>
+      <button class="btn btn-primary" id="btn-add-sierra">+ Nueva sierra</button>
     </div>
     <p class="section-desc">Bounding boxes de respaldo para la clasificación geográfica cuando Nominatim no devuelve un nombre de sierra. Coordenadas en grados decimales.</p>
     <div id="sie-loading" style="color:var(--text2);padding:20px">Cargando…</div>
-    <table class="cfg-table" id="sie-table" style="display:none">
+    <table class="table cfg-table" id="sie-table" style="display:none">
       <thead>
         <tr>
           <th>Nombre</th>
@@ -232,17 +138,18 @@ tr.inactive td { opacity: .4; }
   </div>
 
   <!-- ── Geo ── -->
-  <div id="panel-geo" class="panel">
+  <div id="panel-geo" class="panel card panel-card">
     <div class="section-header"><h2>Provincias en la BD</h2></div>
     <p class="section-desc">Provincias detectadas en los tracks (via Nominatim). Solo lectura — se actualizan al importar.</p>
     <div id="geo-provinces" class="chip-grid" style="margin-bottom:24px"></div>
     <div class="section-header"><h2>Comunidades Autónomas en la BD</h2></div>
     <div id="geo-ccaa" class="chip-grid" style="margin-bottom:24px"></div>
     <div class="section-header"><h2>Sierras en uso</h2></div>
-    <div id="geo-zones" class="chip-grid"></div>
+    <div id="geo-zones" class="chip-grid" style="margin-bottom:12px"></div>
   </div>
 
 </div><!-- #content -->
+</main>
 
 <div id="toast"></div>
 
@@ -402,13 +309,17 @@ function renderActIconCell(name, color) {
 
 // ── ACTIVIDADES ─────────────────────────────────────────────────────
 let activities = [];
+let actCounts = {};
 let editingActId = null;
 
 async function loadActivities() {
-  const tbody = document.getElementById('act-tbody');
   try {
-    const r = await fetch('/api/config/activities');
-    activities = await r.json();
+    const [r1, r2] = await Promise.all([
+      fetch('/api/config/activities'),
+      fetch('/api/config/activity-counts'),
+    ]);
+    activities = await r1.json();
+    actCounts  = await r2.json();
     activities.sort((a, b) => a.name.localeCompare(b.name, 'es'));
     renderActivities();
     document.getElementById('act-loading').style.display = 'none';
@@ -426,7 +337,7 @@ function renderActivities() {
   tbody.innerHTML = '';
 
   if (activities.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="empty-msg">Sin actividades definidas</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-msg">Sin actividades definidas</td></tr>`;
     return;
   }
 
@@ -435,23 +346,30 @@ function renderActivities() {
     if (!a.active) tr.classList.add('inactive');
     if (editingActId === a.id) tr.classList.add('editing');
 
+    const cnt = actCounts[a.name] || 0;
     tr.innerHTML = `
       <td>
         <span class="badge-act" style="background:${escHtml(a.color||'#64748b')}">${escHtml(a.name)}</span>
       </td>
       <td>${renderActIconCell(a.name, a.color)}</td>
       <td style="color:var(--text2);font-size:11px">${escHtml(a.keywords||'—')}</td>
+      <td style="text-align:right">
+        ${cnt > 0
+          ? `<span style="display:inline-block;background:var(--bg3);border:1px solid var(--border);border-radius:99px;padding:1px 9px;font-size:12px;font-weight:600;color:var(--text)">${cnt}</span>`
+          : `<span style="color:var(--text2);font-size:12px">0</span>`
+        }
+      </td>
       <td><span style="color:${a.active?'var(--success)':'var(--text2)'}">${a.active?'✓':'—'}</span></td>
       <td class="row-actions">
-        <button class="btn-sm primary" data-act-edit="${a.id}">Editar</button>
-        <button class="btn-sm danger" data-act-del="${a.id}">✕</button>
+        <button class="btn btn-sm" data-act-edit="${a.id}">Editar</button>
+        <button class="btn btn-sm btn-danger" data-act-del="${a.id}">✕</button>
       </td>
     `;
 
     if (editingActId === a.id) {
       const editTr = document.createElement('tr');
       editTr.className = 'edit-row';
-      editTr.innerHTML = `<td colspan="5"></td>`;
+      editTr.innerHTML = `<td colspan="6"></td>`;
       const cell = editTr.querySelector('td');
       cell.appendChild(buildActForm(a));
       tbody.appendChild(tr);
@@ -465,7 +383,7 @@ function renderActivities() {
   if (editingActId === 'new') {
     const newTr = document.createElement('tr');
     newTr.className = 'edit-row';
-    newTr.innerHTML = `<td colspan="5"></td>`;
+    newTr.innerHTML = `<td colspan="6"></td>`;
     newTr.querySelector('td').appendChild(buildActForm(null));
     tbody.appendChild(newTr);
   }
@@ -590,10 +508,10 @@ function buildActForm(act) {
   const btns = document.createElement('div');
   btns.style.cssText = 'display:flex;gap:8px;margin-top:4px';
   const saveBtn = document.createElement('button');
-  saveBtn.className = 'btn-sm primary';
+  saveBtn.className = 'btn btn-sm btn-primary';
   saveBtn.textContent = isNew ? 'Crear' : 'Guardar';
   const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'btn-sm';
+  cancelBtn.className = 'btn btn-sm btn-ghost';
   cancelBtn.textContent = 'Cancelar';
   btns.appendChild(saveBtn);
   btns.appendChild(cancelBtn);
@@ -648,7 +566,7 @@ document.getElementById('btn-add-act').addEventListener('click', () => {
   editingActId = 'new';
   renderActivities();
   // Scroll to bottom
-  setTimeout(() => document.getElementById('content').scrollTo({ top: 99999, behavior:'smooth' }), 50);
+  setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }), 50);
 });
 
 // ── SIERRAS ─────────────────────────────────────────────────────────
@@ -691,8 +609,8 @@ function renderSierras() {
       <td style="font-size:11px;color:var(--text2)">${fmt(s.ne_lon)}</td>
       <td><span style="color:${s.active?'var(--success)':'var(--text2)'}">${s.active?'✓':'—'}</span></td>
       <td class="row-actions">
-        <button class="btn-sm primary" data-sie-edit="${s.id}">Editar</button>
-        <button class="btn-sm danger" data-sie-del="${s.id}">✕</button>
+        <button class="btn btn-sm" data-sie-edit="${s.id}">Editar</button>
+        <button class="btn btn-sm btn-danger" data-sie-del="${s.id}">✕</button>
       </td>
     `;
 
@@ -772,10 +690,10 @@ function buildSieForm(sie) {
   const btns = document.createElement('div');
   btns.style.cssText = 'display:flex;gap:8px;margin-top:4px';
   const saveBtn = document.createElement('button');
-  saveBtn.className = 'btn-sm primary';
+  saveBtn.className = 'btn btn-sm btn-primary';
   saveBtn.textContent = isNew ? 'Crear' : 'Guardar';
   const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'btn-sm';
+  cancelBtn.className = 'btn btn-sm btn-ghost';
   cancelBtn.textContent = 'Cancelar';
   btns.appendChild(saveBtn);
   btns.appendChild(cancelBtn);
@@ -822,7 +740,7 @@ function buildSieForm(sie) {
 document.getElementById('btn-add-sierra').addEventListener('click', () => {
   editingSieId = 'new';
   renderSierras();
-  setTimeout(() => document.getElementById('content').scrollTo({ top: 99999, behavior:'smooth' }), 50);
+  setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }), 50);
 });
 
 // ── GEO (provincias/ccaa) ────────────────────────────────────────────
@@ -835,7 +753,7 @@ async function loadGeo() {
     const render = (id, items) => {
       const el = document.getElementById(id);
       if (!items.length) { el.innerHTML = `<span style="color:var(--text2);font-size:12px">Sin datos</span>`; return; }
-      el.innerHTML = items.map(v => `<span class="chip">${escHtml(v)}</span>`).join('');
+      el.innerHTML = items.map(v => `<span class="tag">${escHtml(v)}</span>`).join('');
     };
     render('geo-provinces', d.provinces);
     render('geo-ccaa', d.ccaa);
