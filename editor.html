@@ -596,12 +596,6 @@ function showToast(msg, ms=2200) {
   setTimeout(() => t.classList.remove('show'), ms);
 }
 
-// Dispara rebuild del catálogo y señaliza al mapa que actualice
-function triggerCatalogRebuild() {
-  fetch('/api/db/export', { method: 'POST' }).catch(() => {});
-  // Señaliza a otras pestañas (index.html) que el catálogo cambiará
-  setTimeout(() => localStorage.setItem('catalog_ts', Date.now()), 2500);
-}
 
 // ── State ──────────────────────────────────────────────────────────
 let allTracks = [];
@@ -1149,7 +1143,6 @@ function injectEditRow(t) {
       t.zone = zone || null;
       row.querySelector('.ef-file-link').dataset.file = data.file;
       row.querySelector('code').textContent = data.file;
-      triggerCatalogRebuild();
       showToast('✓ Archivo movido');
     } catch (e) {
       status.textContent = '✗ ' + e.message;
@@ -1174,7 +1167,6 @@ function injectEditRow(t) {
       t.tags = body.tags;
       if (d.movedFile) {
         t.file = d.movedFile.to;
-        triggerCatalogRebuild();
       }
 
       editingId = null;
@@ -1353,7 +1345,6 @@ document.getElementById('btn-bulk-apply').addEventListener('click', async () => 
     closeBulkPanel();
     if (data.moved) {
       // File paths changed — reload from server to get accurate state
-      triggerCatalogRebuild();
       await loadTracks();
     } else {
       for (const t of allTracks) {
@@ -1453,7 +1444,7 @@ document.getElementById('da-confirm').addEventListener('click', async () => {
   document.getElementById('da-overlay').classList.remove('open');
   try {
     const resp = await fetch('/api/tracks/delete-all', { method: 'POST' });
-    if (resp.ok) { toast('Todos los tracks eliminados'); triggerCatalogRebuild(); loadTracks(); }
+    if (resp.ok) { toast('Todos los tracks eliminados'); loadTracks(); }
     else { const d = await resp.json().catch(() => ({})); toast(d.error || 'Error al eliminar', true); }
   } catch (e) {
     toast('Error: ' + e.message, true);
@@ -1523,8 +1514,6 @@ document.getElementById('del-confirm').addEventListener('click', async () => {
       applyFilters();
       updateStats();
       showToast(`✓ ${deleted} track${deleted>1?'s':''} borrado${deleted>1?'s':''}`);
-      // Rebuild catalog in background
-      triggerCatalogRebuild();
     }
   } catch(e) {
     showToast('Error: ' + e.message, 4000);
@@ -1694,7 +1683,7 @@ document.getElementById('ibp-calc-btn').addEventListener('click', async () => {
         if (obj.type === 'done') {
           appendLog(obj.code === 0 ? '✓ Completado.' : `✗ Salió con código ${obj.code}`,
             obj.code === 0 ? '' : 'ibp-log-err');
-          if (obj.code === 0) { appendLog('Regenerando catálogo…'); triggerCatalogRebuild(); }
+          if (obj.code === 0) { /* catalog no longer needed */ }
           break;
         }
         const cls = obj.type === 'error' ? 'ibp-log-err' : obj.type === 'warn' ? 'ibp-log-warn' : '';

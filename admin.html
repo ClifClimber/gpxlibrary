@@ -121,7 +121,6 @@
   <div class="seg-tabs" id="admin-tabs" style="margin-bottom:16px">
     <button class="seg-tab active" data-tab="bd">Base de datos</button>
     <button class="seg-tab" data-tab="tracks">Gestión de Tracks</button>
-    <button class="seg-tab" data-tab="catalogo">Mantenimiento catálogo</button>
   </div>
 
   <!-- ── Tab: Base de datos ── -->
@@ -279,29 +278,6 @@
     </div>
   </div>
 
-  <!-- ── Tab: Mantenimiento catálogo ── -->
-  <div class="tab-panel" id="tab-catalogo">
-    <div class="card">
-      <div class="card-head"><h2>Mantenimiento catálogo</h2></div>
-      <div class="card-body">
-        <div class="ops-grid">
-
-          <div class="op-item">
-            <div class="op-head">
-              <h3>Reconstruir catálogo</h3>
-              <div class="op-btns">
-                <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">MAX_POINTS <input type="number" class="db-num" id="inp-maxpts-export" value="300" min="50" max="2000" step="50"></label>
-                <button class="btn btn-primary btn-sm" id="btn-export-catalog">Exportar</button>
-              </div>
-            </div>
-            <p>Regenera <code>catalog-data.js</code> desde la BD usando <code>clean_points</code> cuando estén disponibles y simplificando a MAX_POINTS puntos por track. Necesario para que los cambios sean visibles en el visor — recarga la página tras exportar.</p>
-            <div id="export-size-est" style="font-size:12px;color:var(--accent);font-weight:500"></div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-  </div>
 
 </main>
 
@@ -781,30 +757,9 @@ document.getElementById('btn-organize-files').addEventListener('click', function
     .finally(() => { this.disabled = false; loadStats(); });
 });
 
-document.getElementById('btn-export-catalog').addEventListener('click', function() {
-  const maxPoints = parseInt(document.getElementById('inp-maxpts-export').value) || 300;
-  this.disabled = true;
-  streamScript('/api/db/export', 'Reconstruir catálogo', { maxPoints })
-    .finally(() => { this.disabled = false; });
-});
-
-
 let statsTrackCount = 0;
 
-function updateSizeEstimates() {
-  if (!statsTrackCount) return;
-  [['inp-maxpts-export', 'export-size-est']].forEach(([inpId, estId]) => {
-    const inp = document.getElementById(inpId);
-    const el  = document.getElementById(estId);
-    if (!inp || !el) return;
-    const pts   = parseInt(inp.value) || 300;
-    const bytes = statsTrackCount * (250 + pts * 22);
-    const size  = bytes >= 1048576 ? (bytes/1048576).toFixed(1) + ' MB' : Math.round(bytes/1024) + ' KB';
-    el.textContent = `${statsTrackCount} tracks × ${pts} pts ≈ ${size}`;
-  });
-}
-
-document.getElementById('inp-maxpts-export').addEventListener('input', updateSizeEstimates);
+function updateSizeEstimates() { /* catalog-data.js removed; no size estimate needed */ }
 
 document.querySelectorAll('#admin-tabs .seg-tab').forEach(btn => {
   btn.addEventListener('click', () => {

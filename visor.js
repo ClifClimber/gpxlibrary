@@ -1,10 +1,20 @@
-(function(){
+(async function(){
 'use strict';
 
-if (typeof CATALOG === 'undefined') {
+let CATALOG;
+try {
+  const r = await fetch('/api/catalog');
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  CATALOG = await r.json();
+} catch (err) {
   document.getElementById('tracklist').innerHTML =
-    '<div class="empty-state">⚠ catalog-data.js no encontrado.<p>Ejecuta: node scripts/build-catalog.js</p></div>';
+    `<div class="empty-state">⚠ No se pudo cargar el catálogo.<p>${err.message}</p></div>`;
   return;
+}
+if (!Array.isArray(CATALOG) || CATALOG.length === 0) {
+  document.getElementById('tracklist').innerHTML =
+    '<div class="empty-state">No hay tracks en la base de datos.<p>Importa tracks desde el <a href="/editor">editor</a>.</p></div>';
+  // still continue so the map renders
 }
 
 const $  = id => document.getElementById(id);
@@ -1070,24 +1080,3 @@ if (_openFile) {
 }
 
 })();
-
-// ── Catalog updated notification ─────────────────────────────────────
-window.addEventListener('storage', e => {
-  if (e.key !== 'catalog_ts') return;
-  if (document.getElementById('catalog-reload-banner')) return;
-  const banner = document.createElement('div');
-  banner.id = 'catalog-reload-banner';
-  banner.style.cssText = [
-    'position:fixed','top:64px','left:50%','transform:translateX(-50%)','z-index:9999',
-    'background:#0f172a','color:white','padding:10px 14px 10px 18px',
-    'border-radius:999px','font-size:13px',
-    'box-shadow:0 6px 24px rgba(0,0,0,.3)','display:flex',
-    'align-items:center','gap:10px',
-  ].join(';');
-  banner.innerHTML = `
-    <span>Catálogo actualizado</span>
-    <button onclick="location.reload()" style="background:#38bdf8;color:#0f172a;border:none;border-radius:999px;padding:5px 14px;font-size:12px;cursor:pointer;font-weight:600">Recargar</button>
-    <button onclick="this.closest('#catalog-reload-banner').remove()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:18px;line-height:1;padding:0 4px">×</button>
-  `;
-  document.body.appendChild(banner);
-});
