@@ -250,11 +250,11 @@
             <div class="op-head">
               <h3 title="Consulta Overpass API para mapear qué tipo de camino y superficie recorre cada track segmento a segmento">Enriquecer datos OSM</h3>
               <div class="op-btns">
-                <button class="btn btn-ghost btn-sm" id="btn-enrich-road" title="Obtener tipos de camino OSM de los tracks que aún no los tengan">Enriquecer</button>
-                <button class="btn btn-ghost btn-sm" id="btn-enrich-road-force" title="Enriquecer todos, incluso los que ya tienen datos de tipo de camino">↻ Todos</button>
+                <button class="btn btn-ghost btn-sm" id="btn-enrich-road" title="Solo los tracks que aún no tienen datos de tipo de camino">Solo nuevos</button>
+                <button class="btn btn-ghost btn-sm" id="btn-enrich-road-force" title="Re-consultar todos, incluso los que ya tienen datos">↻ Todos</button>
               </div>
             </div>
-            <p>Consulta OpenStreetMap (Overpass API) para obtener el tipo y superficie de cada segmento del track. <b>Proceso lento</b>: puede tardar varios minutos por track. Los datos se usan en la pestaña "Tipo de camino" del detalle.</p>
+            <p>Consulta OpenStreetMap (Overpass API) para obtener el tipo y superficie de cada segmento del track. <b>Proceso lento</b>: ~1 min/track. Para enriquecer tracks específicos, selecciónalos en el <a href="/editor">editor</a> y usa "Enriquecer OSM" desde la barra de selección.</p>
           </div>
 
           <div class="op-item">
@@ -461,6 +461,14 @@
       </button>
     </div>
     <div class="log-box lm-body" id="log-modal-body"></div>
+    <div id="log-osm-offer" hidden style="margin:0 20px 4px;padding:12px 14px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:13px;font-weight:600;color:var(--ink)">¿Enriquecer tipos de camino OSM?</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Consulta Overpass API por cada track recién importado. Puede tardar <b>varios minutos</b>.</div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="btn-log-enrich-road">Enriquecer ahora</button>
+      <button class="btn btn-outline btn-sm" id="btn-log-enrich-skip">Ahora no</button>
+    </div>
     <div class="modal-foot" style="border-top:none;gap:8px">
       <button class="btn btn-primary" id="log-modal-catalog" hidden>Ver en Catálogo →</button>
       <button class="btn btn-outline" id="log-modal-btn" disabled>Cerrar</button>
@@ -622,13 +630,14 @@ document.getElementById('btn-integrity').addEventListener('click', async () => {
   } finally { btn.disabled = false; btn.textContent = 'Verificar'; }
 });
 
-function streamScript(url, title, postBody) {
+function streamScript(url, title, postBody, onSuccess) {
   const modal    = document.getElementById('log-modal');
   const body     = document.getElementById('log-modal-body');
   const closeBtn = document.getElementById('log-modal-btn');
   document.getElementById('log-modal-title').textContent = title;
   body.innerHTML = '';
   closeBtn.disabled = true;
+  document.getElementById('log-osm-offer').hidden = true;
   modal.hidden = false;
 
   function addLine(text, cls) {
@@ -660,7 +669,7 @@ function streamScript(url, title, postBody) {
             if (ev.type === 'log' || ev.type === 'progress') addLine(ev.text);
             if (ev.type === 'error') addLine(ev.text, 'err');
             if (ev.type === 'warn')  addLine(ev.text, 'warn');
-            if (ev.type === 'done')  { addLine(ev.code === 0 ? '✓ Completado' : `✗ Código ${ev.code}`, ev.code === 0 ? 'ok' : 'err'); closeBtn.disabled = false; }
+            if (ev.type === 'done')  { addLine(ev.code === 0 ? '✓ Completado' : `✗ Código ${ev.code}`, ev.code === 0 ? 'ok' : 'err'); closeBtn.disabled = false; if (ev.code === 0 && onSuccess) onSuccess(); }
           } catch {}
         }
         return pump();
@@ -673,6 +682,7 @@ function streamScript(url, title, postBody) {
 function closeLogModal() {
   document.getElementById('log-modal').hidden = true;
   document.getElementById('log-modal-catalog').hidden = true;
+  document.getElementById('log-osm-offer').hidden = true;
 }
 document.getElementById('log-modal-close').addEventListener('click', closeLogModal);
 document.getElementById('log-modal-btn').addEventListener('click', closeLogModal);
@@ -825,13 +835,14 @@ document.getElementById('btn-import-start').addEventListener('click', () => {
     if (!confirm(`Se importarán ${selected.length} archivo(s) desde _TEMP_ y se eliminarán de esa carpeta tras importar. ¿Continuar?`)) return;
   }
   document.getElementById('import-overlay').classList.remove('open');
-  streamScript('/api/db/import-temp', 'Importar Tracks', { files: selected, force, src, keep })
-    .finally(() => {
-      loadStats();
-      const catBtn = document.getElementById('log-modal-catalog');
-      catBtn.hidden = false;
-      document.getElementById('log-modal-btn').textContent = 'Cerrar';
-    });
+  streamScript('/api/db/import-temp', 'Importar Tracks', { files: selected, force, src, keep }, () => {
+    document.getElementById('log-osm-offer').hidden = false;
+  }).finally(() => {
+    loadStats();
+    const catBtn = document.getElementById('log-modal-catalog');
+    catBtn.hidden = false;
+    document.getElementById('log-modal-btn').textContent = 'Cerrar';
+  });
 });
 
 document.getElementById('btn-clean').addEventListener('click', function() {
@@ -857,17 +868,24 @@ document.getElementById('btn-enrich-force').addEventListener('click', function()
 });
 
 document.getElementById('btn-enrich-road').addEventListener('click', function() {
-  if (!confirm('El enriquecimiento de tipos de camino consulta Overpass API por cada track y puede tardar varios minutos. ¿Continuar?')) return;
   this.disabled = true;
-  streamScript('/api/db/enrich-road-types', 'Enriquecer tipos de camino OSM')
+  streamScript('/api/db/enrich-road-types', 'Enriquecer tipos de camino OSM — pendientes')
     .finally(() => { this.disabled = false; });
 });
 
 document.getElementById('btn-enrich-road-force').addEventListener('click', function() {
-  if (!confirm('El enriquecimiento de tipos de camino consulta Overpass API por cada track y puede tardar MUCHO tiempo. ¿Enriquecer TODOS los tracks, incluso los que ya tienen datos?')) return;
+  if (!confirm('Se reconsultará Overpass API para TODOS los tracks, incluso los que ya tienen datos. ¿Continuar?')) return;
   this.disabled = true;
-  streamScript('/api/db/enrich-road-types?force=1', 'Enriquecer tipos de camino OSM (todos)')
+  streamScript('/api/db/enrich-road-types?force=1', 'Enriquecer tipos de camino OSM — todos')
     .finally(() => { this.disabled = false; });
+});
+
+document.getElementById('btn-log-enrich-road').addEventListener('click', function() {
+  document.getElementById('log-osm-offer').hidden = true;
+  streamScript('/api/db/enrich-road-types', 'Enriquecer tipos de camino OSM — pendientes');
+});
+document.getElementById('btn-log-enrich-skip').addEventListener('click', () => {
+  document.getElementById('log-osm-offer').hidden = true;
 });
 
 document.getElementById('btn-organize-files').addEventListener('click', function() {

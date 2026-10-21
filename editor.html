@@ -354,6 +354,10 @@
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
     Borrar seleccionados
   </button>
+  <button id="btn-sel-enrich-road">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+    Enriquecer OSM
+  </button>
   <button id="btn-select-all-filter">Seleccionar todos los filtrados</button>
   <button id="btn-deselect">Deseleccionar</button>
 </div>
@@ -532,9 +536,12 @@
 <!-- Enrich overlay -->
 <div id="enrich-overlay">
   <div id="enrich-modal">
-    <h3>Enriquecer datos geográficos</h3>
-    <p style="font-size:12px;color:var(--muted)">
+    <h3 id="enrich-modal-title">Enriquecer datos geográficos</h3>
+    <p id="enrich-desc-geo" style="font-size:12px;color:var(--muted)">
       Llama a Nominatim (OpenStreetMap) para obtener provincia y CCAA. Infiere actividad y sierra localmente (sin red). Velocidad: ~1 track/segundo para los que necesiten Nominatim.
+    </p>
+    <p id="enrich-desc-road" hidden style="font-size:12px;color:var(--muted)">
+      Consulta Overpass API para mapear el tipo de camino (highway) y superficie de cada segmento. <b>Proceso lento: ~1 min/track</b>. Los datos aparecen en la pestaña "Tipos de camino" del detalle.
     </p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px;background:var(--filter-bg);border:1px solid var(--border);border-radius:6px;padding:9px 12px;align-items:center;">
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;">
@@ -1362,7 +1369,15 @@ document.getElementById('btn-bulk-apply').addEventListener('click', async () => 
 });
 
 // ── Enrich overlay ─────────────────────────────────────────────────
-document.getElementById('btn-open-enrich').addEventListener('click', () => {
+let enrichMode = 'geo'; // 'geo' | 'road'
+
+function openEnrich(mode) {
+  enrichMode = mode;
+  const isRoad = mode === 'road';
+  document.getElementById('enrich-modal-title').textContent = isRoad
+    ? 'Enriquecer tipos de camino OSM' : 'Enriquecer datos geográficos';
+  document.getElementById('enrich-desc-geo').hidden  =  isRoad;
+  document.getElementById('enrich-desc-road').hidden = !isRoad;
   const n = selected.size;
   const selRadio = document.getElementById('enrich-sel-radio');
   selRadio.disabled = n === 0;
@@ -1370,18 +1385,25 @@ document.getElementById('btn-open-enrich').addEventListener('click', () => {
   if (n === 0 && document.querySelector('input[name="enrich-scope"]:checked')?.value === 'selected') {
     document.querySelector('input[name="enrich-scope"][value="pending"]').checked = true;
   }
+  if (isRoad && n > 0) {
+    document.querySelector('input[name="enrich-scope"][value="selected"]').checked = true;
+  }
   document.getElementById('enrich-overlay').classList.add('open');
   document.getElementById('enrich-log').innerHTML = '<span style="color:#475569">Elige el alcance y pulsa "Iniciar"...</span>';
-});
+}
+
+document.getElementById('btn-open-enrich').addEventListener('click', () => openEnrich('geo'));
 document.getElementById('btn-enrich-close').addEventListener('click', () => {
   document.getElementById('enrich-overlay').classList.remove('open');
   loadTracks();
 });
+document.getElementById('btn-sel-enrich-road').addEventListener('click', () => openEnrich('road'));
 
 async function runEnrich(scope) {
   const log = document.getElementById('enrich-log');
   log.innerHTML = '';
-  let url = '/api/db/enrich';
+  const base = enrichMode === 'road' ? '/api/db/enrich-road-types' : '/api/db/enrich';
+  let url = base;
   if (scope === 'all') url += '?force=1';
   else if (scope === 'selected') url += '?ids=' + [...selected].join(',');
   document.getElementById('btn-enrich-start').disabled = true;
