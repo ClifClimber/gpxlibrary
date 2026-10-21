@@ -4,7 +4,7 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { queryOverpass, fetchTrackPts, applyWaysToTrack, sleep } = require('./osm-shared');
+const { queryOverpass, filterWaysToBbox, fetchTrackPts, applyWaysToTrack, sleep } = require('./osm-shared');
 
 const DELAY_MS     = 2500;
 const MAX_BBOX_DEG = 3.5; // más tolerante para grupos
@@ -40,7 +40,7 @@ async function perTrackFallback(groupTracks, db) {
       console.log(`    OSM: ${ways.length} caminos`);
       const pts = fetchTrackPts(t, db, MAX_PTS);
       if (pts.length < 2) { console.log('    ⚠ Sin puntos'); fail++; continue; }
-      applyWaysToTrack(t, pts, ways, db);
+      applyWaysToTrack(t, pts, filterWaysToBbox(ways, t), db);
       ok++;
     } catch (err) {
       console.log(`    ✗ ${err.message}`);
@@ -124,13 +124,13 @@ async function enrichTracks(tracks, db, opts = {}) {
       }
     }
 
-    // Apply ways to each track in the group
+    // Apply ways to each track in the group (filtered to track bbox for performance)
     for (let i = 0; i < groupTracks.length; i++) {
       const t = groupTracks[i];
       console.log(`  [${i+1}/${groupTracks.length}] ${t.name}`);
       const pts = fetchTrackPts(t, db, MAX_PTS);
       if (pts.length < 2) { console.log('    ⚠ Sin puntos'); totalFail++; continue; }
-      applyWaysToTrack(t, pts, ways, db);
+      applyWaysToTrack(t, pts, filterWaysToBbox(ways, t), db);
       totalOk++;
     }
 

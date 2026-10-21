@@ -119,6 +119,19 @@ async function queryOverpass(s, w, n, e) {
   }
 }
 
+// Filter a ways array to only those whose geometry intersects a track's bbox.
+// Reduces the search space from all-sierra to per-track before matching.
+function filterWaysToBbox(ways, track, buf = 0.015) {
+  if (!track.sw_lat) return ways;
+  const s = track.sw_lat - buf, w = track.sw_lon - buf;
+  const n = track.ne_lat + buf, e = track.ne_lon + buf;
+  return ways.filter(way => {
+    const geom = way.geometry;
+    if (!geom || !geom.length) return false;
+    return geom.some(p => p.lat >= s && p.lat <= n && p.lon >= w && p.lon <= e);
+  });
+}
+
 function fetchTrackPts(track, db, maxPts = 1500) {
   const table = track.cleaned ? 'clean_points' : 'raw_points';
   let pts = db.prepare(`SELECT lat, lon FROM ${table} WHERE track_id=? ORDER BY seq`).all(track.id);
@@ -172,4 +185,4 @@ function applyWaysToTrack(track, pts, ways, db) {
     .run(JSON.stringify(hwDist), JSON.stringify(sfDist), roadSegs.length ? JSON.stringify(roadSegs) : null, track.id);
 }
 
-module.exports = { HW, SF, hav, ptSegDist, nearestWay, sleep, overpassRequest, queryOverpass, fetchTrackPts, applyWaysToTrack };
+module.exports = { HW, SF, hav, ptSegDist, nearestWay, sleep, overpassRequest, queryOverpass, filterWaysToBbox, fetchTrackPts, applyWaysToTrack };

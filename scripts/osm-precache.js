@@ -11,7 +11,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { openDb } = require('./db');
-const { queryOverpass, fetchTrackPts, applyWaysToTrack, sleep } = require('./osm-shared');
+const { queryOverpass, filterWaysToBbox, fetchTrackPts, applyWaysToTrack, sleep } = require('./osm-shared');
 const { CACHE_DIR, slugify } = require('./osm-strategy-batch');
 
 const DELAY_MS     = 2500;
@@ -88,7 +88,7 @@ async function main() {
       for (const t of tracks) {
         const pts = fetchTrackPts(t, db);
         if (pts.length < 2) continue;
-        applyWaysToTrack(t, pts, ways, db);
+        applyWaysToTrack(t, pts, filterWaysToBbox(ways, t), db);
         groupOk++;
       }
       console.log(`  ✓ ${groupOk} tracks enriquecidos`);
@@ -150,7 +150,7 @@ async function main() {
       for (const t of tracks) {
         const pts = fetchTrackPts(t, db);
         if (pts.length < 2) continue;
-        applyWaysToTrack(t, pts, ways, db);
+        applyWaysToTrack(t, pts, filterWaysToBbox(ways, t), db);
         groupOk++;
       }
       console.log(`  ✓ ${groupOk} tracks enriquecidos`);
