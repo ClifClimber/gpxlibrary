@@ -1342,6 +1342,15 @@ const server = http.createServer(async (req, res) => {
     return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-download.js'), []);
   }
 
+  if (pathname === '/api/db/osm-precache' && method === 'GET') {
+    const force  = searchParams.get('force') === '1';
+    const sierra = searchParams.get('sierra');
+    const args   = [];
+    if (force) args.push('--force');
+    if (sierra) { args.push('--sierra'); args.push(sierra); }
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-precache.js'), args);
+  }
+
   // ── OSM settings ─────────────────────────────────────────────────
   const OSM_SETTINGS = path.join(ROOT, 'osm-settings.json');
   function readOsmSettings() {

@@ -334,12 +334,15 @@
                   TTL <input type="number" class="db-num" id="osm-cache-ttl" value="30" min="1" max="365"> días
                 </label>
                 <button class="btn btn-ghost btn-sm" id="btn-osm-cache-refresh" title="Actualizar lista">↻</button>
+                <button class="btn btn-ghost btn-sm" id="btn-osm-precache" title="Descargar caché para todas las sierras ahora">⬇ Pre-cachear todas</button>
+                <button class="btn btn-ghost btn-sm" id="btn-osm-precache-force" title="Re-descargar aunque la caché sea reciente">↻ Forzar todas</button>
                 <button class="btn btn-danger btn-sm" id="btn-osm-cache-clear">Limpiar caché</button>
               </div>
             </div>
             <div id="osm-cache-table" style="margin-top:6px">
               <div style="color:var(--muted);font-size:13px">—</div>
             </div>
+            <p style="margin-top:8px">Pre-cachear descarga los datos Overpass para cada sierra de tu BD sin enriquecer los tracks. Útil para pre-calentar la caché por primera vez o fuera de horas de uso. <b>Proceso lento</b>: ~1 consulta/sierra con pausa de 2.5 s entre ellas.</p>
           </div>
 
           <div class="op-item" id="osm-local-panel" hidden>
@@ -1092,6 +1095,19 @@ document.getElementById('btn-osm-download').addEventListener('click', function()
   this.disabled = true;
   streamScript('/api/db/osm-download', 'Descargar datos OSM España')
     .finally(() => { this.disabled = false; loadOsmLocalStatus(); });
+});
+
+document.getElementById('btn-osm-precache').addEventListener('click', function() {
+  this.disabled = true;
+  streamScript('/api/db/osm-precache', 'Pre-cachear sierras OSM')
+    .finally(() => { this.disabled = false; loadOsmCache(); });
+});
+
+document.getElementById('btn-osm-precache-force').addEventListener('click', function() {
+  if (!confirm('¿Re-descargar Overpass para TODAS las sierras, incluso las que ya tienen caché reciente?')) return;
+  this.disabled = true;
+  streamScript('/api/db/osm-precache?force=1', 'Pre-cachear sierras OSM (forzado)')
+    .finally(() => { this.disabled = false; loadOsmCache(); });
 });
 
 loadOsmStrategy();
