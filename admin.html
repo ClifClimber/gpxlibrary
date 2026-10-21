@@ -880,9 +880,17 @@ document.getElementById('btn-enrich-road-force').addEventListener('click', funct
     .finally(() => { this.disabled = false; });
 });
 
-document.getElementById('btn-log-enrich-road').addEventListener('click', function() {
+document.getElementById('btn-log-enrich-road').addEventListener('click', async function() {
   document.getElementById('log-osm-offer').hidden = true;
-  streamScript('/api/db/enrich-road-types', 'Enriquecer tipos de camino OSM — pendientes');
+  try {
+    const ids = await fetch('/api/tracks/recent-ids').then(r => r.json());
+    const url = ids.length > 0
+      ? `/api/db/enrich-road-types?ids=${ids.join(',')}`
+      : '/api/db/enrich-road-types';
+    streamScript(url, `Enriquecer tipos de camino OSM — ${ids.length} tracks importados`);
+  } catch {
+    streamScript('/api/db/enrich-road-types', 'Enriquecer tipos de camino OSM — pendientes');
+  }
 });
 document.getElementById('btn-log-enrich-skip').addEventListener('click', () => {
   document.getElementById('log-osm-offer').hidden = true;

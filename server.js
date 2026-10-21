@@ -1267,6 +1267,16 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/catalog' && method === 'GET')
     return apiCatalog(res);
 
+  if (pathname === '/api/tracks/recent-ids' && method === 'GET') {
+    try {
+      const db = openDb();
+      const ids = db.prepare('SELECT id FROM tracks WHERE is_recent_import=1').all().map(r => r.id);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(ids));
+    } catch (e) { res.writeHead(500); res.end('[]'); }
+    return;
+  }
+
   if (pathname === '/api/tracks' && method === 'GET')
     return apiGetTracks(res);
 
