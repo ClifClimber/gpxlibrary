@@ -91,6 +91,7 @@ function _migrate(db) {
     ['circular',          'INTEGER DEFAULT 0'],
     ['road_type_seq',     'TEXT'],
     ['waypoints_json',    'TEXT'],
+    ['catalog_pts',       'TEXT'],
   ];
   for (const [col, type] of newCols) {
     try { db.exec(`ALTER TABLE tracks ADD COLUMN ${col} ${type}`); } catch {}

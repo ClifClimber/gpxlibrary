@@ -308,7 +308,7 @@
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.3.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.4.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">21 octubre 2026</div>
         </div>
       </div>
@@ -327,8 +327,21 @@
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v1.3.0</span>
+            <span class="cl-version">v1.4.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">21 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li>Columna <code>catalog_pts</code> en BD: polilíneas pre-simplificadas (300 pts) almacenadas por track — <code>buildCatalog()</code> pasa de 372 queries a 1 sola consulta</li>
+            <li>Tiempo de catálogo cacheado: ~8 ms (warm); los imports y limpiezas actualizan <code>catalog_pts</code> automáticamente</li>
+            <li>Endpoint <code>GET /api/tracks/:id/gpx</code> — descarga el fichero GPX original desde disco; con <code>?pts=N</code> descarga versión simplificada con N puntos</li>
+            <li><code>scripts/backfill-catalog-pts.js</code> — rellena tracks importados antes de la v1.4</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v1.3.0</span>
             <span class="cl-date">21 oct 2026</span>
           </div>
           <ul class="cl-list">

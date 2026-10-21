@@ -429,6 +429,33 @@ function apiExportGpxSingle(res, id, searchParams) {
   } catch(e) { res.writeHead(500); res.end(e.message); }
 }
 
+// GET /api/tracks/:id/gpx           → original GPX file from disk
+// GET /api/tracks/:id/gpx?pts=300   → generated GPX with N simplified points
+function apiDownloadGpx(res, id, searchParams) {
+  try {
+    const db = openDb();
+    const track = db.prepare('SELECT id,name,file,date,cleaned FROM tracks WHERE id=?').get(id);
+    if (!track) { res.writeHead(404); res.end('Not found'); return; }
+
+    const ptsParam = searchParams.get('pts');
+    if (!ptsParam || ptsParam === 'all') {
+      const filePath = path.join(ROOT, track.file);
+      if (!fs.existsSync(filePath)) { res.writeHead(404); res.end('GPX file not found on disk'); return; }
+      const safe = path.basename(track.file).replace(/[^\w\s\-áéíóúñÁÉÍÓÚÑ.]/g, '_');
+      res.writeHead(200, {
+        'Content-Type': 'application/gpx+xml; charset=utf-8',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(safe)}`,
+      });
+      fs.createReadStream(filePath).pipe(res);
+    } else {
+      const maxPts = Math.max(2, parseInt(ptsParam) || 300);
+      const data = getTracksForExport(db, [id], 'simplified', maxPts);
+      if (!data.length) { res.writeHead(404); res.end('Not found'); return; }
+      exportGpxResponse(res, data, data[0].name + '.gpx');
+    }
+  } catch(e) { res.writeHead(500); res.end(e.message); }
+}
+
 // ── API: list _TEMP_ files ────────────────────────────────────────
 function apiTempFiles(res, srcDir) {
   try {
@@ -468,24 +495,44 @@ function simplifyCatalog(pts, maxN) {
   return out;
 }
 
+function computeCatalogPts(pts) {
+  if (!pts || pts.length < 2) return null;
+  const disp = simplifyCatalog(pts, MAX_CATALOG_PTS);
+  return JSON.stringify(disp.map(p => [
+    Math.round(p.lat * 100000) / 100000,
+    Math.round(p.lon * 100000) / 100000,
+    p.ele != null ? Math.round(p.ele) : null,
+  ]));
+}
+
 function buildCatalog() {
   const db = openDb();
   const tracks = db.prepare(
     'SELECT id,name,file,zone,date,cleaned,color,activity,sierra,province,ccaa,tags,' +
     'ibp_bicycle,ibp_hiking,ibp_running,' +
     'distance,elevation_gain,elevation_loss,min_elevation,max_elevation,' +
-    'sw_lat,sw_lon,ne_lat,ne_lon,center_lat,center_lon ' +
+    'sw_lat,sw_lon,ne_lat,ne_lon,center_lat,center_lon,catalog_pts ' +
     'FROM tracks ORDER BY date DESC,name ASC'
   ).all();
   const fetchRaw   = db.prepare('SELECT lat,lon,ele FROM raw_points   WHERE track_id=? ORDER BY seq');
   const fetchClean = db.prepare('SELECT lat,lon,ele FROM clean_points WHERE track_id=? ORDER BY seq');
   const catalog = [];
   for(const t of tracks){
-    // Skip tracks whose stats aren't usable
     if(t.sw_lat==null || t.ne_lat==null) continue;
-    const pts = t.cleaned ? fetchClean.all(t.id) : fetchRaw.all(t.id);
-    if(pts.length<2) continue;
-    const disp = simplifyCatalog(pts, MAX_CATALOG_PTS);
+    let points;
+    if (t.catalog_pts) {
+      try { points = JSON.parse(t.catalog_pts); } catch { continue; }
+    } else {
+      const pts = t.cleaned ? fetchClean.all(t.id) : fetchRaw.all(t.id);
+      if(pts.length<2) continue;
+      const disp = simplifyCatalog(pts, MAX_CATALOG_PTS);
+      points = disp.map(p=>[
+        Math.round(p.lat*100000)/100000,
+        Math.round(p.lon*100000)/100000,
+        p.ele!=null?Math.round(p.ele):null,
+      ]);
+    }
+    if(!Array.isArray(points) || points.length < 2) continue;
     catalog.push({
       id:            t.id,
       name:          t.name,
@@ -497,7 +544,6 @@ function buildCatalog() {
       province:      t.province||null,
       ccaa:          t.ccaa||null,
       tags:          t.tags ? JSON.parse(t.tags) : [],
-      // Stats come from the tracks table — no haversine recomputation
       distance:      t.distance,
       elevationGain: t.elevation_gain,
       elevationLoss: t.elevation_loss,
@@ -509,11 +555,7 @@ function buildCatalog() {
       ibp_bicycle:   t.ibp_bicycle  != null ? Math.round(t.ibp_bicycle)  : null,
       ibp_hiking:    t.ibp_hiking   != null ? Math.round(t.ibp_hiking)   : null,
       ibp_running:   t.ibp_running  != null ? Math.round(t.ibp_running)  : null,
-      points:        disp.map(p=>[
-        Math.round(p.lat*100000)/100000,
-        Math.round(p.lon*100000)/100000,
-        p.ele!=null?Math.round(p.ele):null,
-      ]),
+      points,
     });
   }
   return JSON.stringify(catalog);
@@ -1204,6 +1246,10 @@ const server = http.createServer(async (req, res) => {
   const exportMatch = pathname.match(/^\/api\/tracks\/(\d+)\/export-gpx$/);
   if (exportMatch && method === 'GET')
     return apiExportGpxSingle(res, parseInt(exportMatch[1]), searchParams);
+
+  const gpxMatch = pathname.match(/^\/api\/tracks\/(\d+)\/gpx$/);
+  if (gpxMatch && method === 'GET')
+    return apiDownloadGpx(res, parseInt(gpxMatch[1]), searchParams);
 
   // ── Track CRUD ────────────────────────────────────────────────────
   if (pathname === '/api/tags' && method === 'GET') {

@@ -159,6 +159,20 @@ function collectGpx(dir) {
   return out;
 }
 
+// ── catalog_pts ────────────────────────────────────────────────────
+const MAX_CATALOG_PTS = 300;
+function catalogPts(pts) {
+  if (!pts || pts.length < 2) return null;
+  const n = Math.min(pts.length, MAX_CATALOG_PTS);
+  const step = (pts.length - 1) / (n - 1);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[Math.round(i * step)];
+    out.push([Math.round(p.lat*100000)/100000, Math.round(p.lon*100000)/100000, p.ele!=null?Math.round(p.ele):null]);
+  }
+  return JSON.stringify(out);
+}
+
 // ── Main ───────────────────────────────────────────────────────────
 const db = openDb();
 
@@ -212,6 +226,8 @@ function importTrack(track) {
       db.prepare('UPDATE tracks SET waypoints_json=? WHERE id=?')
         .run(JSON.stringify(track.waypoints), row.id);
     }
+    const cp = catalogPts(track.points);
+    if (cp) db.prepare('UPDATE tracks SET catalog_pts=? WHERE id=?').run(cp, row.id);
   });
 }
 

@@ -19,6 +19,20 @@
 
 const { openDb, withTransaction } = require('./db');
 
+// ── catalog_pts ────────────────────────────────────────────────────
+const MAX_CATALOG_PTS = 300;
+function catalogPts(pts) {
+  if (!pts || pts.length < 2) return null;
+  const n = Math.min(pts.length, MAX_CATALOG_PTS);
+  const step = (pts.length - 1) / (n - 1);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[Math.round(i * step)];
+    out.push([Math.round(p.lat*100000)/100000, Math.round(p.lon*100000)/100000, p.ele!=null?Math.round(p.ele):null]);
+  }
+  return JSON.stringify(out);
+}
+
 // ── Ayuda ──────────────────────────────────────────────────────────
 if (process.argv.includes('--help')) {
   console.log(`
@@ -253,6 +267,8 @@ for(const track of tracks) {
         insClean.run(track.id,i,p.lat,p.lon,p.ele??null);
       }
       updCleaned.run(cleaned.length, track.id);
+      const cp = catalogPts(cleaned);
+      if (cp) db.prepare('UPDATE tracks SET catalog_pts=? WHERE id=?').run(cp, track.id);
     });
   }
 }
