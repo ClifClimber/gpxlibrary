@@ -1343,11 +1343,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === '/api/db/osm-precache' && (method === 'GET' || method === 'POST')) {
-    const force  = searchParams.get('force') === '1';
-    const sierra = searchParams.get('sierra');
-    const args   = [];
-    if (force) args.push('--force');
-    if (sierra) { args.push('--sierra'); args.push(sierra); }
+    const force     = searchParams.get('force') === '1';
+    const cacheOnly = searchParams.get('cache-only') === '1';
+    const sierra    = searchParams.get('sierra');
+    const args      = [];
+    if (force)     args.push('--force');
+    if (cacheOnly) args.push('--cache-only');
+    if (sierra)    { args.push('--sierra'); args.push(sierra); }
     return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-precache.js'), args);
   }
 

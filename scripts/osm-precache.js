@@ -1,27 +1,30 @@
 #!/usr/bin/env node
 'use strict';
-// Pre-calienta la caché batch-sierra consultando Overpass para cada grupo
-// de tracks sin necesidad de ejecutar el enriquecimiento completo.
-// Uso: node scripts/osm-precache.js [--force] [--sierra "Sierra de Guadarrama"]
+// Descarga datos Overpass por sierra y, por defecto, aplica el enriquecimiento
+// a todos los tracks de cada zona en el mismo paso.
+// Uso: node scripts/osm-precache.js [--force] [--cache-only] [--sierra "Sierra de Guadarrama"]
+//   --force       : re-descarga aunque la caché sea reciente
+//   --cache-only  : solo guarda la caché, no modifica los tracks
+//   --sierra X    : procesa solo ese grupo
 
 const fs   = require('fs');
 const path = require('path');
 const { openDb } = require('./db');
-const { queryOverpass, sleep } = require('./osm-shared');
+const { queryOverpass, fetchTrackPts, applyWaysToTrack, sleep } = require('./osm-shared');
 const { CACHE_DIR, slugify } = require('./osm-strategy-batch');
 
 const DELAY_MS     = 2500;
 const MAX_BBOX_DEG = 3.5;
 
 async function main() {
-  const args       = process.argv.slice(2);
-  const force      = args.includes('--force');
-  const sierraIdx  = args.indexOf('--sierra');
-  const sierraArg  = sierraIdx !== -1 ? args[sierraIdx + 1] : null;
+  const args      = process.argv.slice(2);
+  const force     = args.includes('--force');
+  const cacheOnly = args.includes('--cache-only');
+  const sierraIdx = args.indexOf('--sierra');
+  const sierraArg = sierraIdx !== -1 ? args[sierraIdx + 1] : null;
 
   const db = openDb();
 
-  // Load settings for TTL
   let cacheTtlMs = 30 * 86400 * 1000;
   try {
     const sf = path.join(__dirname, '..', 'osm-settings.json');
@@ -31,7 +34,7 @@ async function main() {
     }
   } catch {}
 
-  // Aggregate bbox per group_key (sierra → province → 'sin-zona')
+  // Aggregate bbox + track ids per group (sierra → province → 'sin-zona')
   const rows = db.prepare(`
     SELECT
       COALESCE(sierra, province, 'sin-zona') AS group_key,
@@ -48,54 +51,84 @@ async function main() {
     ? rows.filter(r => r.group_key.toLowerCase() === sierraArg.toLowerCase())
     : rows;
 
-  console.log(`\nPre-calentando caché OSM para ${groups.length} grupos…`);
+  const mode = cacheOnly ? 'solo caché' : 'caché + enriquecimiento';
+  console.log(`\nDescargando OSM para ${groups.length} grupos (${mode})…`);
   fs.mkdirSync(CACHE_DIR, { recursive: true });
 
-  let cached = 0, queried = 0, skipped = 0, failed = 0;
+  let enriched = 0, cachedGroups = 0, skipped = 0, failed = 0;
 
   for (let i = 0; i < groups.length; i++) {
     const g    = groups[i];
     const file = path.join(CACHE_DIR, slugify(g.group_key) + '.json');
 
-    // Skip if cache is fresh and --force not set
+    // Determine whether we need a fresh Overpass query
+    let ways = null;
+    let fromCache = false;
+
     if (!force && fs.existsSync(file)) {
       try {
         const d = JSON.parse(fs.readFileSync(file, 'utf8'));
         if (d.ts && (Date.now() - d.ts) < cacheTtlMs) {
+          ways = d.ways;
+          fromCache = true;
           const ageH = Math.round((Date.now() - d.ts) / 3600000);
-          console.log(`[${i+1}/${groups.length}] ${g.group_key} — caché vigente (${ageH}h), saltando`);
-          cached++;
-          continue;
+          console.log(`[${i+1}/${groups.length}] ${g.group_key} (${g.track_count} tracks) — caché vigente (${ageH}h)`);
+          cachedGroups++;
         }
       } catch {}
     }
 
-    const latSpan = g.n - g.s;
-    const lonSpan = g.e - g.w;
-    if (latSpan > MAX_BBOX_DEG || lonSpan > MAX_BBOX_DEG) {
-      console.log(`[${i+1}/${groups.length}] ${g.group_key} — bbox demasiado grande (${latSpan.toFixed(2)}°×${lonSpan.toFixed(2)}°), saltando`);
-      skipped++;
-      continue;
+    if (!ways) {
+      const latSpan = g.n - g.s;
+      const lonSpan = g.e - g.w;
+      if (latSpan > MAX_BBOX_DEG || lonSpan > MAX_BBOX_DEG) {
+        console.log(`[${i+1}/${groups.length}] ${g.group_key} — bbox demasiado grande (${latSpan.toFixed(2)}°×${lonSpan.toFixed(2)}°), saltando`);
+        skipped++;
+        continue;
+      }
+
+      const buf = 0.008;
+      console.log(`[${i+1}/${groups.length}] ${g.group_key} (${g.track_count} tracks) — consultando Overpass…`);
+      try {
+        const osmData = await queryOverpass(g.s - buf, g.w - buf, g.n + buf, g.e + buf);
+        ways = (osmData.elements || []).filter(el => el.type === 'way' && el.tags?.highway);
+        fs.writeFileSync(file, JSON.stringify({ ts: Date.now(), ways }));
+        console.log(`  ${ways.length} caminos guardados en caché`);
+      } catch (err) {
+        console.log(`  ✗ Overpass: ${err.message}`);
+        failed++;
+        if (i < groups.length - 1) await sleep(DELAY_MS);
+        continue;
+      }
     }
 
-    const buf = 0.008;
-    console.log(`[${i+1}/${groups.length}] ${g.group_key} (${g.track_count} tracks) — consultando Overpass…`);
+    // Apply to tracks unless --cache-only
+    if (!cacheOnly) {
+      const tracks = db.prepare(`
+        SELECT id, name, cleaned, sw_lat, sw_lon, ne_lat, ne_lon
+        FROM tracks
+        WHERE COALESCE(sierra, province, 'sin-zona') = ? AND sw_lat IS NOT NULL
+      `).all(g.group_key);
 
-    try {
-      const osmData = await queryOverpass(g.s - buf, g.w - buf, g.n + buf, g.e + buf);
-      const ways = (osmData.elements || []).filter(el => el.type === 'way' && el.tags?.highway);
-      fs.writeFileSync(file, JSON.stringify({ ts: Date.now(), ways }));
-      console.log(`  ✓ ${ways.length} caminos guardados`);
-      queried++;
-    } catch (err) {
-      console.log(`  ✗ Overpass: ${err.message}`);
-      failed++;
+      let groupOk = 0;
+      for (const t of tracks) {
+        const pts = fetchTrackPts(t, db);
+        if (pts.length < 2) continue;
+        applyWaysToTrack(t, pts, ways, db);
+        groupOk++;
+      }
+      console.log(`  ✓ ${groupOk} tracks enriquecidos`);
+      enriched += groupOk;
     }
 
-    if (i < groups.length - 1) await sleep(DELAY_MS);
+    if (!fromCache && i < groups.length - 1) await sleep(DELAY_MS);
   }
 
-  console.log(`\n✓ Completado: ${queried} consultados, ${cached} ya en caché, ${skipped} saltados, ${failed} fallidos\n`);
+  if (cacheOnly) {
+    console.log(`\n✓ Caché descargada: ${groups.length - skipped - failed} zonas, ${skipped} saltadas, ${failed} fallidas\n`);
+  } else {
+    console.log(`\n✓ Completado: ${enriched} tracks enriquecidos, ${cachedGroups} zonas ya en caché, ${skipped} saltadas, ${failed} fallidas\n`);
+  }
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
