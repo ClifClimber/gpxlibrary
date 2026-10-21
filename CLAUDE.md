@@ -5,71 +5,99 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Parse all GPX files and regenerate catalog-data.js
-node scripts/build-catalog.js
+# Import all GPX files from TracksGps/ into the DB (skips existing unless --force)
+node scripts/import-gpx.js [--force]
 
-# Serve and open the viewer at http://localhost:8080
+# Import new files from TracksGps/_TEMP_/ (auto-classifies, geocodes, moves files)
+node scripts/import-from-temp.js [--force]
+
+# Clean/smooth raw GPS points
+node scripts/clean-tracks.js [--ids 1,2,3] [--all]
+
+# Enrich tracks with OSM road/surface data
+node scripts/enrich-road-types.js [--ids 1,2,3] [--all] [--force]
+
+# Start server at http://localhost:8080
 npm start
 
-# Build catalog + start server in one step
+# Start server + open browser
 npm run dev
 ```
 
-`catalog-data.js` is auto-generated — never edit it by hand. Always re-run the build script after changing `scripts/build-catalog.js` or adding/removing GPX files.
-
-The viewer works only from a local HTTP server, not `file://`, because it loads `catalog-data.js` via `<script src>`.
+The viewer works only via HTTP server, not `file://`, because it uses fetch/SSE APIs.
 
 ## Architecture
 
-This is a static two-file project with a separate build step:
+Node.js HTTP server (`server.js`) with SQLite (`data/tracks.db`, auto-created). No npm runtime dependencies — uses Node.js built-ins only (`node:sqlite` requires Node v22+).
 
-### Build step — `scripts/build-catalog.js` (Node.js, no npm deps)
-Recursively walks `TracksGps/`, parses every `.gpx` file with `indexOf`-based XML parsing (no library), and writes `catalog-data.js` which exposes a global `const CATALOG = [...]`.
+### DB — `scripts/db.js`
+Singleton (`openDb()`) using `node:sqlite` (DatabaseSync). `_migrate()` uses `ALTER TABLE … ADD COLUMN` for non-breaking schema evolution. DB path: `data/tracks.db`.
 
-Each catalog entry:
-```js
-{
-  name, file,
-  category,   // first-level subfolder under TracksGps/, or "General"
-  zone,       // second-level subfolder, or null
-  date,       // YYYY-MM-DD from metadata/time, first trkpt/time, or filename prefix
-  distance,   // km, haversine sum
-  elevationGain, elevationLoss,  // metres, cumulative
-  minElevation, maxElevation,
-  bounds,     // [[minLat,minLon],[maxLat,maxLon]]
-  center,     // [lat,lon]
-  points      // simplified to ≤150 pts: [[lat,lon,ele|null], ...]
-}
-```
+Key tables: `tracks`, `raw_points`, `clean_points`, `config_activities`, `config_sierras`.
 
-`MAX_POINTS = 300` controls simplification (uniform sampling). Files containing only `<wpt>` waypoints (no `<trkpt>`) are silently skipped.
+Important `tracks` columns: `activity`, `sierra`, `province`, `ccaa`, `tags` (JSON array), `road_types` (JSON obj), `surface_types` (JSON obj), `road_type_seq` (JSON array of `{t,f0,f1}` fraction segments), `waypoints_json` (JSON array of `{lat,lon,ele,name,sym,desc}`), `ibp_bicycle/hiking/running`, `circular`, `is_recent_import`.
 
-### Viewer — `index.html` (vanilla JS + Leaflet 1.9.4 from cdnjs)
-Single-page app that reads the global `CATALOG` array. Key sections of the inline script:
+**`track.file`** always includes the `TracksGps/` prefix. Use `path.join(ROOT, track.file)` — never `path.join(ROOT, 'TracksGps', track.file)`.
 
-- **Color assignment** — categories get colors from a 12-entry `PALETTE` in stable sorted order.
-- **Polylines** — all tracks rendered at startup with Leaflet's Canvas renderer (`L.canvas()`). Visibility is toggled with `layer.addTo(map)` / `layer.remove()` rather than opacity, to keep 370+ tracks fast.
-- **`activateTrack(i, fitMap)`** — selects a track: highlights polyline, fits bounds, opens popup, and calls `showProfile()`.
-- **`showProfile(track, color)`** — renders an SVG elevation chart in `#profile` panel below the map. Uses `requestAnimationFrame` so the SVG has a real bounding rect before drawing. Elevation is read from `track.points[n][2]`. Cumulative distances are recomputed client-side with `hav()`.
-- **`applyFilters()`** — called on every filter change; iterates all items, shows/hides layers, re-renders the list.
-- Layout: `#main` is a flex row; `#right-col` is a flex column containing `#map` (flex:1) and `#profile` (height:175px, hidden until a track is selected). Showing/hiding the profile calls `map.invalidateSize()`.
+### Server — `server.js`
+Pure Node.js HTTP server. No framework. Routes:
+- `GET /` → `index.html` (visor)
+- `GET /track?id=N` → `track.html`
+- `GET /editor`, `/config`, `/admin` → static HTML pages
+- `GET /api/tracks` — paginated list with filters
+- `GET /api/tracks/:id` — full track (parses `tags`/`waypoints_json`, attaches `points` array from DB)
+- `PATCH /api/tracks/:id` — update metadata; calls `updateGpxMetadata()` for name/activity/notes
+- `DELETE /api/tracks/:id`
+- `GET /api/geo` — returns `{provinces, ccaa, zones}` distinct values from DB
+- `GET /api/config/activities` — activity list with colors
+- `GET /api/db/import-temp` (SSE) — runs `import-from-temp.js`, streams log lines
+- `GET /api/db/enrich-road-types?ids=1,2,3` (SSE) — runs `enrich-road-types.js`
+- `GET /api/db/clean?ids=…` (SSE) — runs `clean-tracks.js`
+- `/api/admin/…` — stats, backup, restore, vacuum, integrity
 
-## Pages and shared styles
+### Pages
+- `/` → `index.html` + `visor.js` + `visor.css` — Leaflet map, track list, filters, elevation profile
+- `/track?id=N` → `track.html` + `track.css` — detail view with tabs (Resumen, Puntos de paso, Tipos de camino, Subidas, Tiempo hoy)
+- `/editor` → `editor.html` — CRUD list, import from `_TEMP_`, tag editing
+- `/config` → `config.html` — activity/sierra config
+- `/admin` → `admin.html` — backup/restore/vacuum, IBP calc, stats
 
-All pages share a common top nav and sub-header pattern via `shared.css`:
+### Visor (`visor.js`)
+- Polylines are only added to the map when active or being previewed (hover). When a track is active, other tracks' polylines are suppressed — `previewTrack` is a no-op when `activeIdx !== null`.
+- `activateTrack(i, fitMap)` manages the active polyline + highlights the list row (`.track-item.active`).
+- Filters live in chips + popovers; `applyFilters()` shows/hides markers and updates the list.
+- `geoFilter` — Nominatim place search sets a radius circle filter.
 
-- `nav` — sticky dark bar (`#1e293b`) with Visor / Editor / Config / Admin links. Active page link uses `style="color:#f8fafc"`.
-- `.page-header` — dark bar (`#0f172a`) below nav, height 50px, with `.page-header-title` and `.page-header-actions`.
-- `.hbtn-nav` — outline button style for use inside `.page-header`.
+### Track detail (`track.html`)
+Tabs built dynamically by `buildContent(t)`:
+- **Resumen** — key stats, IBP gauge, tags, description
+- **Puntos de paso** — start/end points + GPX waypoints (`t.waypoints[]`) with toggle button to show `L.divIcon` markers on the map (`toggleWptMarkers()`)
+- **Tipos de camino** — OSM highway/surface breakdown; clicking a type highlights its segments on the map (`showRoadTypesOnMap()`, `highlightRoadType()`)
+- **Subidas** — gradient color overlay on map (`showGradientMap()`), detected climbs listed
+- **Tiempo hoy** — Open-Meteo forecast
 
-Every HTML page must include `<link rel="stylesheet" href="/shared.css">`.
+Edit modal: `<datalist>` autocomplete for activity/sierra/province/ccaa; custom dropdown for tags.
 
-Pages use a **light theme** (`--bg: #f0f2f5`, `--surface: #fff`) with dark headers. config.html was migrated from a dark theme to match this.
+### Import pipeline (`scripts/import-from-temp.js`)
+1. Parse GPX (track points + `<wpt>` waypoints)
+2. Nominatim reverse-geocode for province/CCAA
+3. Infer activity from name keywords + metrics
+4. Move file to `TracksGps/<Activity>/<Sierra>/`
+5. Upsert to DB; store `waypoints_json`; write metadata back to GPX
 
-The stats section (rawPoints, cleanPoints, reduction %, per-activity table) lives in **admin.html** only — it was removed from the visor's DB sidebar tab to avoid duplication. `GET /api/admin/stats` now returns the full details including `cats[]`.
+### OSM enrichment (`scripts/enrich-road-types.js`)
+Queries Overpass API for `highway` ways inside track bbox. Matches each GPS segment midpoint to nearest way. Stores compact fraction-based segments `{t, f0, f1}` in `road_type_seq` for the frontend to colorize.
 
-## GPX file conventions
-- Source tracks live in `TracksGps/` and are never modified by the build.
-- The folder structure (`TracksGps/<category>/<zone>/track.gpx`) defines `category` and `zone` metadata.
-- Files with a `YYYY-MM-DD` prefix in the filename get that date if no `<time>` tag is present.
-- Waypoint-only files (`.wpt`, or `.gpx` with only `<wpt>` elements) are not rendered.
+## Design system — `shared.css` (MANDATORY for every page)
+
+Every page must `<link rel="stylesheet" href="/shared.css">` before its own CSS. Never hard-code colors — use CSS variables (`--ink`, `--ink-2`, `--muted`, `--soft`, `--line`, `--surface`, `--bg`, `--accent`, `--accent-soft`, `--success`, `--warn`, `--danger`, `--radius`, `--shadow`, etc.).
+
+Key component classes: `.btn` (+ modifiers), `.input`/`.select`, `.chip` (+ `.active`, `.open`), `.popover`, `.cat-pills`/`.cat-pill`, `.table`, `.stats-grid`/`.stat`, `.tag`, `.badge`, `.modal-overlay`/`.modal`, `.log-box`, `.floating`, `.card`.
+
+New pages start from `docs/page-template.html` and must be added to the `<nav>` in every page.
+
+## GPX conventions
+- Source tracks live in `TracksGps/<Activity>/<Zone>/file.gpx`. Never modify them programmatically except via `updateGpxMetadata()`.
+- Files with `YYYY-MM-DD` filename prefix get that date if no `<time>` tag is present.
+- Files with only `<wpt>` (no `<trkpt>`) are skipped by the import scripts.
+- `<wpt>` waypoints are parsed (lat/lon/ele/name/sym/desc) and stored as `waypoints_json`.

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<!--
+  Plantilla para páginas nuevas de GPX Library.
+  1. Copia este archivo a la raíz con el nombre de la página (p. ej. stats.html)
+     y añade la ruta en server.js si hace falta.
+  2. Añade el enlace en la <nav> de TODAS las páginas.
+  3. Usa solo los tokens y componentes de shared.css; el <style> de la página
+     contiene únicamente su maquetación propia.
+-->
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Título — GPX Library</title>
+  <link rel="stylesheet" href="/shared.css">
+  <style>
+    /* Maquetación propia de la página (usar var(--ink), var(--soft), var(--radius)...) */
+  </style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">GPX Library</span>
+  <a href="/">Visor</a>
+  <a href="/editor">Catálogo</a>
+  <a href="/config">Config</a>
+  <a href="/admin">Admin</a>
+</nav>
+
+<main class="page">
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">Título de la página</h1>
+      <div class="page-sub">Descripción breve</div>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-outline">Secundaria</button>
+      <button class="btn btn-primary">Acción principal</button>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="card-head"><h2>Sección</h2><button class="btn btn-sm">Acción</button></div>
+    <div class="card-body">
+      <div class="stats-grid">
+        <div class="stat"><div class="val">123</div><div class="lbl">Tracks</div></div>
+        <div class="stat"><div class="val">4.567</div><div class="lbl">km</div></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+</body>
+</html>

@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "ClaudeInChromeDomain(localhost:8080)",
+      "Bash(curl -s http://localhost:8080/api/tracks/569)",
+      "Bash(node -e ' *)"
     ]
   }
 }

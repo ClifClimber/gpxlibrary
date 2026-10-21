@@ -4,232 +4,371 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Admin — GPX Library</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5;color:#1e293b;min-height:100vh}
-.page{max-width:960px;margin:0 auto;padding:24px 16px;display:flex;flex-direction:column;gap:20px}
-h1{font-size:20px;font-weight:700;color:#0f172a}
-.card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden}
-.card-head{padding:14px 18px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.card-head h2{font-size:14px;font-weight:600;color:#0f172a}
-.card-body{padding:18px}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
-.stat{background:#f8fafc;border-radius:8px;padding:14px;text-align:center}
-.stat .val{font-size:24px;font-weight:700;color:#0f172a}
-.stat .lbl{font-size:11px;color:#64748b;margin-top:2px}
-button{cursor:pointer;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;transition:background .15s}
-.btn-primary{background:#2563eb;color:#fff}.btn-primary:hover{background:#1d4ed8}
-.btn-danger{background:#dc2626;color:#fff}.btn-danger:hover{background:#b91c1c}
-.btn-ghost{background:#f1f5f9;color:#374151}.btn-ghost:hover{background:#e2e8f0}
-.btn-sm{padding:4px 10px;font-size:12px}
-button:disabled{opacity:.5;cursor:not-allowed}
-.backups-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
-.backup-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8fafc;border-radius:6px;font-size:13px}
-.backup-row .bname{flex:1;font-family:monospace;font-size:12px;color:#374151}
-.backup-row .bsize{color:#64748b;font-size:12px;white-space:nowrap}
-.backup-row .bdate{color:#94a3b8;font-size:11px;white-space:nowrap}
-.log-line{margin:1px 0;white-space:pre-wrap;word-break:break-all}
-.log-line.err{color:#f87171}.log-line.ok{color:#4ade80}.log-line.warn{color:#fbbf24}
-#log-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:2000}
-#log-modal[hidden]{display:none}
-.lm-box{background:#0f172a;border-radius:10px;width:min(700px,95vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.5)}
-.lm-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1e293b}
-.lm-head h3{color:#f8fafc;font-size:14px;font-weight:600}
-.lm-close{background:none;border:none;color:#64748b;font-size:22px;cursor:pointer;padding:0 4px;line-height:1}
-.lm-close:hover{color:#f8fafc}
-.lm-body{flex:1;overflow-y:auto;padding:12px 16px;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;color:#e2e8f0;min-height:200px}
-.lm-body::-webkit-scrollbar{width:4px}
-.lm-body::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
-.lm-foot{padding:10px 16px;border-top:1px solid #1e293b;display:flex;justify-content:flex-end}
-.lm-foot button{background:#1e293b;border:1.5px solid #334155;color:#94a3b8;padding:6px 16px;border-radius:6px;font-size:13px;cursor:pointer}
-.lm-foot button:hover{background:#334155;color:#f8fafc}
-.lm-foot button:disabled{opacity:.5;cursor:not-allowed}
-.ops-grid{display:flex;flex-direction:column;gap:14px}
-.op-item{background:#f8fafc;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px}
-.op-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.op-head h3{font-size:14px;font-weight:600;color:#0f172a;padding-top:2px}
-.op-btns{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.op-item>p{font-size:12px;color:#64748b;line-height:1.5}
-.op-item code{background:#e2e8f0;padding:1px 5px;border-radius:3px;font-size:11px}
-.db-num{width:60px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;color:#1e293b;outline:none;background:#fff}
-.db-num:focus{border-color:#2563eb}
-.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:12px}
-.badge-green{background:#dcfce7;color:#15803d}
-.badge-red{background:#fee2e2;color:#b91c1c}
-.badge-blue{background:#dbeafe;color:#1d4ed8}
-.maint-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-.maint-item{background:#f8fafc;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px}
-.maint-item h3{font-size:13px;font-weight:600;color:#0f172a}
-.maint-item p{font-size:12px;color:#64748b;line-height:1.5}
-.result-line{font-size:12px;color:#374151;margin-top:4px}
-.result-line.ok{color:#15803d}.result-line.err{color:#b91c1c}
-#toast{position:fixed;bottom:20px;right:20px;background:#1e293b;color:#f8fafc;padding:10px 16px;border-radius:8px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.2);transform:translateY(60px);opacity:0;transition:all .3s;pointer-events:none;z-index:1000}
-#toast.show{transform:translateY(0);opacity:1}
-</style>
 <link rel="stylesheet" href="/shared.css">
+<style>
+/* Admin — maquetación propia. Tokens y componentes en shared.css */
+.page { max-width: 980px; }
+.backups-list { display: flex; flex-direction: column; gap: 6px; }
+.backup-row { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; background: var(--soft); border-radius: var(--radius-md); }
+.backup-row .bname { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.backup-row .bsize { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.backup-row .bdate { color: var(--ink-3); font-size: 11px; white-space: nowrap; }
+
+.ops-grid { display: flex; flex-direction: column; gap: 10px; }
+.op-item { background: var(--soft); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.op-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.op-head h3 { font-size: 14px; font-weight: 600; }
+.op-btns { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.op-btns label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+.op-item > p { font-size: 12px; color: var(--muted); line-height: 1.55; }
+.op-item code { background: #e2e8f0; }
+.db-num { width: 64px; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; font-size: 12px; outline: none; background: var(--surface); }
+.db-num:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+
+.maint-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.maint-item { background: var(--soft); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.maint-item h3 { font-size: 14px; font-weight: 600; }
+.maint-item p { font-size: 12px; color: var(--muted); line-height: 1.55; flex: 1; }
+.result-line { font-size: 12px; color: var(--ink-2); }
+.result-line.ok { color: #15803d; } .result-line.err { color: #b91c1c; }
+
+/* Modal de log en streaming */
+#log-modal { position: fixed; inset: 0; z-index: 2000; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+#log-modal[hidden] { display: none; }
+.lm-box { width: min(720px, 100%); max-height: 80vh; }
+.lm-body { min-height: 220px; max-height: 60vh; margin: 0 20px; }
+.log-line { white-space: pre-wrap; word-break: break-all; }
+.log-line.err { color: #f87171; } .log-line.ok { color: #4ade80; } .log-line.warn { color: #fbbf24; }
+
+.op-item .btn-ghost, .maint-item .btn-ghost, .backup-row .btn-ghost { background: var(--surface); }
+.op-item .btn-ghost:hover, .maint-item .btn-ghost:hover, .backup-row .btn-ghost:hover { background: #e2e8f0; }
+.stats-table { margin-top: 16px; }
+.stats-table .red { color: var(--accent); font-weight: 600; }
+.srow { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.srow:nth-child(odd) { padding-right: 16px; }
+.slbl { color: var(--muted); font-size: 12px; flex: 1; }
+.sval { font-weight: 600; font-size: 13px; color: var(--ink); white-space: nowrap; }
+#tab-bd .card-body { font-size: 13px; }
+#tab-bd .maint-item h3, #tab-bd .maint-item p,
+#tab-bd .maint-item button { font-size: 13px; }
+#tab-bd .maint-item p { color: var(--muted); }
+#tab-bd .backup-row .bname, #tab-bd .backup-row .bsize,
+#tab-bd .backup-row .bdate { font-size: 13px; font-family: inherit; }
+#tab-bd .stats-table td, #tab-bd .stats-table th { font-size: 13px; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+/* Import modal */
+#import-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1500; display:none; align-items:center; justify-content:center; }
+#import-overlay.open { display:flex; }
+#import-modal { background:var(--surface); border-radius:10px; padding:20px; width:580px; max-width:96vw; display:flex; flex-direction:column; gap:12px; box-shadow:0 8px 40px rgba(0,0,0,.25); }
+#import-modal h3 { font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; }
+#import-picker { display:flex; flex-direction:column; gap:10px; }
+#import-picker-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.import-sel-btn { padding:3px 9px; border:1.5px solid var(--line); border-radius:5px; background:transparent; color:var(--muted); font-size:11px; cursor:pointer; white-space:nowrap; }
+.import-sel-btn:hover { border-color:var(--ink); color:var(--ink); }
+#import-file-list { max-height:220px; overflow-y:auto; background:#0f172a; border-radius:6px; padding:6px 8px; display:flex; flex-direction:column; gap:1px; }
+.import-file-item { display:flex; align-items:center; gap:8px; padding:5px 4px; cursor:pointer; border-radius:4px; }
+.import-file-item:hover { background:rgba(255,255,255,.05); }
+.import-file-item input[type=checkbox] { accent-color:#3b82f6; cursor:pointer; flex-shrink:0; width:13px; height:13px; }
+.import-file-item .ifl-name { font-size:11px; font-family:'Cascadia Code',Consolas,monospace; color:#e2e8f0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.import-file-item .ifl-dir { font-size:10px; color:#475569; flex-shrink:0; }
+#btn-import-start { padding:7px 16px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; }
+#btn-import-start:disabled { opacity:.5; cursor:not-allowed; }
+/* Folder browser */
+#fb-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:2000; display:none; align-items:center; justify-content:center; }
+#fb-overlay.open { display:flex; }
+#fb-modal { background:var(--surface); border-radius:12px; width:560px; max-width:96vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 12px 48px rgba(0,0,0,.35); overflow:hidden; }
+#fb-topbar { display:flex; align-items:center; gap:10px; padding:14px 16px 10px; border-bottom:1px solid var(--line); }
+#fb-topbar h3 { font-size:14px; font-weight:600; flex:1; }
+#fb-breadcrumb { display:flex; align-items:center; flex-wrap:wrap; gap:2px; padding:8px 14px; background:var(--soft); border-bottom:1px solid var(--line); font-size:11px; min-height:34px; }
+.fb-crumb { color:var(--accent); cursor:pointer; padding:2px 4px; border-radius:4px; white-space:nowrap; }
+.fb-crumb:hover { background:var(--accent-soft); }
+.fb-sep { color:var(--muted); padding:0 1px; }
+#fb-list { overflow-y:auto; flex:1; padding:6px 8px; display:flex; flex-direction:column; gap:1px; }
+.fb-item { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px; cursor:pointer; font-size:13px; color:var(--ink); }
+.fb-item:hover { background:var(--soft); }
+.fb-item.fb-up { color:var(--muted); font-size:12px; }
+.fb-item svg { flex-shrink:0; color:#f59e0b; }
+.fb-item.fb-up svg { color:var(--muted); }
+.fb-item.fb-file { color:var(--muted); cursor:default; font-size:12px; padding:5px 10px; }
+.fb-item.fb-file:hover { background:transparent; }
+.fb-item.fb-file svg { color:#64748b; }
+.fb-divider { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding:8px 10px 3px; }
+.fb-empty { padding:20px; text-align:center; color:var(--muted); font-size:13px; }
+#fb-footer { display:flex; align-items:center; gap:10px; padding:10px 14px; border-top:1px solid var(--line); background:var(--soft); }
+#fb-selected-path { flex:1; font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace,Consolas,monospace; }
+</style>
 </head>
 <body>
 
 <nav>
   <span class="logo">GPX Library</span>
   <a href="/">Visor</a>
-  <a href="/editor">Editor</a>
+  <a href="/editor">Catálogo</a>
   <a href="/config">Config</a>
   <a href="/admin" style="color:#f8fafc">Admin</a>
 </nav>
 
-<div class="page-header">
-  <div class="page-header-title">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-    GPX Library — Admin
+<main class="page">
+
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">Administración</h1>
+      <div class="page-sub">Base de datos, operaciones de mantenimiento y copias de seguridad</div>
+    </div>
+  </div>
+
+  <div class="seg-tabs" id="admin-tabs" style="margin-bottom:16px">
+    <button class="seg-tab active" data-tab="bd">Base de datos</button>
+    <button class="seg-tab" data-tab="tracks">Gestión de Tracks</button>
+    <button class="seg-tab" data-tab="catalogo">Mantenimiento catálogo</button>
+  </div>
+
+  <!-- ── Tab: Base de datos ── -->
+  <div class="tab-panel active" id="tab-bd">
+    <div class="card">
+      <div class="card-head">
+        <h2>Estado de la base de datos</h2>
+        <button class="btn btn-ghost btn-sm" id="btn-refresh-stats">↻ Actualizar</button>
+      </div>
+      <div class="card-body">
+        <div id="stats-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:0;font-size:13px">
+          <div class="srow"><span class="slbl">Tracks</span><span class="sval" id="s-tracks">—</span></div>
+          <div class="srow"><span class="slbl">Archivos GPX</span><span class="sval" id="s-gpx">—</span></div>
+          <div class="srow"><span class="slbl">Limpiados</span><span class="sval" id="s-cleaned">—</span></div>
+          <div class="srow"><span class="slbl">Reducción pts</span><span class="sval" id="s-reduction">—</span></div>
+          <div class="srow"><span class="slbl">Tamaño BD</span><span class="sval" id="s-dbsize">—</span></div>
+          <div class="srow"><span class="slbl">WAL</span><span class="sval" id="s-walsize">—</span></div>
+          <div class="srow"><span class="slbl">Backups</span><span class="sval" id="s-backups">—</span></div>
+          <div class="srow"><span class="slbl">Última importación</span><span class="sval" id="s-last">—</span></div>
+        </div>
+        <div id="stats-cats" style="margin-top:16px;display:none">
+          <table class="table stats-table">
+            <thead><tr>
+              <th>Actividad</th>
+              <th class="num">Tracks</th>
+              <th class="num">Puntos raw</th>
+              <th class="num">Reducción</th>
+            </tr></thead>
+            <tbody id="stats-cats-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-head"><h2>Mantenimiento BD</h2></div>
+      <div class="card-body">
+        <div class="maint-grid">
+          <div class="maint-item">
+            <h3>Vacuum</h3>
+            <p>Compacta la BD, libera espacio y elimina fragmentación.</p>
+            <button class="btn btn-ghost" id="btn-vacuum">Ejecutar VACUUM</button>
+            <div class="result-line" id="vacuum-result"></div>
+          </div>
+          <div class="maint-item">
+            <h3>Integridad</h3>
+            <p>Verifica que la BD no esté corrupta.</p>
+            <button class="btn btn-ghost" id="btn-integrity">Verificar</button>
+            <div class="result-line" id="integrity-result"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-head">
+        <h2>Copias de seguridad</h2>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:12px;color:var(--muted);white-space:nowrap">Máx. copias</label>
+          <input type="number" id="inp-max-backups" class="db-num" value="10" min="1" max="99" style="width:52px">
+          <button class="btn btn-ghost btn-sm" id="btn-save-backup-cfg" title="Guardar configuración">Guardar</button>
+          <button class="btn btn-primary btn-sm" id="btn-backup">+ Backup</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px" id="backup-auto-note"></div>
+        <div id="backups-list" class="backups-list">
+          <div style="color:#94a3b8;font-size:13px">Cargando…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Gestión de Tracks ── -->
+  <div class="tab-panel" id="tab-tracks">
+    <div class="card">
+      <div class="card-head"><h2>Gestión de Tracks</h2></div>
+      <div class="card-body">
+        <div class="ops-grid">
+
+          <div class="op-item">
+            <div class="op-head">
+              <h3>Importar tracks</h3>
+              <div class="op-btns">
+                <button class="btn btn-primary btn-sm" id="btn-import">Importar Tracks</button>
+              </div>
+            </div>
+            <p>Selecciona la carpeta origen y los archivos a importar. Geocodifica con Nominatim, clasifica por actividad y mueve a <code>TracksGps/&lt;Actividad&gt;/&lt;Sierra&gt;/</code>. Si la carpeta es <code>_TEMP_</code> los archivos se eliminan tras importar; si es otra carpeta, los originales se conservan.</p>
+          </div>
+
+          <div class="op-item">
+            <div class="op-head">
+              <h3>Limpiar tracks</h3>
+              <div class="op-btns">
+                <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">min-dist <input type="number" class="db-num" id="inp-mindist" value="5" min="0" max="100"> m</label>
+                <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">RDP <input type="number" class="db-num" id="inp-rdp" value="8" min="0" max="50"> m</label>
+                <button class="btn btn-ghost btn-sm" id="btn-clean">Limpiar</button>
+              </div>
+            </div>
+            <p><b>min-dist</b>: descarta puntos GPS a menos de N metros del anterior (elimina pausas grabadas). <b>RDP</b>: aplica Douglas-Peucker con epsilon en metros, reduciendo el número de puntos sin perder la forma de la ruta. Los puntos limpios se guardan en <code>clean_points</code> y se usan al exportar el catálogo.</p>
+          </div>
+
+          <div class="op-item">
+            <div class="op-head">
+              <h3 title="Geocodifica provincia, comunidad autónoma y sierra para cada track usando Nominatim/OpenStreetMap">Enriquecer datos geo</h3>
+              <div class="op-btns">
+                <button class="btn btn-ghost btn-sm" id="btn-enrich" title="Geocodificar provincia, CCAA y sierra de los tracks que aún no los tengan">Enriquecer</button>
+                <button class="btn btn-ghost btn-sm" id="btn-enrich-force" title="Enriquecer todos, incluso los que ya tienen datos geográficos">↻ Todos</button>
+              </div>
+            </div>
+            <p>Geocodifica cada track mediante Nominatim para obtener su provincia, comunidad autónoma y sierra. Los datos se usan en los filtros y en el detalle de la ruta.</p>
+          </div>
+
+          <div class="op-item">
+            <div class="op-head">
+              <h3 title="Consulta Overpass API para mapear qué tipo de camino y superficie recorre cada track segmento a segmento">Enriquecer datos OSM</h3>
+              <div class="op-btns">
+                <button class="btn btn-ghost btn-sm" id="btn-enrich-road" title="Obtener tipos de camino OSM de los tracks que aún no los tengan">Enriquecer</button>
+                <button class="btn btn-ghost btn-sm" id="btn-enrich-road-force" title="Enriquecer todos, incluso los que ya tienen datos de tipo de camino">↻ Todos</button>
+              </div>
+            </div>
+            <p>Consulta OpenStreetMap (Overpass API) para obtener el tipo y superficie de cada segmento del track. <b>Proceso lento</b>: puede tardar varios minutos por track. Los datos se usan en la pestaña "Tipo de camino" del detalle.</p>
+          </div>
+
+          <div class="op-item">
+            <div class="op-head">
+              <h3>Calcular IBP Index</h3>
+              <div class="op-btns">
+                <button class="btn btn-ghost btn-sm" id="btn-ibp">Calcular IBP</button>
+              </div>
+            </div>
+            <p>Calcula el índice de dificultad IBP para los tracks que aún no lo tienen, usando la distancia, desnivel y tipo de actividad.</p>
+          </div>
+
+          <div class="op-item">
+            <div class="op-head">
+              <h3>Escribir atributos a GPX</h3>
+              <div class="op-btns">
+                <button class="btn btn-ghost btn-sm" id="btn-write-attrs">Escribir todos</button>
+              </div>
+            </div>
+            <p>Reescribe nombre, actividad, notas y URL en todos los archivos GPX desde los datos de la BD.</p>
+          </div>
+
+          <div class="op-item">
+            <div class="op-head">
+              <h3>Reorganizar carpetas</h3>
+              <div class="op-btns">
+                <button class="btn btn-ghost btn-sm" id="btn-organize-files">Reorganizar</button>
+              </div>
+            </div>
+            <p>Mueve cada archivo GPX a <code>TracksGps/&lt;Actividad&gt;/&lt;Sierra&gt;/</code> según la actividad y zona almacenadas en la BD. Útil si has editado actividades o zonas manualmente y los archivos han quedado fuera de lugar.</p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Mantenimiento catálogo ── -->
+  <div class="tab-panel" id="tab-catalogo">
+    <div class="card">
+      <div class="card-head"><h2>Mantenimiento catálogo</h2></div>
+      <div class="card-body">
+        <div class="ops-grid">
+
+          <div class="op-item">
+            <div class="op-head">
+              <h3>Reconstruir catálogo</h3>
+              <div class="op-btns">
+                <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">MAX_POINTS <input type="number" class="db-num" id="inp-maxpts-export" value="300" min="50" max="2000" step="50"></label>
+                <button class="btn btn-primary btn-sm" id="btn-export-catalog">Exportar</button>
+              </div>
+            </div>
+            <p>Regenera <code>catalog-data.js</code> desde la BD usando <code>clean_points</code> cuando estén disponibles y simplificando a MAX_POINTS puntos por track. Necesario para que los cambios sean visibles en el visor — recarga la página tras exportar.</p>
+            <div id="export-size-est" style="font-size:12px;color:var(--accent);font-weight:500"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Folder browser -->
+<div id="fb-overlay">
+  <div id="fb-modal">
+    <div id="fb-topbar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <h3>Seleccionar carpeta</h3>
+      <button class="btn btn-ghost btn-sm" id="btn-fb-close">✕</button>
+    </div>
+    <div id="fb-breadcrumb"></div>
+    <div id="fb-list"></div>
+    <div id="fb-footer">
+      <span id="fb-selected-path"></span>
+      <button class="btn btn-ghost btn-sm" id="btn-fb-cancel">Cancelar</button>
+      <button class="btn btn-primary btn-sm" id="btn-fb-select">Seleccionar</button>
+    </div>
   </div>
 </div>
 
-<div class="page">
-
-  <!-- Stats -->
-  <div class="card">
-    <div class="card-head">
-      <h2>Estado de la base de datos</h2>
-      <button class="btn-ghost btn-sm" id="btn-refresh-stats">↻ Actualizar</button>
-    </div>
-    <div class="card-body">
-      <div class="stats-grid" id="stats-grid">
-        <div class="stat"><div class="val" id="s-tracks">—</div><div class="lbl">Tracks</div></div>
-        <div class="stat"><div class="val" id="s-cleaned">—</div><div class="lbl">Limpiados</div></div>
-        <div class="stat"><div class="val" id="s-reduction">—</div><div class="lbl">Reducción pts</div></div>
-        <div class="stat"><div class="val" id="s-gpx">—</div><div class="lbl">Archivos GPX</div></div>
-        <div class="stat"><div class="val" id="s-dbsize">—</div><div class="lbl">Tamaño BD</div></div>
-        <div class="stat"><div class="val" id="s-walsize">—</div><div class="lbl">WAL</div></div>
-        <div class="stat"><div class="val" id="s-backups">—</div><div class="lbl">Backups</div></div>
-        <div class="stat"><div class="val" id="s-last">—</div><div class="lbl">Última importación</div></div>
+<!-- Import modal -->
+<div id="import-overlay">
+  <div id="import-modal">
+    <h3>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Importar Tracks
+    </h3>
+    <div id="import-picker">
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:12px;color:var(--muted);white-space:nowrap">Carpeta:</label>
+        <input type="text" id="import-src-path" class="input" style="font-size:12px;flex:1;padding:4px 8px" value="TracksGps/_TEMP_">
+        <button class="btn btn-ghost btn-sm" id="btn-import-browse" title="Seleccionar carpeta">📂</button>
+        <button class="btn btn-ghost btn-sm" id="btn-import-load">Cargar</button>
       </div>
-      <div id="stats-cats" style="margin-top:16px;display:none">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead><tr style="border-bottom:2px solid #f1f5f9">
-            <th style="text-align:left;padding:6px 8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Actividad</th>
-            <th style="text-align:right;padding:6px 8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Tracks</th>
-            <th style="text-align:right;padding:6px 8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Puntos raw</th>
-            <th style="text-align:right;padding:6px 8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Reducción</th>
-          </tr></thead>
-          <tbody id="stats-cats-body"></tbody>
-        </table>
+      <div id="import-picker-toolbar">
+        <span id="import-picker-count" style="font-size:12px;color:var(--muted);flex:1">—</span>
+        <button class="import-sel-btn" id="import-sel-all">Todos</button>
+        <button class="import-sel-btn" id="import-sel-none">Ninguno</button>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--muted);font-size:12px">
+          <input type="checkbox" id="import-force"> --force
+        </label>
       </div>
-    </div>
-  </div>
-
-  <!-- Operaciones de BD -->
-  <div class="card">
-    <div class="card-head"><h2>Operaciones de BD</h2></div>
-    <div class="card-body">
-      <div class="ops-grid">
-
-        <div class="op-item">
-          <div class="op-head">
-            <h3>Importar tracks</h3>
-            <div class="op-btns">
-              <button class="btn-primary btn-sm" id="btn-import">Importar _TEMP_</button>
-              <button class="btn-ghost btn-sm" id="btn-import-force" title="Reimportar aunque ya existan">↻ Force</button>
-            </div>
-          </div>
-          <p>Procesa los GPX de <code>TracksGps/_TEMP_/</code>: geocodifica con Nominatim, clasifica por actividad, mueve a la carpeta correcta e inserta en la BD. Al finalizar regenera el catálogo automáticamente.</p>
-        </div>
-
-        <div class="op-item">
-          <div class="op-head">
-            <h3>Limpiar tracks</h3>
-            <div class="op-btns">
-              <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">min-dist <input type="number" class="db-num" id="inp-mindist" value="5" min="0" max="100"> m</label>
-              <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">RDP <input type="number" class="db-num" id="inp-rdp" value="8" min="0" max="50"> m</label>
-              <button class="btn-ghost btn-sm" id="btn-clean">Limpiar</button>
-            </div>
-          </div>
-          <p><b>min-dist</b>: descarta puntos GPS a menos de N metros del anterior (elimina pausas grabadas). <b>RDP</b>: aplica Douglas-Peucker con epsilon en metros, reduciendo el número de puntos sin perder la forma de la ruta. Los puntos limpios se guardan en <code>clean_points</code> y se usan al exportar el catálogo.</p>
-        </div>
-
-        <div class="op-item">
-          <div class="op-head">
-            <h3>Enriquecer datos OSM</h3>
-            <div class="op-btns">
-              <button class="btn-ghost btn-sm" id="btn-enrich">Enriquecer</button>
-              <button class="btn-ghost btn-sm" id="btn-enrich-force" title="Enriquecer todos, incluidos los ya procesados">↻ Todos</button>
-            </div>
-          </div>
-          <p>Consulta OpenStreetMap (Overpass API) para obtener el tipo de camino y superficie de cada track. Los datos aparecen en el Editor y en la página de detalle de cada ruta.</p>
-        </div>
-
-        <div class="op-item">
-          <div class="op-head">
-            <h3>Reconstruir catálogo</h3>
-            <div class="op-btns">
-              <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">MAX_POINTS <input type="number" class="db-num" id="inp-maxpts-export" value="300" min="50" max="2000" step="50"></label>
-              <button class="btn-primary btn-sm" id="btn-export-catalog">Exportar</button>
-            </div>
-          </div>
-          <p>Regenera <code>catalog-data.js</code> desde la BD usando <code>clean_points</code> cuando estén disponibles y simplificando a MAX_POINTS puntos por track. Necesario para que los cambios sean visibles en el visor — recarga la página tras exportar.</p>
-          <div id="export-size-est" style="font-size:12px;color:#2563eb;font-weight:500"></div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  <!-- Backups -->
-  <div class="card">
-    <div class="card-head">
-      <h2>Copias de seguridad</h2>
-      <button class="btn-primary btn-sm" id="btn-backup">+ Crear backup</button>
-    </div>
-    <div class="card-body">
-      <div id="backups-list" class="backups-list">
-        <div style="color:#94a3b8;font-size:13px">Cargando…</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Mantenimiento -->
-  <div class="card">
-    <div class="card-head">
-      <h2>Mantenimiento</h2>
-    </div>
-    <div class="card-body">
-      <div class="maint-grid">
-        <div class="maint-item">
-          <h3>Vacuum</h3>
-          <p>Compacta la BD, libera espacio y elimina fragmentación.</p>
-          <button class="btn-ghost" id="btn-vacuum">Ejecutar VACUUM</button>
-          <div class="result-line" id="vacuum-result"></div>
-        </div>
-        <div class="maint-item">
-          <h3>Integridad</h3>
-          <p>Verifica que la BD no esté corrupta.</p>
-          <button class="btn-ghost" id="btn-integrity">Verificar</button>
-          <div class="result-line" id="integrity-result"></div>
-        </div>
-        <div class="maint-item">
-          <h3>Calcular IBP</h3>
-          <p>Calcula IBP Index para los tracks que no lo tienen.</p>
-          <button class="btn-ghost" id="btn-ibp">Calcular IBP</button>
-        </div>
-        <div class="maint-item">
-          <h3>Escribir attrs a GPX</h3>
-          <p>Reescribe nombre, actividad, notas y URL en todos los archivos GPX desde la BD.</p>
-          <button class="btn-ghost" id="btn-write-attrs">Escribir todos</button>
-        </div>
+      <div id="import-file-list"><span style="color:#64748b;font-size:12px">Introduce una carpeta y pulsa Cargar.</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="btn-import-start" disabled>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Importar seleccionados
+        </button>
+        <button class="btn btn-ghost btn-sm" id="btn-import-modal-close" style="margin-left:auto">Cerrar</button>
       </div>
     </div>
   </div>
 </div>
 
 <div id="log-modal" hidden>
-  <div class="lm-box">
-    <div class="lm-head">
+  <div class="modal lm-box">
+    <div class="modal-head">
       <h3 id="log-modal-title">Operación</h3>
-      <button class="lm-close" id="log-modal-close" title="Cerrar">×</button>
+      <button class="icon-btn" id="log-modal-close" title="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
-    <div class="lm-body" id="log-modal-body"></div>
-    <div class="lm-foot">
-      <button id="log-modal-btn" disabled>Cerrar</button>
+    <div class="log-box lm-body" id="log-modal-body"></div>
+    <div class="modal-foot" style="border-top:none;gap:8px">
+      <button class="btn btn-primary" id="log-modal-catalog" hidden>Ver en Catálogo →</button>
+      <button class="btn btn-outline" id="log-modal-btn" disabled>Cerrar</button>
     </div>
   </div>
 </div>
@@ -252,7 +391,7 @@ let toast_t;
 function toast(msg, err) {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.style.background = err ? '#b91c1c' : '#1e293b';
+  el.style.background = err ? '#b91c1c' : '';
   el.classList.add('show');
   clearTimeout(toast_t);
   toast_t = setTimeout(() => el.classList.remove('show'), 3000);
@@ -283,20 +422,36 @@ async function loadStats() {
     catsEl.style.display = '';
     document.getElementById('stats-cats-body').innerHTML = cats.map(c => {
       const red = c.rawPoints ? ((1 - (c.cleanPoints||0) / c.rawPoints) * 100).toFixed(0) + '%' : '—';
-      return `<tr style="border-bottom:1px solid #f1f5f9">
-        <td style="padding:6px 8px">${c.category || 'Sin clasificar'}</td>
-        <td style="padding:6px 8px;text-align:right">${c.count}</td>
-        <td style="padding:6px 8px;text-align:right;color:#64748b">${fmtN(c.rawPoints)}</td>
-        <td style="padding:6px 8px;text-align:right;color:#2563eb;font-weight:600">${red}</td>
+      return `<tr>
+        <td>${c.category || 'Sin clasificar'}</td>
+        <td class="num">${c.count}</td>
+        <td class="num" style="color:var(--muted)">${fmtN(c.rawPoints)}</td>
+        <td class="num red">${red}</td>
       </tr>`;
     }).join('');
   }
+}
+
+async function loadBackupConfig() {
+  try {
+    const cfg = await fetch('/api/admin/backup-config').then(r => r.json());
+    document.getElementById('inp-max-backups').value = cfg.maxKeep || 10;
+  } catch {}
 }
 
 async function loadBackups() {
   const r = await fetch('/api/admin/backups');
   const list = await r.json();
   const el = document.getElementById('backups-list');
+  const note = document.getElementById('backup-auto-note');
+  if (list.length) {
+    const last = new Date(list[0].mtime);
+    const today = new Date().toDateString() === last.toDateString();
+    note.textContent = today ? '✓ Backup de hoy realizado.' : '⚠ Sin backup hoy todavía.';
+    note.style.color = today ? 'var(--success,#16a34a)' : 'var(--warn,#b45309)';
+  } else {
+    note.textContent = '';
+  }
   if (!list.length) {
     el.innerHTML = '<div style="color:#94a3b8;font-size:13px">Sin backups todavía.</div>';
     return;
@@ -306,8 +461,8 @@ async function loadBackups() {
       <span class="bname">${b.name}</span>
       <span class="bsize">${fmtSize(b.size)}</span>
       <span class="bdate">${fmtDate(b.mtime)}</span>
-      <button class="btn-ghost btn-sm" onclick="restoreBackup('${b.name}')">Restaurar</button>
-      <button class="btn-danger btn-sm" onclick="deleteBackup('${b.name}')">✕</button>
+      <button class="btn btn-ghost btn-sm" onclick="restoreBackup('${b.name}')">Restaurar</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteBackup('${b.name}')">✕</button>
     </div>
   `).join('');
 }
@@ -327,6 +482,13 @@ async function deleteBackup(name) {
 }
 
 document.getElementById('btn-refresh-stats').addEventListener('click', () => { loadStats(); loadBackups(); });
+
+document.getElementById('btn-save-backup-cfg').addEventListener('click', async () => {
+  const maxKeep = parseInt(document.getElementById('inp-max-backups').value) || 10;
+  const r = await fetch('/api/admin/backup-config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ maxKeep }) });
+  if (r.ok) { toast(`Configuración guardada: máx. ${maxKeep} copias`); loadBackups(); }
+  else toast('Error al guardar', true);
+});
 
 document.getElementById('btn-backup').addEventListener('click', async () => {
   const btn = document.getElementById('btn-backup');
@@ -413,9 +575,14 @@ function streamScript(url, title, postBody) {
   }).catch(e => { addLine('Error: ' + e.message, 'err'); closeBtn.disabled = false; });
 }
 
-document.getElementById('log-modal-close').addEventListener('click', () => { document.getElementById('log-modal').hidden = true; });
-document.getElementById('log-modal-btn').addEventListener('click', () => { document.getElementById('log-modal').hidden = true; });
-document.getElementById('log-modal').addEventListener('click', e => { if (e.target === document.getElementById('log-modal')) document.getElementById('log-modal').hidden = true; });
+function closeLogModal() {
+  document.getElementById('log-modal').hidden = true;
+  document.getElementById('log-modal-catalog').hidden = true;
+}
+document.getElementById('log-modal-close').addEventListener('click', closeLogModal);
+document.getElementById('log-modal-btn').addEventListener('click', closeLogModal);
+document.getElementById('log-modal-catalog').addEventListener('click', () => { location.href = '/editor?last-import=1'; });
+document.getElementById('log-modal').addEventListener('click', e => { if (e.target === document.getElementById('log-modal')) closeLogModal(); });
 
 
 document.getElementById('btn-ibp').addEventListener('click', function() {
@@ -430,17 +597,146 @@ document.getElementById('btn-write-attrs').addEventListener('click', function() 
     .finally(() => { this.disabled = false; });
 });
 
-document.getElementById('btn-import').addEventListener('click', function() {
-  this.disabled = true;
-  streamScript('/api/db/import', 'Importar _TEMP_')
-    .finally(() => { this.disabled = false; loadStats(); });
+// ── Import Tracks modal ─────────────────────────────────────────────
+async function loadTempFiles() {
+  const list  = document.getElementById('import-file-list');
+  const count = document.getElementById('import-picker-count');
+  const btn   = document.getElementById('btn-import-start');
+  const src   = document.getElementById('import-src-path').value.trim();
+  list.innerHTML = '<span style="color:#64748b;font-size:12px">Cargando...</span>';
+  btn.disabled = true;
+  try {
+    const url = '/api/db/temp-files' + (src ? '?src=' + encodeURIComponent(src) : '');
+    const files = await fetch(url).then(r => r.json());
+    if (!files.length) {
+      list.innerHTML = '<span style="color:#64748b;font-size:12px">La carpeta está vacía o no existe.</span>';
+      count.textContent = '0 archivos';
+      return;
+    }
+    count.textContent = `${files.length} archivo${files.length !== 1 ? 's' : ''}`;
+    list.innerHTML = files.map(f => {
+      const dir = f.rel.includes('/') ? f.rel.slice(0, f.rel.lastIndexOf('/')) : '';
+      return `<label class="import-file-item">
+        <input type="checkbox" class="import-file-cb" value="${f.rel}" checked>
+        <span class="ifl-name">${f.name}</span>
+        ${dir ? `<span class="ifl-dir">${dir}/</span>` : ''}
+      </label>`;
+    }).join('');
+    btn.disabled = false;
+  } catch(e) {
+    list.innerHTML = `<span style="color:#f87171;font-size:12px">Error: ${e.message}</span>`;
+    count.textContent = 'Error';
+  }
+}
+
+document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('import-src-path').value = 'TracksGps/_TEMP_';
+  document.getElementById('import-overlay').classList.add('open');
+  document.getElementById('import-file-list').innerHTML = '<span style="color:#64748b;font-size:12px">Introduce una carpeta y pulsa Cargar.</span>';
+  document.getElementById('import-picker-count').textContent = '—';
+  document.getElementById('btn-import-start').disabled = true;
 });
 
-document.getElementById('btn-import-force').addEventListener('click', function() {
-  if (!confirm('¿Reimportar TODOS los tracks aunque ya existan? Esto borra los puntos limpios.')) return;
-  this.disabled = true;
-  streamScript('/api/db/import?force=1', 'Importar _TEMP_ (force)')
-    .finally(() => { this.disabled = false; loadStats(); });
+// ── Folder browser ─────────────────────────────────────────────────
+let fbCurrentPath = null;
+
+async function fbNavigate(dirPath) {
+  const list = document.getElementById('fb-list');
+  list.innerHTML = '<div class="fb-empty">Cargando…</div>';
+  try {
+    const d = await fetch('/api/fs/dirs?path=' + encodeURIComponent(dirPath)).then(r => r.json());
+    if (d.error) { list.innerHTML = `<div class="fb-empty">${d.error}</div>`; return; }
+    fbCurrentPath = d.current;
+    document.getElementById('fb-selected-path').textContent = d.current;
+
+    // Breadcrumb
+    const bc = document.getElementById('fb-breadcrumb');
+    const segs = d.current.replace(/\\/g, '/').split('/').filter(Boolean);
+    let cum = '';
+    bc.innerHTML = segs.map((seg, i) => {
+      if (i === 0 && /^[A-Za-z]:$/.test(seg)) { cum = seg + '\\'; }
+      else { cum = cum.endsWith('\\') ? cum + seg : cum + '\\' + seg; }
+      const p = cum;
+      return `<span class="fb-crumb" data-path="${p}">${seg}</span>${i < segs.length-1 ? '<span class="fb-sep">›</span>' : ''}`;
+    }).join('');
+    bc.querySelectorAll('.fb-crumb').forEach(el => el.addEventListener('click', () => fbNavigate(el.dataset.path)));
+
+    // List — folders
+    let html = '';
+    if (d.parent) html += `<div class="fb-item fb-up" data-path="${d.parent}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> ..</div>`;
+    if (!d.dirs.length && !d.parent) html += '<div class="fb-empty">No hay subcarpetas.</div>';
+    html += d.dirs.map(dir => `<div class="fb-item" data-path="${dir.path}"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${dir.name}</div>`).join('');
+    // Files section
+    if (d.files && d.files.length) {
+      html += `<div class="fb-divider">📍 ${d.files.length} track${d.files.length !== 1 ? 's' : ''} en esta carpeta</div>`;
+      html += d.files.map(f => `<div class="fb-item fb-file"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>${f.name.replace(/\.gpx$/i,'')}</div>`).join('');
+    }
+    list.innerHTML = html;
+    // Update select button label
+    const selBtn = document.getElementById('btn-fb-select');
+    selBtn.textContent = d.files && d.files.length ? `Seleccionar (${d.files.length} track${d.files.length !== 1 ? 's' : ''})` : 'Seleccionar';
+    list.querySelectorAll('.fb-item:not(.fb-file)').forEach(el => el.addEventListener('click', () => fbNavigate(el.dataset.path)));
+  } catch(e) {
+    list.innerHTML = `<div class="fb-empty">Error: ${e.message}</div>`;
+  }
+}
+
+document.getElementById('btn-import-browse').addEventListener('click', async () => {
+  const src = document.getElementById('import-src-path').value.trim();
+  // start at the input path if it looks absolute, else at project root
+  const startPath = /^[A-Za-z]:[/\\]/.test(src) ? src : (await fetch('/api/fs/dirs').then(r=>r.json()).catch(()=>({current:''}))).current;
+  fbNavigate(startPath);
+  document.getElementById('fb-overlay').classList.add('open');
+});
+
+function fbClose() { document.getElementById('fb-overlay').classList.remove('open'); }
+
+document.getElementById('btn-fb-close').addEventListener('click', fbClose);
+document.getElementById('btn-fb-cancel').addEventListener('click', fbClose);
+document.getElementById('fb-overlay').addEventListener('click', e => { if (e.target === document.getElementById('fb-overlay')) fbClose(); });
+document.getElementById('btn-fb-select').addEventListener('click', () => {
+  if (fbCurrentPath) {
+    document.getElementById('import-src-path').value = fbCurrentPath;
+    fbClose();
+    loadTempFiles();
+  }
+});
+
+document.getElementById('btn-import-load').addEventListener('click', loadTempFiles);
+
+document.getElementById('import-sel-all').addEventListener('click', () => {
+  document.querySelectorAll('.import-file-cb').forEach(cb => cb.checked = true);
+});
+document.getElementById('import-sel-none').addEventListener('click', () => {
+  document.querySelectorAll('.import-file-cb').forEach(cb => cb.checked = false);
+});
+
+document.getElementById('btn-import-modal-close').addEventListener('click', () => {
+  document.getElementById('import-overlay').classList.remove('open');
+});
+document.getElementById('import-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('import-overlay'))
+    document.getElementById('import-overlay').classList.remove('open');
+});
+
+document.getElementById('btn-import-start').addEventListener('click', () => {
+  const selected = [...document.querySelectorAll('.import-file-cb:checked')].map(cb => cb.value);
+  if (!selected.length) { alert('Selecciona al menos un archivo.'); return; }
+  const force  = document.getElementById('import-force').checked;
+  const src    = document.getElementById('import-src-path').value.trim() || null;
+  const isTemp = !src || src.replace(/\\/g, '/').includes('_TEMP_');
+  const keep   = !isTemp;
+  if (isTemp) {
+    if (!confirm(`Se importarán ${selected.length} archivo(s) desde _TEMP_ y se eliminarán de esa carpeta tras importar. ¿Continuar?`)) return;
+  }
+  document.getElementById('import-overlay').classList.remove('open');
+  streamScript('/api/db/import-temp', 'Importar Tracks', { files: selected, force, src, keep })
+    .finally(() => {
+      loadStats();
+      const catBtn = document.getElementById('log-modal-catalog');
+      catBtn.hidden = false;
+      document.getElementById('log-modal-btn').textContent = 'Cerrar';
+    });
 });
 
 document.getElementById('btn-clean').addEventListener('click', function() {
@@ -463,6 +759,26 @@ document.getElementById('btn-enrich-force').addEventListener('click', function()
   this.disabled = true;
   streamScript('/api/db/enrich?force=1', 'Enriquecer datos OSM (todos)')
     .finally(() => { this.disabled = false; });
+});
+
+document.getElementById('btn-enrich-road').addEventListener('click', function() {
+  if (!confirm('El enriquecimiento de tipos de camino consulta Overpass API por cada track y puede tardar varios minutos. ¿Continuar?')) return;
+  this.disabled = true;
+  streamScript('/api/db/enrich-road-types', 'Enriquecer tipos de camino OSM')
+    .finally(() => { this.disabled = false; });
+});
+
+document.getElementById('btn-enrich-road-force').addEventListener('click', function() {
+  if (!confirm('El enriquecimiento de tipos de camino consulta Overpass API por cada track y puede tardar MUCHO tiempo. ¿Enriquecer TODOS los tracks, incluso los que ya tienen datos?')) return;
+  this.disabled = true;
+  streamScript('/api/db/enrich-road-types?force=1', 'Enriquecer tipos de camino OSM (todos)')
+    .finally(() => { this.disabled = false; });
+});
+
+document.getElementById('btn-organize-files').addEventListener('click', function() {
+  this.disabled = true;
+  streamScript('/api/db/organize-files', 'Reorganizar carpetas')
+    .finally(() => { this.disabled = false; loadStats(); });
 });
 
 document.getElementById('btn-export-catalog').addEventListener('click', function() {
@@ -490,8 +806,18 @@ function updateSizeEstimates() {
 
 document.getElementById('inp-maxpts-export').addEventListener('input', updateSizeEstimates);
 
+document.querySelectorAll('#admin-tabs .seg-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#admin-tabs .seg-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
 loadStats();
 loadBackups();
+loadBackupConfig();
 </script>
 </body>
 </html>

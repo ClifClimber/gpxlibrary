@@ -12,12 +12,12 @@ const MAX_POINTS = 300;
 function loadDbMeta() {
   try {
     const { DatabaseSync } = require('node:sqlite');
-    const dbPath = path.join(__dirname, '..', 'tracks.db');
+    const dbPath = path.join(__dirname, '..', 'data', 'tracks.db');
     if (!fs.existsSync(dbPath)) return {};
     const db = new DatabaseSync(dbPath, { readonly: true });
-    const rows = db.prepare('SELECT file, activity, sierra, province, ccaa, tags FROM tracks').all();
+    const rows = db.prepare('SELECT file, activity, sierra, province, ccaa, tags, ibp_bicycle, ibp_hiking, ibp_running, moving_time, stopped_time, id, circular FROM tracks').all();
     const map = {};
-    for (const r of rows) map[r.file] = { activity: r.activity, sierra: r.sierra, province: r.province, ccaa: r.ccaa, tags: r.tags };
+    for (const r of rows) map[r.file] = { activity: r.activity, sierra: r.sierra, province: r.province, ccaa: r.ccaa, tags: r.tags, ibp_bicycle: r.ibp_bicycle, ibp_hiking: r.ibp_hiking, ibp_running: r.ibp_running, moving_time: r.moving_time, stopped_time: r.stopped_time, id: r.id };
     db.close();
     return map;
   } catch { return {}; }
@@ -110,21 +110,26 @@ function parseGpx(content, filePath) {
     distance += haversine(points[i - 1].lat, points[i - 1].lon, points[i].lat, points[i].lon);
   }
 
-  // Elevation
+  const circular = haversine(points[0].lat, points[0].lon, points[points.length - 1].lat, points[points.length - 1].lon) < 0.5;
+
+  // Elevation (5 m threshold to filter GPS noise)
   let elevationGain = 0, elevationLoss = 0;
   let minEle = Infinity, maxEle = -Infinity;
-  let hasEle = false;
+  let hasEle = false, lastAccEle = null;
   for (let i = 0; i < points.length; i++) {
     const e = points[i].ele;
     if (e !== null && !isNaN(e)) {
       hasEle = true;
       if (e < minEle) minEle = e;
       if (e > maxEle) maxEle = e;
-      if (i > 0 && points[i - 1].ele !== null && !isNaN(points[i - 1].ele)) {
-        const diff = e - points[i - 1].ele;
-        if (diff > 0) elevationGain += diff;
-        else elevationLoss -= diff;
-      }
+      if (lastAccEle !== null) {
+        const diff = e - lastAccEle;
+        if (Math.abs(diff) >= 8) {
+          if (diff > 0) elevationGain += diff;
+          else elevationLoss -= diff;
+          lastAccEle = e;
+        }
+      } else { lastAccEle = e; }
     }
   }
 
@@ -162,6 +167,7 @@ function parseGpx(content, filePath) {
       Math.round(((minLat + maxLat) / 2) * 10000) / 10000,
       Math.round(((minLon + maxLon) / 2) * 10000) / 10000
     ],
+    circular,
     points: simplified
   };
 }
@@ -199,11 +205,18 @@ for (const filePath of files) {
     const track = parseGpx(content, filePath);
     if (track) {
       const meta = dbMeta[track.file] || {};
-      track.activity = meta.activity || null;
-      track.sierra   = meta.sierra   || null;
-      track.province = meta.province || null;
-      track.ccaa     = meta.ccaa     || null;
-      track.tags     = meta.tags ? JSON.parse(meta.tags) : [];
+      track.activity    = meta.activity    || null;
+      track.sierra      = meta.sierra      || null;
+      track.province    = meta.province    || null;
+      track.ccaa        = meta.ccaa        || null;
+      track.tags        = meta.tags ? JSON.parse(meta.tags) : [];
+      track.ibp_bicycle  = meta.ibp_bicycle  ?? null;
+      track.ibp_hiking   = meta.ibp_hiking   ?? null;
+      track.ibp_running  = meta.ibp_running  ?? null;
+      track.moving_time  = meta.moving_time  ?? null;
+      track.stopped_time = meta.stopped_time ?? null;
+      track.id           = meta.id           ?? null;
+      // circular stays as computed from GPX (same formula used in both import scripts)
       catalog.push(track);
     } else { console.warn(`  ⚠ Sin puntos: ${path.basename(filePath)}`); errors++; }
   } catch (e) {
