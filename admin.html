@@ -57,6 +57,19 @@
 #tab-bd .stats-table td, #tab-bd .stats-table th { font-size: 13px; }
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
+
+/* Changelog */
+.changelog-entry { padding: 20px 24px; border-bottom: 1px solid var(--line); }
+.changelog-entry:last-child { border-bottom: none; }
+.changelog-entry.current { background: var(--accent-soft); }
+.cl-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.cl-version { font-size: 15px; font-weight: 700; color: var(--ink); font-family: ui-monospace, Consolas, monospace; }
+.cl-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+            background: var(--accent); color: white; padding: 2px 8px; border-radius: 999px; }
+.cl-date { font-size: 12px; color: var(--muted); margin-left: auto; }
+.cl-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.cl-list li { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.cl-list code { font-size: 11px; background: rgba(0,0,0,.07); padding: 1px 5px; border-radius: 4px; }
 /* Import modal */
 #import-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1500; display:none; align-items:center; justify-content:center; }
 #import-overlay.open { display:flex; }
@@ -121,6 +134,7 @@
   <div class="seg-tabs" id="admin-tabs" style="margin-bottom:16px">
     <button class="seg-tab active" data-tab="bd">Base de datos</button>
     <button class="seg-tab" data-tab="tracks">Gestión de Tracks</button>
+    <button class="seg-tab" data-tab="about">Acerca de</button>
   </div>
 
   <!-- ── Tab: Base de datos ── -->
@@ -278,6 +292,98 @@
     </div>
   </div>
 
+  <!-- ── Tab: Acerca de ── -->
+  <div class="tab-panel" id="tab-about">
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body" style="display:flex;align-items:center;gap:20px;padding:20px 24px">
+        <div style="width:48px;height:48px;background:var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 17 L8 7 L13 14 L16 9 L21 17Z" fill="white" stroke="none"/>
+            <circle cx="8" cy="17" r="2" fill="white" stroke="none"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-size:20px;font-weight:700;color:var(--ink)">GPX Library</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.3.0</div>
+          <div style="font-size:11px;color:var(--muted)" id="about-date">21 octubre 2026</div>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--line);padding:14px 24px;display:flex;gap:24px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--muted)">⚙ Node.js + SQLite</span>
+        <span style="font-size:12px;color:var(--muted)">🗺 Leaflet 1.9</span>
+        <span style="font-size:12px;color:var(--muted)">📐 OpenStreetMap / Overpass</span>
+        <span style="font-size:12px;color:var(--muted)">🏔 IBP Index API</span>
+        <span style="font-size:12px;color:var(--muted)">🌤 Open-Meteo</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Historial de cambios</h2></div>
+      <div class="card-body" style="padding:0">
+
+        <div class="changelog-entry current">
+          <div class="cl-header">
+            <span class="cl-version">v1.3.0</span>
+            <span class="cl-badge current">Actual</span>
+            <span class="cl-date">21 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li>Visor carga datos desde <code>/api/catalog</code> — elimina <code>catalog-data.js</code> y el paso de reconstrucción</li>
+            <li>Los cambios en tracks (nombre, actividad, tags) son visibles de inmediato al volver al mapa</li>
+            <li>Corrección de elevaciones corruptas en tracks de La Palma (valores centinela <code>-1</code>/<code>-9999</code> y valores constantes del exportador Global Mapper)</li>
+            <li>Asignación de nombres a rutas PR LP 11–19 a partir del nombre de fichero</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v1.2.0</span>
+            <span class="cl-date">21 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li>Los archivos GPX se mueven automáticamente al cambiar la actividad o sierra de un track (edición individual, edición masiva y detalle de track)</li>
+            <li>Importación de tracks desde la página Admin (además del editor)</li>
+            <li>Reorganización de carpetas con detección de archivos ya en destino</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v1.1.0</span>
+            <span class="cl-date">19 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li>Navegación unificada en todas las páginas</li>
+            <li>Página de administración: backup/restore de BD, vacuum, estadísticas</li>
+            <li>Exportación ZIP de tracks seleccionados</li>
+            <li>MAX_POINTS configurable para el catálogo del visor</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v1.0.0</span>
+            <span class="cl-date">18 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li>Visor con mapa Leaflet, lista de tracks con filtros (actividad, sierra, IBP, búsqueda por lugar)</li>
+            <li>Importación desde GPX con geocodificación automática (Nominatim) e inferencia de actividad</li>
+            <li>Detalle de track: resumen, puntos de paso, tipos de camino OSM, curvas de nivel y pronóstico del tiempo</li>
+            <li>Limpieza y suavizado de tracks GPS (<code>clean-tracks.js</code>)</li>
+            <li>Enriquecimiento OSM: tipos de carretera y superficie por tramos</li>
+            <li>Cálculo de índice IBP (dificultad) vía API oficial ibpindex.com</li>
+            <li>Editor de tracks: CRUD, edición masiva, importación desde carpeta <code>_TEMP_</code></li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
 
 </main>
 
@@ -773,6 +879,12 @@ document.querySelectorAll('#admin-tabs .seg-tab').forEach(btn => {
 loadStats();
 loadBackups();
 loadBackupConfig();
+
+// Load version info for About tab
+fetch('/api/admin/version').then(r => r.json()).then(d => {
+  const el = document.getElementById('about-version');
+  if (el) el.textContent = 'v' + d.version;
+}).catch(() => {});
 </script>
 </body>
 </html>

@@ -1353,6 +1353,13 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/admin' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'admin.html'));
 
+  if (pathname === '/api/admin/version' && method === 'GET') {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ version: pkg.version, name: pkg.name }));
+    return;
+  }
+
   if (pathname === '/api/admin/stats' && method === 'GET')
     return apiAdminStats(res);
   if (pathname === '/api/admin/backup' && method === 'POST')
