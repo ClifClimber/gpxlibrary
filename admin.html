@@ -398,8 +398,8 @@
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.5.0</div>
-          <div style="font-size:11px;color:var(--muted)" id="about-date">21 octubre 2026</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.6.0</div>
+          <div style="font-size:11px;color:var(--muted)" id="about-date">23 octubre 2026</div>
         </div>
       </div>
       <div style="border-top:1px solid var(--line);padding:14px 24px;display:flex;gap:24px;flex-wrap:wrap">
@@ -417,16 +417,33 @@
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v1.5.0</span>
+            <span class="cl-version">v1.6.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">23 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Comparar tracks</b> (<code>/compare?ids=1,2,3</code>) — mapa Leaflet con N rutas en colores distintos, panel izquierdo compacto, botón "Altimetría" con pestañas por track y columna de stats</li>
+            <li>"Comparar" añadido al <code>&lt;nav&gt;</code> de todas las páginas; botón en barra de selección del editor (≥ 2 tracks)</li>
+            <li><b>Editor — Exportar GPX individual</b>: descarga un fichero por track de forma secuencial; ZIP sigue igual</li>
+            <li><b>Visor — stats en columna izquierda</b> del perfil de elevación: 📏 distancia, ↗↘ desnivel, ⏱ tiempo movimiento · total</li>
+            <li>Fix visor: al seleccionar un tramo el track principal no se oscurece; al cerrar el tramo/perfil el track no desaparece</li>
+            <li><b>Pestaña Logs</b>: visor de <code>data/operations.log</code> con filtros por nivel, búsqueda, descarga y borrado</li>
+            <li><b>OSM — botón "Solo enriquecer"</b>, TTL 365 días para caché Overpass, pre-caché por sierra</li>
+            <li>Fix: <code>osm-download</code> y <code>osm-precache</code> no respondían desde Admin</li>
+            <li><b>Wikiloc OAuth 2.0</b>: flujo Authorization Code completo con estado de conexión visual en Config</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v1.5.0</span>
             <span class="cl-date">21 oct 2026</span>
           </div>
           <ul class="cl-list">
             <li>Sistema de estrategias OSM intercambiables — selector en Admin para elegir entre tres métodos sin tocar código</li>
-            <li><b>Batch por sierra</b>: agrupa tracks por sierra, una consulta Overpass por grupo + caché en disco (<code>data/osm-cache/</code>) con TTL configurable — ideal cuando hay múltiples tracks en la misma zona</li>
-            <li><b>OSM local (osmium-tool)</b>: consulta un PBF de España descargado; sin límites de red ni esperas — requiere osmium-tool y ~200 MB de datos</li>
-            <li><code>scripts/osm-shared.js</code> — lógica común extraída: Haversine, matching, Overpass HTTP, escritura a BD</li>
-            <li><code>scripts/osm-download.js</code> — descarga Geofabrik + filtro osmium accionable desde Admin con barra de progreso</li>
+            <li><b>Batch por sierra</b>: agrupa tracks por sierra, una consulta Overpass por grupo + caché en disco (<code>data/osm-cache/</code>) con TTL configurable</li>
+            <li><b>OSM local (osmium-tool)</b>: consulta un PBF de España descargado; sin límites de red ni esperas</li>
+            <li><code>scripts/osm-shared.js</code> — lógica común extraída; <code>scripts/osm-download.js</code> — descarga Geofabrik desde Admin</li>
           </ul>
         </div>
 
