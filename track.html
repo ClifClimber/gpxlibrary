@@ -15,6 +15,7 @@
   <span class="logo">GPX Library</span>
   <a href="/" style="color:#f8fafc">Visor</a>
   <a href="/editor">Catálogo</a>
+  <a href="/compare">Comparar</a>
   <a href="/config">Config</a>
   <a href="/admin">Admin</a>
 </nav>
@@ -412,7 +413,7 @@ function fitTrack(t) {
 let gResizeT = null;
 window.addEventListener('resize', () => {
   clearTimeout(gResizeT);
-  gResizeT = setTimeout(() => { if (gTrack && gElePts) { clearHL(); drawProfile(gTrack, gColor); } }, 200);
+  gResizeT = setTimeout(() => { if (gTrack && gElePts) { clearHL(); drawProfile(gTrack, gColor); if (gSubidasActive) showClimbsOnProfile(); } }, 200);
 });
 
 // ── Map ──────────────────────────────────────────────────────────
@@ -455,6 +456,8 @@ function initMap(t, color) {
 // ── Module-level state ────────────────────────────────────────────
 let gMap = null, gLine = null, gHoverMk = null, gTrack = null;
 let gElePts = null;   // elevation-filtered points, set by drawProfile
+let gEleDists = null; // cumulative distances for gElePts, set by drawProfile
+let gProfileParams = null; // { l, t, CW, CH, totalDist } for profile highlight
 let gSelHL  = null;   // segment highlight featureGroup
 let gColor  = '#3b82f6'; // track color, set by render()
 let gClimbs = [];          // detected climbs, set by buildContent
@@ -464,6 +467,7 @@ let gActiveRoadType = null;
 let gWptMarkers = null;        // GPX waypoint markers layer
 let gEndpointMarkers = null;   // A/B start-end markers (puntos tab)
 let gClimbMapVisible = false;  // whether gradient overlay is shown on map
+let gSubidasActive  = false;   // whether Subidas tab is currently active
 let gRoadTypeMapVisible = false;// whether road type overlay is shown on map
 
 function hlByIdx(i1, i2) {
@@ -483,6 +487,8 @@ function hlByIdx(i1, i2) {
 
 function clearHL() {
   if (gSelHL) { gSelHL.remove(); gSelHL = null; }
+  const cr = document.getElementById('climb-rect');
+  if (cr) cr.setAttribute('opacity', '0');
 }
 
 // ── Gradient map & road-type overlay ─────────────────────────────
@@ -532,6 +538,7 @@ function clearClimbLayers() {
   if (gClimbLayers) { gClimbLayers.remove(); gClimbLayers = null; }
   if (gLine) gLine.setStyle({ opacity: 0.9 });
   gClimbMapVisible = false;
+  clearClimbBands();
 }
 
 function showRoadTypesOnMap(t) {
@@ -641,29 +648,60 @@ function showClimbsOnMap() {
   for (const c of gClimbs) {
     const lls = gElePts.slice(c.i1, c.i2 + 1).map(p => [p[0], p[1]]);
     if (lls.length < 2) continue;
-    const gc = gradColor(c.grad);
-    L.polyline(lls, { color: gc, weight: 6, opacity: 0.9 }).addTo(gClimbLayers);
-    const mid = lls[Math.floor(lls.length / 2)];
-    L.marker(mid, {
-      icon: L.divIcon({
-        html: `<div style="background:${gc};color:#fff;font-size:10px;font-weight:700;padding:2px 5px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4)">▲${c.grad}%</div>`,
-        className: '', iconAnchor: [20, 10],
-      })
-    }).addTo(gClimbLayers);
+    L.polyline(lls, { color: gradColor(c.grad), weight: 6, opacity: 0.9 }).addTo(gClimbLayers);
   }
-  if (gLine) gLine.setStyle({ opacity: 0.25 });
+  if (gLine) gLine.setStyle({ opacity: 0.55 });
   gClimbLayers.addTo(gMap);
+  gClimbMapVisible = true;
+}
+
+function showClimbsOnProfile() {
+  if (!gEleDists || !gProfileParams || !gClimbs.length) return;
+  const svgEl = document.getElementById('profile-svg');
+  if (!svgEl) return;
+  const old = document.getElementById('climb-bands');
+  if (old) old.remove();
+  const { l, t, CW, CH, totalDist } = gProfileParams;
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.id = 'climb-bands';
+  for (const c of gClimbs) {
+    const d1 = gEleDists[Math.min(c.i1, gEleDists.length - 1)] ?? 0;
+    const d2 = gEleDists[Math.min(c.i2, gEleDists.length - 1)] ?? totalDist;
+    const x1 = l + (d1 / totalDist) * CW;
+    const x2 = l + (d2 / totalDist) * CW;
+    const gc = gradColor(c.grad);
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x',            x1.toFixed(1));
+    rect.setAttribute('y',            t);
+    rect.setAttribute('width',        Math.max(2, x2 - x1).toFixed(1));
+    rect.setAttribute('height',       CH);
+    rect.setAttribute('fill',         gc);
+    rect.setAttribute('fill-opacity', '0.18');
+    rect.setAttribute('stroke',       gc);
+    rect.setAttribute('stroke-opacity', '0.6');
+    rect.setAttribute('stroke-width', '1.2');
+    rect.setAttribute('rx',           '1');
+    rect.setAttribute('pointer-events', 'none');
+    g.appendChild(rect);
+  }
+  const climbRect = document.getElementById('climb-rect');
+  if (climbRect) svgEl.insertBefore(g, climbRect);
+  else           svgEl.appendChild(g);
+}
+
+function clearClimbBands() {
+  const g = document.getElementById('climb-bands');
+  if (g) g.remove();
 }
 
 function toggleClimbsOnMap() {
   const btn = document.getElementById('climbs-map-btn');
   if (gClimbMapVisible) {
-    clearClimbLayers();
-    gClimbMapVisible = false;
+    clearClimbLayers();   // also clears profile bands
     if (btn) { btn.textContent = 'Mostrar en mapa'; btn.classList.remove('active'); }
   } else {
     showClimbsOnMap();
-    gClimbMapVisible = true;
+    showClimbsOnProfile();
     if (btn) { btn.textContent = 'Ocultar del mapa'; btn.classList.add('active'); }
   }
 }
@@ -714,11 +752,11 @@ function highlightRoadType(type) {
 
 // ── Climb detection ───────────────────────────────────────────────
 function gradColor(pct) {
-  if (pct <  3) return '#22c55e';
-  if (pct <  6) return '#eab308';
-  if (pct <  9) return '#f97316';
-  if (pct < 12) return '#ef4444';
-  return '#7c3aed';
+  if (pct <  3) return '#22c55e';  // verde
+  if (pct <  6) return '#eab308';  // amarillo
+  if (pct <  9) return '#f97316';  // naranja
+  if (pct < 12) return '#ef4444';  // rojo
+  return '#991b1b';                 // rojo oscuro
 }
 
 function formatDur(s) {
@@ -766,19 +804,22 @@ function detectClimbs(pts) {
   else              events.push({ type: 'v', i: refI });
 
   const all = [{ type: 'v', i: 0 }, ...events];
-  const MIN_GAIN = 25, MIN_DIST = 0.2;
+  let _p = { minGain: 80, minGrad: 4, minDist: 0.2 };
+  try { Object.assign(_p, JSON.parse(localStorage.getItem('gpx-climb-params') || '{}')); } catch {}
+  const MIN_DIST = _p.minDist, MIN_GAIN = _p.minGain, MIN_GRAD = _p.minGrad;
   const climbs = [];
   for (let j = 0; j + 1 < all.length; j++) {
     const a = all[j], b = all[j + 1];
     if (a.type !== 'v' || b.type !== 'p') continue;
     const gain = sm[b.i] - sm[a.i];
     const dist = ep[b.i].d - ep[a.i].d;
-    if (gain < MIN_GAIN || dist < MIN_DIST) continue;
+    const grad = gain / dist / 10;
+    if (dist < MIN_DIST || (gain < MIN_GAIN && grad < MIN_GRAD)) continue;
     climbs.push({
       i1:   a.i, i2: b.i,
       gain: Math.round(gain),
       km:   Math.round(dist * 100) / 100,
-      grad: Math.round(gain / dist / 10 * 10) / 10,
+      grad: Math.round(grad * 10) / 10,
     });
   }
   return climbs;
@@ -1003,10 +1044,8 @@ function buildContent(t, color, icon) {
   </div>`;
 
   // ── Tab: Subidas ──────────────────────────────────────────────
-  const climbMapBar = climbs.length ? `<div class="climb-map-bar">
-    <button class="btn btn-outline btn-sm" id="climbs-map-btn" onclick="toggleClimbsOnMap()">Mostrar en mapa</button>
-  </div>` : '';
-  const tabSubidas = climbMapBar + (climbs.length ? climbs.map((c, i) => {
+  const climbToggleBar = climbs.length ? `<div class="climb-map-bar"><button class="btn btn-outline btn-sm active" id="climbs-map-btn" onclick="toggleClimbsOnMap()">Ocultar del mapa</button></div>` : '';
+  const tabSubidas = climbToggleBar + (climbs.length ? climbs.map((c, i) => {
     const gc = gradColor(c.grad);
     return `<div class="climb-item" data-i1="${c.i1}" data-i2="${c.i2}" onclick="climbClick(this)">
       <div class="climb-grade-bar" style="background:${gc}"></div>
@@ -1073,6 +1112,8 @@ function drawProfile(t, color) {
   const W = rect.width || 700, H = 150;
   const P = { t: 10, r: 14, b: 24, l: 46 };
   const CW = W - P.l - P.r, CH = H - P.t - P.b;
+  gEleDists = dists;
+  gProfileParams = { l: P.l, t: P.t, CW, CH, totalDist };
   const toX = d => P.l + (d / totalDist) * CW;
   const toY = e => P.t + (1 - (e - minE) / rngE) * CH;
 
@@ -1115,6 +1156,7 @@ function drawProfile(t, color) {
     <path d="${areaD}" fill="url(#${gid})"/>
     <path d="${lineD}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
     <rect id="sel-rect" x="${P.l}" y="${P.t}" width="0" height="${CH}" fill="rgba(59,130,246,.12)" stroke="rgba(59,130,246,.45)" stroke-width="1" opacity="0" pointer-events="none"/>
+    <rect id="climb-rect" x="${P.l}" y="${P.t}" width="0" height="${CH}" fill="rgba(251,146,60,.18)" stroke="rgba(234,88,12,.55)" stroke-width="1.5" rx="2" opacity="0" pointer-events="none"/>
     <line id="ph-line" x1="0" y1="${P.t}" x2="0" y2="${P.t+CH}" stroke="${color}" stroke-width="1.5" stroke-dasharray="4 3" opacity="0" pointer-events="none"/>
     <circle id="ph-dot" cx="0" cy="0" r="4.5" fill="white" stroke="${color}" stroke-width="2" opacity="0" pointer-events="none"/>
     <rect id="ph-area" x="${P.l}" y="${P.t}" width="${CW}" height="${CH}" fill="transparent" style="cursor:crosshair"/>
@@ -1278,10 +1320,12 @@ function switchTab(name) {
   clearClimbLayers();
   clearRoadTypeLayers();
   gActiveRoadType = null;
+  gSubidasActive = name === 'subidas';
   document.querySelectorAll('.climb-item.active').forEach(e => e.classList.remove('active'));
   document.querySelectorAll('.type-row.active-type').forEach(el => el.classList.remove('active-type'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'subidas') { showClimbsOnMap(); showClimbsOnProfile(); }
   if (name === 'tiempo') loadWeather();
 }
 
@@ -1396,13 +1440,27 @@ document.addEventListener('keydown', e => {
 
 // ── Climb click ──────────────────────────────────────────────────
 function climbClick(el) {
+  const wasActive = el.classList.contains('active');
   document.querySelectorAll('.climb-item.active').forEach(e => e.classList.remove('active'));
+  if (wasActive) { clearHL(); return; }
   el.classList.add('active');
   const i1 = +el.dataset.i1, i2 = +el.dataset.i2;
   hlByIdx(i1, i2);
   if (gMap && gElePts && i2 < gElePts.length) {
     const lls = gElePts.slice(i1, i2 + 1).map(p => [p[0], p[1]]);
     gMap.fitBounds(L.latLngBounds(lls), { ...mapPadding(), maxZoom: 15 });
+  }
+  // Highlight segment in elevation profile
+  const climbRect = document.getElementById('climb-rect');
+  if (climbRect && gEleDists && gProfileParams) {
+    const { l, t, CW, CH, totalDist } = gProfileParams;
+    const d1 = gEleDists[Math.min(i1, gEleDists.length - 1)] ?? 0;
+    const d2 = gEleDists[Math.min(i2, gEleDists.length - 1)] ?? totalDist;
+    const x1 = l + (d1 / totalDist) * CW;
+    const x2 = l + (d2 / totalDist) * CW;
+    climbRect.setAttribute('x', x1.toFixed(1));
+    climbRect.setAttribute('width', Math.max(2, x2 - x1).toFixed(1));
+    climbRect.setAttribute('opacity', '1');
   }
 }
 

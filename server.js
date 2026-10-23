@@ -20,6 +20,26 @@ const { escXml, updateGpxMetadata } = require('./scripts/gpx-utils');
 const PORT = parseInt(process.env.PORT || '8080');
 const ROOT = __dirname;
 
+let _oauthState = null; // { state, ts } — CSRF token para el flujo OAuth
+
+// ── Operations log ─────────────────────────────────────────────────
+const LOG_FILE = path.join(ROOT, 'data', 'operations.log');
+const LOG_MAX_LINES = 3000;
+
+function appendLog(level, op, msg, extra = {}) {
+  const entry = JSON.stringify({ ts: new Date().toISOString(), level, op, msg, ...extra });
+  try { fs.appendFileSync(LOG_FILE, entry + '\n'); } catch {}
+  // Rotate: if file > 256 KB, keep last LOG_MAX_LINES lines
+  try {
+    if (fs.statSync(LOG_FILE).size > 262144) {
+      const lines = fs.readFileSync(LOG_FILE, 'utf8').trim().split('\n');
+      if (lines.length > LOG_MAX_LINES) {
+        fs.writeFileSync(LOG_FILE, lines.slice(-LOG_MAX_LINES).join('\n') + '\n');
+      }
+    }
+  } catch {}
+}
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js':   'application/javascript',
@@ -98,6 +118,9 @@ function apiRunScript(res, scriptPath, args = []) {
     'Connection':    'keep-alive',
   });
 
+  const opName = path.basename(scriptPath, '.js');
+  appendLog('info', opName, `${opName} iniciado`, { args });
+
   const send = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
   send({ type: 'start' });
 
@@ -137,12 +160,14 @@ function apiRunScript(res, scriptPath, args = []) {
   child.on('close', code => {
     if (buf.trim()) send({ type: 'log', text: buf.trim() });
     send({ type: 'done', code });
+    appendLog(code === 0 ? 'info' : 'error', opName, `${opName} ${code === 0 ? 'completado' : 'fallido'}`, { code });
     if (code === 0) invalidateCatalogCache(); // import/clean/enrich changed the data
     res.end();
   });
   child.on('error', err => {
     send({ type: 'error', text: err.message });
     send({ type: 'done', code: 1 });
+    appendLog('error', opName, `${opName} error: ${err.message}`);
     res.end();
   });
 }
@@ -511,7 +536,8 @@ function buildCatalog() {
     'SELECT id,name,file,zone,date,cleaned,color,activity,sierra,ccaa,tags,' +
     'ibp_bicycle,ibp_hiking,ibp_running,' +
     'distance,elevation_gain,elevation_loss,min_elevation,max_elevation,' +
-    'sw_lat,sw_lon,ne_lat,ne_lon,center_lat,center_lon,catalog_pts,road_types ' +
+    'sw_lat,sw_lon,ne_lat,ne_lon,center_lat,center_lon,catalog_pts,road_types,' +
+    'moving_time,stopped_time ' +
     'FROM tracks ORDER BY date DESC,name ASC'
   ).all();
   const fetchRaw   = db.prepare('SELECT lat,lon,ele FROM raw_points   WHERE track_id=? ORDER BY seq');
@@ -555,6 +581,8 @@ function buildCatalog() {
       ibp_hiking:    t.ibp_hiking   != null ? Math.round(t.ibp_hiking)   : null,
       ibp_running:   t.ibp_running  != null ? Math.round(t.ibp_running)  : null,
       hasOsm:        !!(t.road_types && t.road_types !== '{}'),
+      movingTime:    t.moving_time  || null,
+      stoppedTime:   t.stopped_time || null,
       points,
     });
   }
@@ -585,7 +613,7 @@ function apiGetTracks(res) {
              distance, elevation_gain, elevation_loss, min_elevation, max_elevation,
              center_lat, center_lon, raw_count, clean_count, cleaned,
              activity, province, ccaa, sierra, notes, url, imported_at, tags,
-             ibp_bicycle, ibp_hiking, ibp_running, is_recent_import, circular
+             ibp_bicycle, ibp_hiking, ibp_running, is_recent_import, circular, road_types
       FROM tracks ORDER BY imported_at DESC, name
     `).all();
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1307,6 +1335,13 @@ const server = http.createServer(async (req, res) => {
     return apiTempFiles(res, srcDir);
   }
 
+  if (pathname === '/api/import/wikiloc' && method === 'POST') {
+    const body = await parseBody(req).catch(() => ({}));
+    const url  = (body.url || '').trim();
+    if (!url) return json(res, 400, { error: 'Missing url' });
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'wikiloc-import.js'), [url]);
+  }
+
   if (pathname === '/api/db/import-temp' && method === 'POST') {
     const body  = await parseBody(req).catch(() => ({}));
     const force = body.force || searchParams.get('force') === '1';
@@ -1346,11 +1381,13 @@ const server = http.createServer(async (req, res) => {
     const force       = searchParams.get('force') === '1';
     const cacheOnly   = searchParams.get('cache-only') === '1';
     const enrichOnly  = searchParams.get('enrich-only') === '1';
+    const missingOnly = searchParams.get('missing-only') === '1';
     const sierra      = searchParams.get('sierra');
     const args        = [];
     if (force)       args.push('--force');
     if (cacheOnly)   args.push('--cache-only');
     if (enrichOnly)  args.push('--enrich-only');
+    if (missingOnly) args.push('--missing-only');
     if (sierra)      { args.push('--sierra'); args.push(sierra); }
     return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-precache.js'), args);
   }
@@ -1360,6 +1397,102 @@ const server = http.createServer(async (req, res) => {
   function readOsmSettings() {
     try { if (fs.existsSync(OSM_SETTINGS)) return JSON.parse(fs.readFileSync(OSM_SETTINGS, 'utf8')); } catch {}
     return { strategy: 'per-track', cacheTtlDays: 30 };
+  }
+
+  // ── OAuth Wikiloc ──────────────────────────────────────────────────
+  if (pathname === '/auth/wikiloc' && method === 'GET') {
+    const s = readOsmSettings();
+    const clientId = s.wikiloc_client_id;
+    if (!clientId) { res.writeHead(302, { Location: '/config?wl-error=no-client-id' }); return res.end(); }
+    const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    _oauthState = { state, ts: Date.now() };
+    const qs = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      redirect_uri: `http://localhost:${PORT}/auth/wikiloc/callback`,
+      scope: 'trails',
+      state,
+    });
+    res.writeHead(302, { Location: `https://www.wikiloc.com/oauth2/authorize?${qs}` });
+    return res.end();
+  }
+
+  if (pathname === '/auth/wikiloc/callback' && method === 'GET') {
+    const code  = searchParams.get('code');
+    const state = searchParams.get('state');
+    const error = searchParams.get('error');
+    if (error) { res.writeHead(302, { Location: `/config?wl-error=${encodeURIComponent(error)}` }); return res.end(); }
+    if (!_oauthState || _oauthState.state !== state || Date.now() - _oauthState.ts > 300000) {
+      res.writeHead(302, { Location: '/config?wl-error=state-mismatch' }); return res.end();
+    }
+    _oauthState = null;
+    const s = readOsmSettings();
+    try {
+      const tr = await fetch('https://www.wikiloc.com/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code', code,
+          redirect_uri: `http://localhost:${PORT}/auth/wikiloc/callback`,
+          client_id: s.wikiloc_client_id, client_secret: s.wikiloc_client_secret,
+        }).toString(),
+      });
+      const data = await tr.json();
+      if (data.access_token) {
+        const next = { ...s, wikiloc_token: data.access_token };
+        if (data.refresh_token) next.wikiloc_refresh_token = data.refresh_token;
+        fs.writeFileSync(OSM_SETTINGS, JSON.stringify(next, null, 2));
+        appendLog('info', 'oauth', 'Wikiloc OAuth: token obtenido');
+        res.writeHead(302, { Location: '/config?wl-ok=1' });
+      } else {
+        appendLog('warn', 'oauth', `Wikiloc OAuth sin token: ${JSON.stringify(data)}`);
+        res.writeHead(302, { Location: `/config?wl-error=${encodeURIComponent(data.error || 'no-token')}` });
+      }
+    } catch (e) {
+      appendLog('error', 'oauth', `Wikiloc OAuth callback error: ${e.message}`);
+      res.writeHead(302, { Location: `/config?wl-error=${encodeURIComponent(e.message)}` });
+    }
+    return res.end();
+  }
+
+  if (pathname === '/auth/wikiloc/disconnect' && method === 'POST') {
+    const s = readOsmSettings();
+    const next = { ...s };
+    delete next.wikiloc_token; delete next.wikiloc_refresh_token;
+    fs.writeFileSync(OSM_SETTINGS, JSON.stringify(next, null, 2));
+    appendLog('info', 'oauth', 'Wikiloc: sesión desconectada');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true }));
+  }
+
+  if (pathname === '/api/config/settings' && method === 'GET') {
+    const s = readOsmSettings();
+    const safe = { ...s };
+    if (safe.wikiloc_token)         safe.wikiloc_token = '(configured)';
+    if (safe.wikiloc_client_secret) safe.wikiloc_client_secret = '(configured)';
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(safe));
+  }
+
+  if (pathname === '/api/config/settings' && method === 'PATCH') {
+    try {
+      const body = await parseBody(req);
+      const current = readOsmSettings();
+      const ALLOWED = ['wikiloc_token', 'wikiloc_client_id', 'wikiloc_client_secret'];
+      const updates = {};
+      for (const k of ALLOWED) {
+        if (k in body) updates[k] = body[k] === '' ? undefined : body[k];
+      }
+      const next = { ...current };
+      for (const [k, v] of Object.entries(updates)) {
+        if (v === undefined) delete next[k]; else next[k] = v;
+      }
+      fs.writeFileSync(OSM_SETTINGS, JSON.stringify(next, null, 2));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true }));
+    } catch(e) {
+      res.writeHead(500); return res.end(JSON.stringify({ error: e.message }));
+    }
   }
 
   if (pathname === '/api/config/osm-strategy' && method === 'GET') {
@@ -1385,17 +1518,26 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/admin/osm-cache' && method === 'GET') {
     const cacheDir = path.join(ROOT, 'data', 'osm-cache');
+    const slugify = s => (s||'sin-zona').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
     try {
-      const files = fs.existsSync(cacheDir) ? fs.readdirSync(cacheDir).filter(f => f.endsWith('.json')) : [];
-      const entries = files.map(f => {
-        const fp   = path.join(cacheDir, f);
+      // All groups from DB
+      const db = openDb();
+      const groups = db.prepare(
+        `SELECT COALESCE(sierra, province, 'sin-zona') AS group_key, COUNT(*) AS track_count
+         FROM tracks WHERE sw_lat IS NOT NULL GROUP BY group_key ORDER BY track_count DESC`
+      ).all();
+      const entries = groups.map(g => {
+        const slug = slugify(g.group_key);
+        const fp   = path.join(cacheDir, slug + '.json');
+        if (!fs.existsSync(fp)) return { name: slug, label: g.group_key, trackCount: g.track_count, cached: false };
         const stat = fs.statSync(fp);
         let ts = 0;
         try { ts = JSON.parse(fs.readFileSync(fp, 'utf8')).ts || 0; } catch {}
-        return { name: f.replace('.json', ''), file: f, size: stat.size, ts,
-                 ageHours: Math.round((Date.now() - ts) / 3600000) };
+        return { name: slug, label: g.group_key, trackCount: g.track_count, cached: true,
+                 size: stat.size, ts, ageHours: Math.round((Date.now() - ts) / 3600000) };
       });
-      entries.sort((a, b) => a.name.localeCompare(b.name));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify(entries));
     } catch(e) {
@@ -1485,6 +1627,41 @@ const server = http.createServer(async (req, res) => {
     return apiRunScript(res, path.join(ROOT,'scripts','calc-ibp.js'), args);
   }
 
+  // ── Log routes ───────────────────────────────────────────────────
+  if (pathname === '/api/admin/logs' && method === 'GET') {
+    try {
+      const content = fs.existsSync(LOG_FILE) ? fs.readFileSync(LOG_FILE, 'utf8') : '';
+      const lines = content.trim().split('\n').filter(Boolean);
+      const parsed = lines.map(l => { try { return JSON.parse(l); } catch { return { ts: null, level: 'raw', op: '', msg: l }; } });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(parsed));
+    } catch (e) { res.writeHead(500); res.end(JSON.stringify({ error: e.message })); }
+    return;
+  }
+
+  if (pathname === '/api/admin/logs/download' && method === 'GET') {
+    try {
+      const content = fs.existsSync(LOG_FILE) ? fs.readFileSync(LOG_FILE) : Buffer.alloc(0);
+      const date = new Date().toISOString().slice(0, 10);
+      res.writeHead(200, {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Disposition': `attachment; filename="operations-${date}.log"`,
+      });
+      res.end(content);
+    } catch (e) { res.writeHead(500); res.end(JSON.stringify({ error: e.message })); }
+    return;
+  }
+
+  if (pathname === '/api/admin/logs/clear' && method === 'POST') {
+    try {
+      fs.writeFileSync(LOG_FILE, '');
+      appendLog('info', 'server', 'Log limpiado manualmente');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (e) { res.writeHead(500); res.end(JSON.stringify({ error: e.message })); }
+    return;
+  }
+
   // ── Admin routes ─────────────────────────────────────────────────
   if (pathname === '/admin' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'admin.html'));
@@ -1535,6 +1712,9 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/track' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'track.html'));
+
+  if (pathname === '/compare' && method === 'GET')
+    return serveStatic(res, path.join(ROOT, 'compare.html'));
 
   if (pathname === '/api/db/write-gpx-attrs' && method === 'POST') {
     const ids = searchParams.get('ids');
@@ -1596,6 +1776,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, '127.0.0.1', () => {
   const url = `http://localhost:${PORT}`;
   console.log(`\n  GPX Library  →  ${url}\n`);
+  appendLog('info', 'server', `Servidor iniciado en puerto ${PORT}`);
   const { exec } = require('child_process');
   const open = process.platform === 'win32' ? `start ${url}` : `open ${url}`;
   exec(open);

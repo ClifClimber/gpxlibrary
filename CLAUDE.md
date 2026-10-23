@@ -51,16 +51,19 @@ Pure Node.js HTTP server. No framework. Routes:
 - `DELETE /api/tracks/:id`
 - `GET /api/geo` — returns `{provinces, ccaa, zones}` distinct values from DB
 - `GET /api/config/activities` — activity list with colors
-- `GET /api/db/import-temp` (SSE) — runs `import-from-temp.js`, streams log lines
-- `GET /api/db/enrich-road-types?ids=1,2,3` (SSE) — runs `enrich-road-types.js`
-- `GET /api/db/clean?ids=…` (SSE) — runs `clean-tracks.js`
+- `POST /api/db/import-temp` (SSE) — runs `import-from-temp.js`, streams log lines
+- `POST /api/db/enrich-road-types?ids=1,2,3` (SSE) — runs `enrich-road-types.js`
+- `POST /api/db/clean?ids=…` (SSE) — runs `clean-tracks.js`
+- `POST /api/import/wikiloc` (SSE) — body `{ url }`, runs `wikiloc-import.js`; requires `wikiloc_token` in `osm-settings.json`
+- `GET /api/config/settings` — returns `osm-settings.json` (token values masked)
+- `PATCH /api/config/settings` — updates allowed keys (`wikiloc_token`) in `osm-settings.json`
 - `/api/admin/…` — stats, backup, restore, vacuum, integrity
 
 ### Pages
 - `/` → `index.html` + `visor.js` + `visor.css` — Leaflet map, track list, filters, elevation profile
 - `/track?id=N` → `track.html` + `track.css` — detail view with tabs (Resumen, Puntos de paso, Tipos de camino, Subidas, Tiempo hoy)
 - `/editor` → `editor.html` — CRUD list, import from `_TEMP_`, tag editing
-- `/config` → `config.html` — activity/sierra config
+- `/config` → `config.html` — activity/sierra config, Parámetros (climb thresholds + Wikiloc token)
 - `/admin` → `admin.html` — backup/restore/vacuum, IBP calc, stats
 
 ### Visor (`visor.js`)
@@ -75,8 +78,14 @@ Tabs built dynamically by `buildContent(t)`:
 - **Resumen** — key stats, IBP gauge, tags, description
 - **Puntos de paso** — start/end points + GPX waypoints (`t.waypoints[]`) with toggle button to show `L.divIcon` markers on the map (`toggleWptMarkers()`)
 - **Tipos de camino** — OSM highway/surface breakdown; clicking a type highlights its segments on the map (`showRoadTypesOnMap()`, `highlightRoadType()`)
-- **Subidas** — gradient color overlay on map (`showGradientMap()`), detected climbs listed
+- **Subidas** — detected climbs shown automatically on map (colored polylines, no labels) and as colored bands in the elevation profile SVG when the tab is active. Toggle button to show/hide. Clicking a climb zooms the map and highlights a selection rect in the profile. `gSubidasActive` flag tracks whether the tab is active; `showClimbsOnMap()` / `showClimbsOnProfile()` / `clearClimbBands()` manage the overlays.
 - **Tiempo hoy** — Open-Meteo forecast
+
+Climb detection (`detectClimbs`): thresholds read from `localStorage['gpx-climb-params']` (minGain m, minGrad %, minDist km). A climb passes if `dist ≥ minDist AND (gain ≥ minGain OR grad ≥ minGrad)`. Defaults: 80 m / 4% / 0.2 km.
+
+`gradColor(pct)`: green < 3%, yellow < 6%, orange < 9%, red < 12%, dark-red ≥ 12%. No purple.
+
+Profile globals: `gEleDists` (cumulative distances for `gElePts`) and `gProfileParams` (`{l,t,CW,CH,totalDist}`) are set in `drawProfile` and used by climb/selection highlight functions.
 
 Edit modal: `<datalist>` autocomplete for activity/sierra/province/ccaa; custom dropdown for tags.
 
@@ -86,6 +95,11 @@ Edit modal: `<datalist>` autocomplete for activity/sierra/province/ccaa; custom 
 3. Infer activity from name keywords + metrics
 4. Move file to `TracksGps/<Activity>/<Sierra>/`
 5. Upsert to DB; store `waypoints_json`; write metadata back to GPX
+
+### Wikiloc import (`scripts/wikiloc-import.js`)
+Takes a Wikiloc URL or numeric trail ID. Reads `wikiloc_token` from `osm-settings.json`. Calls Wikiloc REST API v2 (`/api/v2/trails/{id}` and `/api/v2/trails/{id}/gpx`) with Bearer auth. Saves GPX to `TracksGps/_TEMP_/wikiloc-{id}.gpx`, then spawns `import-from-temp.js` to complete the import. Token configured in `Config → Parámetros → Wikiloc`.
+
+The visor has a globe icon button in `#panel-head` that opens an import modal. Currently lists Wikiloc; designed to add more sources (Komoot, Strava…) as new `.import-net-btn` cards.
 
 ### OSM enrichment (`scripts/enrich-road-types.js`)
 Queries Overpass API for `highway` ways inside track bbox. Matches each GPS segment midpoint to nearest way. Stores compact fraction-based segments `{t, f0, f1}` in `road_type_seq` for the frontend to colorize.

@@ -256,6 +256,59 @@
       .edit-grid2 { grid-template-columns:1fr; }
       #bulk-panel { width:100%; }
     }
+    /* ── Disk import (inside import modal) ──────── */
+    #import-picker { display:flex; flex-direction:column; gap:10px; }
+    #import-picker-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .import-sel-btn { padding:3px 9px; border:1.5px solid var(--border); border-radius:5px; background:transparent; color:var(--muted); font-size:11px; cursor:pointer; white-space:nowrap; }
+    .import-sel-btn:hover { border-color:var(--text); color:var(--text); }
+    #import-file-list { max-height:180px; overflow-y:auto; background:#0f172a; border-radius:6px; padding:6px 8px; display:flex; flex-direction:column; gap:1px; }
+    .import-file-item { display:flex; align-items:center; gap:8px; padding:5px 4px; cursor:pointer; border-radius:4px; }
+    .import-file-item:hover { background:rgba(255,255,255,.05); }
+    .import-file-item input[type=checkbox] { accent-color:#3b82f6; cursor:pointer; flex-shrink:0; width:13px; height:13px; }
+    .import-file-item .ifl-name { font-size:11px; font-family:'Cascadia Code',Consolas,monospace; color:#e2e8f0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .import-file-item .ifl-dir { font-size:10px; color:#475569; flex-shrink:0; }
+    #btn-import-start { padding:7px 16px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; }
+    #btn-import-start:disabled { opacity:.5; cursor:not-allowed; }
+    /* ── Friendly import log ─────────────────────── */
+    .ilog { background:var(--soft,#f8fafc); border:1px solid var(--line,#e2e8f0); border-radius:8px; padding:8px 10px; max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:1px; }
+    .ilog-row { display:flex; align-items:baseline; gap:7px; padding:2px 4px; border-radius:4px; font-size:12px; line-height:1.55; }
+    .ilog-row:hover { background:rgba(0,0,0,.03); }
+    .ilog-icon { width:14px; flex-shrink:0; text-align:center; font-size:11px; }
+    .ilog-text { flex:1; font-family:ui-monospace,Consolas,monospace; white-space:pre-wrap; word-break:break-word; color:var(--ink-2,#475569); }
+    .ilog-row.ok   .ilog-icon { color:#16a34a; } .ilog-row.ok   .ilog-text { color:#15803d; }
+    .ilog-row.err  .ilog-icon { color:#dc2626; } .ilog-row.err  .ilog-text { color:#b91c1c; }
+    .ilog-row.err  { background:rgba(220,38,38,.05); }
+    .ilog-row.warn .ilog-icon { color:#d97706; } .ilog-row.warn .ilog-text { color:#92400e; }
+    .ilog-row.prog .ilog-icon { color:var(--accent); } .ilog-row.prog .ilog-text { color:var(--accent); font-weight:500; }
+    .ilog-row.sub  .ilog-text { color:var(--muted,#94a3b8); padding-left:10px; }
+    .ilog-summary { display:flex; gap:6px; padding:6px 4px 2px; border-top:1px solid var(--line,#e2e8f0); margin-top:4px; flex-wrap:wrap; }
+    .ilog-badge { font-size:11px; font-weight:600; padding:2px 9px; border-radius:999px; }
+    .ilog-badge.ok   { background:#dcfce7; color:#15803d; }
+    .ilog-badge.err  { background:#fee2e2; color:#b91c1c; }
+    .ilog-badge.warn { background:#fef9c3; color:#854d0e; }
+    /* ── Folder browser ──────────────────────────── */
+    #fb-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:3000; display:none; align-items:center; justify-content:center; }
+    #fb-overlay.open { display:flex; }
+    #fb-modal { background:var(--surface); border-radius:12px; width:560px; max-width:96vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 12px 48px rgba(0,0,0,.35); overflow:hidden; }
+    #fb-topbar { display:flex; align-items:center; gap:10px; padding:14px 16px 10px; border-bottom:1px solid var(--border); }
+    #fb-topbar h3 { font-size:14px; font-weight:600; flex:1; }
+    #fb-breadcrumb { display:flex; align-items:center; flex-wrap:wrap; gap:2px; padding:8px 14px; background:var(--filter-bg); border-bottom:1px solid var(--border); font-size:11px; min-height:34px; }
+    .fb-crumb { color:var(--accent); cursor:pointer; padding:2px 4px; border-radius:4px; white-space:nowrap; }
+    .fb-crumb:hover { background:#eff6ff; }
+    .fb-sep { color:var(--muted); padding:0 1px; }
+    #fb-list { overflow-y:auto; flex:1; padding:6px 8px; display:flex; flex-direction:column; gap:1px; }
+    .fb-item { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px; cursor:pointer; font-size:13px; color:var(--text); }
+    .fb-item:hover { background:var(--filter-bg); }
+    .fb-item.fb-up { color:var(--muted); font-size:12px; }
+    .fb-item svg { flex-shrink:0; color:#f59e0b; }
+    .fb-item.fb-up svg { color:var(--muted); }
+    .fb-item.fb-file { color:var(--muted); cursor:default; font-size:12px; padding:5px 10px; }
+    .fb-item.fb-file:hover { background:transparent; }
+    .fb-item.fb-file svg { color:#64748b; }
+    .fb-divider { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding:8px 10px 3px; }
+    .fb-empty { padding:20px; text-align:center; color:var(--muted); font-size:13px; }
+    #fb-footer { display:flex; align-items:center; gap:10px; padding:10px 14px; border-top:1px solid var(--border); background:var(--filter-bg); }
+    #fb-selected-path { flex:1; font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace,Consolas,monospace; }
   </style>
 </head>
 <body>
@@ -264,6 +317,7 @@
   <span class="logo">GPX Library</span>
   <a href="/">Visor</a>
   <a href="/editor" style="color:#f8fafc">Catálogo</a>
+  <a href="/compare">Comparar</a>
   <a href="/config">Config</a>
   <a href="/admin">Admin</a>
 </nav>
@@ -307,6 +361,10 @@
     <button class="hbtn hbtn-outline" id="btn-ibp">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       IBP Index
+    </button>
+    <button class="hbtn hbtn-outline" id="btn-import-web">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Importar tracks
     </button>
     </div>
   </div>
@@ -357,6 +415,10 @@
   <button id="btn-sel-enrich-road">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
     Enriquecer OSM
+  </button>
+  <button id="btn-compare" hidden>
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="18"/></svg>
+    Comparar (<span id="compare-count">0</span>)
   </button>
   <button id="btn-select-all-filter">Seleccionar todos los filtrados</button>
   <button id="btn-deselect">Deseleccionar</button>
@@ -412,8 +474,8 @@
     </div>
     <div class="export-opt">
       <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Formato</div>
-      <label><input type="radio" name="export-fmt" value="gpx" checked> GPX único (todos los tracks en un archivo)</label>
-      <label><input type="radio" name="export-fmt" value="zip"> ZIP — un archivo GPX por track</label>
+      <label><input type="radio" name="export-fmt" value="gpx" checked> GPX — un archivo por track (descarga individual)</label>
+      <label><input type="radio" name="export-fmt" value="zip"> ZIP — todos los tracks en un archivo comprimido</label>
       <div id="export-layout-row" style="display:none;flex-direction:column;gap:3px;margin-left:22px;margin-top:3px">
         <label><input type="radio" name="export-layout" value="flat" checked> Plano (sin subcarpetas)</label>
         <label><input type="radio" name="export-layout" value="tree"> Estructura original (Actividad/Zona/track.gpx)</label>
@@ -466,7 +528,7 @@
         <th class="col-cb"><input type="checkbox" id="cb-all" class="cb"></th>
         <th class="sortable" data-col="name">Nombre</th>
         <th class="col-activ sortable" data-col="activity">Actividad</th>
-        <th class="col-prov sortable" data-col="province">Provincia</th>
+        <th class="col-prov sortable" data-col="has_osm" title="Datos OSM de tipos de camino" style="text-align:center">OSM</th>
         <th class="col-ccaa sortable" data-col="ccaa">CCAA</th>
         <th class="col-sierra sortable" data-col="sierra">Sierra / Zona</th>
         <th class="col-circ" title="Circular / Lineal">Tipo</th>
@@ -567,7 +629,149 @@
 
 <div id="toast"></div>
 
+<!-- Folder browser -->
+<div id="fb-overlay">
+  <div id="fb-modal">
+    <div id="fb-topbar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <h3>Seleccionar carpeta</h3>
+      <button class="btn btn-ghost btn-sm" id="btn-fb-close">✕</button>
+    </div>
+    <div id="fb-breadcrumb"></div>
+    <div id="fb-list"></div>
+    <div id="fb-footer">
+      <span id="fb-selected-path"></span>
+      <button class="btn btn-ghost btn-sm" id="btn-fb-cancel">Cancelar</button>
+      <button class="btn btn-primary btn-sm" id="btn-fb-select">Seleccionar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import tracks modal -->
+<div id="import-web-overlay" class="modal-overlay">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-head">
+      <span class="modal-title">Importar tracks</span>
+      <button class="icon-btn" id="import-web-close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;padding:4px 16px 12px;overflow-y:auto;flex:1;min-height:0">
+      <button class="import-net-btn" data-net="wikiloc">
+        <span class="import-net-icon" style="background:#fff;border:1px solid #e2e8f0;padding:2px">
+          <img src="/assets/wikiloc-logo.png" alt="Wikiloc" style="width:32px;height:32px;object-fit:contain;border-radius:6px">
+        </span>
+        <span class="import-net-label">Wikiloc</span>
+        <svg class="import-net-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <div class="import-net-form" id="form-wikiloc" hidden>
+        <label style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">URL o ID del track</label>
+        <input type="text" id="wl-url-input" class="input" placeholder="https://es.wikiloc.com/rutas/… o 123456" style="margin-top:6px;width:100%">
+        <button class="btn btn-primary" id="btn-wl-import" style="margin-top:10px;width:100%">Importar</button>
+      </div>
+
+      <button class="import-net-btn" data-net="disco">
+        <span class="import-net-icon" style="background:#f59e0b">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        <span class="import-net-label">Importar de disco</span>
+        <svg class="import-net-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <div class="import-net-form" id="form-disco" hidden>
+        <div id="import-picker">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;color:var(--muted);white-space:nowrap">Carpeta:</label>
+            <input type="text" id="import-src-path" class="input" style="font-size:12px;flex:1;padding:4px 8px" value="TracksGps/_TEMP_">
+            <button class="btn btn-ghost btn-sm" id="btn-import-browse" title="Seleccionar carpeta">📂</button>
+            <button class="btn btn-ghost btn-sm" id="btn-import-load">Cargar</button>
+          </div>
+          <div id="import-picker-toolbar">
+            <span id="import-picker-count" style="font-size:12px;color:var(--muted);flex:1">—</span>
+            <button class="import-sel-btn" id="import-sel-all">Todos</button>
+            <button class="import-sel-btn" id="import-sel-none">Ninguno</button>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--muted);font-size:12px">
+              <input type="checkbox" id="import-force"> --force
+            </label>
+          </div>
+          <div id="import-file-list"><span style="color:#94a3b8;font-size:12px">Introduce una carpeta y pulsa Cargar.</span></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="btn-import-start" disabled>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Importar seleccionados
+            </button>
+          </div>
+          <div id="import-disk-log" class="ilog" style="margin-top:6px" hidden></div>
+        </div>
+      </div>
+    </div>
+    <div id="import-web-log" class="ilog" style="margin-top:6px" hidden></div>
+  </div>
+</div>
+
 <script>
+// ── Shared friendly log renderer ────────────────────────────────────
+function importLog(container, text) {
+  if (text === null || text === undefined) return;
+  // Split multi-line messages
+  for (const raw of String(text).split('\n')) {
+    const t = raw.trimEnd();
+    if (!t) continue;
+    const row  = document.createElement('div');
+    const icon = document.createElement('span');
+    const msg  = document.createElement('span');
+    row.className  = 'ilog-row';
+    icon.className = 'ilog-icon';
+    msg.className  = 'ilog-text';
+    msg.textContent = t.replace(/^[\s✓✗⚠]+/, '').trim() || t;
+
+    const trimmed = t.trimStart();
+    if (trimmed.startsWith('✓') || (trimmed.startsWith('  ✓'))) {
+      row.classList.add('ok');   icon.textContent = '✓';
+      msg.textContent = trimmed.replace(/^✓\s*/, '');
+    } else if (trimmed.startsWith('✗') || /^error\b/i.test(trimmed)) {
+      row.classList.add('err');  icon.textContent = '✗';
+      msg.textContent = trimmed.replace(/^✗\s*/, '');
+    } else if (trimmed.startsWith('⚠')) {
+      row.classList.add('warn'); icon.textContent = '⚠';
+      msg.textContent = trimmed.replace(/^⚠\s*/, '');
+    } else if (/^Importados?:\s*\d+/i.test(trimmed)) {
+      row.classList.add('prog'); icon.textContent = '↑';
+      msg.textContent = trimmed;
+    } else if (t.startsWith('  ') || t.startsWith('\t')) {
+      row.classList.add('sub');  icon.textContent = '';
+      msg.textContent = trimmed;
+    } else {
+      icon.textContent = '·';
+      msg.textContent = trimmed;
+    }
+
+    row.appendChild(icon);
+    row.appendChild(msg);
+    container.appendChild(row);
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+function importLogSummary(container, isErr) {
+  const rows = container.querySelectorAll('.ilog-row');
+  let ok = 0, err = 0, warn = 0;
+  rows.forEach(r => {
+    if (r.classList.contains('ok'))   ok++;
+    if (r.classList.contains('err'))  err++;
+    if (r.classList.contains('warn')) warn++;
+  });
+  const sum = document.createElement('div');
+  sum.className = 'ilog-summary';
+  if (isErr && !err && !ok) {
+    sum.innerHTML = '<span class="ilog-badge err">Importación con errores</span>';
+  } else {
+    if (ok)   sum.innerHTML += `<span class="ilog-badge ok">✓ ${ok} importado${ok>1?'s':''}</span>`;
+    if (warn) sum.innerHTML += `<span class="ilog-badge warn">⚠ ${warn} aviso${warn>1?'s':''}</span>`;
+    if (err)  sum.innerHTML += `<span class="ilog-badge err">✗ ${err} error${err>1?'es':''}</span>`;
+  }
+  if (sum.innerHTML) { container.appendChild(sum); container.scrollTop = container.scrollHeight; }
+}
+
 (function(){
 'use strict';
 
@@ -877,8 +1081,9 @@ document.getElementById('search-clear').addEventListener('click', () => {
 function sortFiltered() {
   const { col, dir } = sort;
   filtered.sort((a, b) => {
-    const av = col === 'ibp_val' ? (ibpForTrack(a) ?? -1) : (a[col] ?? '');
-    const bv = col === 'ibp_val' ? (ibpForTrack(b) ?? -1) : (b[col] ?? '');
+    const hasOsm = t => (t.road_types && t.road_types !== '{}') ? 1 : 0;
+    const av = col === 'ibp_val' ? (ibpForTrack(a) ?? -1) : col === 'has_osm' ? hasOsm(a) : (a[col] ?? '');
+    const bv = col === 'ibp_val' ? (ibpForTrack(b) ?? -1) : col === 'has_osm' ? hasOsm(b) : (b[col] ?? '');
     const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'es');
     return dir === 'asc' ? cmp : -cmp;
   });
@@ -942,7 +1147,7 @@ function renderTable() {
         <span style="display:block;font-size:9px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px" title="${escHtml(t.file||'')}">${escHtml((t.file||'').replace('TracksGps/',''))}</span>
       </td>
       <td>${actBadge}</td>
-      <td style="font-size:11px;color:var(--muted)">${escHtml(t.province||'—')}</td>
+      <td style="text-align:center">${(t.road_types && t.road_types !== '{}') ? '<span style="color:#16a34a;font-size:14px;font-weight:700" title="Tiene datos OSM">✓</span>' : ''}</td>
       <td style="font-size:11px;color:var(--muted)">${escHtml(t.ccaa||'—')}</td>
       <td>${sierraCell}</td>
       <td class="col-circ" title="${t.circular ? 'Circular' : 'Lineal'}" style="text-align:center;font-size:14px">${t.circular ? '🔄' : '↔'}</td>
@@ -1195,6 +1400,9 @@ function updateSelBar() {
   const n   = selected.size;
   document.getElementById('sel-count-label').textContent = `${n} seleccionado${n!==1?'s':''}`;
   bar.classList.toggle('visible', n > 0);
+  const cmpBtn = document.getElementById('btn-compare');
+  cmpBtn.hidden = n < 2;
+  document.getElementById('compare-count').textContent = n;
 }
 function updateCbAll() {
   const allCb = document.getElementById('cb-all');
@@ -1209,6 +1417,9 @@ document.getElementById('cb-all').addEventListener('change', e => {
   renderTable(); updateSelBar();
 });
 document.getElementById('btn-deselect').addEventListener('click', () => { selected.clear(); renderTable(); updateSelBar(); });
+document.getElementById('btn-compare').addEventListener('click', () => {
+  window.open('/compare?ids=' + [...selected].join(','), '_blank');
+});
 document.getElementById('btn-select-all-filter').addEventListener('click', () => {
   filtered.forEach(t => selected.add(t.id)); renderTable(); updateSelBar(); updateCbAll();
 });
@@ -1592,22 +1803,37 @@ document.getElementById('export-download').addEventListener('click', async () =>
   const layout = document.querySelector('input[name="export-layout"]:checked').value;
   const btn    = document.getElementById('export-download');
   btn.disabled = true;
-  btn.textContent = 'Descargando…';
-  try {
+
+  async function downloadOne(ids, fname) {
     const resp = await fetch('/api/tracks/export-gpx', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: exportIds, mode, pts, format, layout }),
+      body: JSON.stringify({ ids, mode, pts, format: format === 'gpx' ? 'gpx' : format, layout }),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const blob = await resp.blob();
     const cd   = resp.headers.get('Content-Disposition') || '';
     const m    = cd.match(/filename\*?=(?:UTF-8'')?(.+)/i);
-    const name = m ? decodeURIComponent(m[1].replace(/"/g,'')) : (format === 'zip' ? 'tracks.zip' : 'tracks.gpx');
+    const name = m ? decodeURIComponent(m[1].replace(/"/g,'')) : fname;
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url; a.download = name; a.click();
     URL.revokeObjectURL(url);
+  }
+
+  try {
+    if (format === 'gpx') {
+      // GPX individual: one download per track
+      for (let i = 0; i < exportIds.length; i++) {
+        btn.textContent = exportIds.length > 1 ? `Descargando ${i + 1}/${exportIds.length}…` : 'Descargando…';
+        await downloadOne([exportIds[i]], 'track.gpx');
+        if (i < exportIds.length - 1) await new Promise(r => setTimeout(r, 400));
+      }
+    } else {
+      // ZIP: single request with all IDs
+      btn.textContent = 'Descargando…';
+      await downloadOne(exportIds, 'tracks.zip');
+    }
     document.getElementById('export-modal').classList.remove('open');
   } catch(e) {
     showToast('Error exportando: ' + e.message, 4000);
@@ -1721,6 +1947,237 @@ document.getElementById('ibp-calc-btn').addEventListener('click', async () => {
 
 // ── Boot ───────────────────────────────────────────────────────────
 loadTracks();
+
+// ── Import from web ────────────────────────────────────────────────
+(function () {
+  const overlay = document.getElementById('import-web-overlay');
+  const log     = document.getElementById('import-web-log');
+
+  document.getElementById('btn-import-web').addEventListener('click', () => { overlay.classList.add('open'); });
+  document.getElementById('import-web-close').addEventListener('click', closeModal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+  function closeModal() {
+    overlay.classList.remove('open');
+    log.hidden = true; log.textContent = '';
+    document.querySelectorAll('.import-net-form').forEach(f => f.hidden = true);
+    document.querySelectorAll('.import-net-btn').forEach(b => b.classList.remove('active'));
+  }
+
+  document.querySelectorAll('.import-net-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById('form-' + btn.dataset.net);
+      const open = !form.hidden;
+      document.querySelectorAll('.import-net-form').forEach(f => f.hidden = true);
+      document.querySelectorAll('.import-net-btn').forEach(b => b.classList.remove('active'));
+      if (!open) { form.hidden = false; btn.classList.add('active'); }
+    });
+  });
+
+  document.getElementById('btn-wl-import').addEventListener('click', () => {
+    const url = document.getElementById('wl-url-input').value.trim();
+    if (!url) return;
+    log.hidden = false; log.innerHTML = '';
+    document.getElementById('btn-wl-import').disabled = true;
+    runImportSSE('/api/import/wikiloc', { url });
+  });
+
+  function runImportSSE(endpoint, body) {
+    fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(resp => {
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      function pump() {
+        reader.read().then(({ done, value }) => {
+          if (done) { done_(); return; }
+          buf += dec.decode(value, { stream: true });
+          const parts = buf.split('\n\n'); buf = parts.pop();
+          for (const part of parts) {
+            const dl = part.split('\n').find(l => l.startsWith('data:'));
+            if (!dl) continue;
+            try {
+              const evt = JSON.parse(dl.slice(5));
+              if (evt.type === 'log' || evt.type === 'progress') addLog(evt.text);
+              if (evt.type === 'warn')  addLog('⚠ ' + evt.text);
+              if (evt.type === 'done')  { done_(evt.code !== 0); return; }
+              if (evt.type === 'error') { addLog('✗ ' + evt.text); }
+            } catch {}
+          }
+          pump();
+        }).catch(e => { addLog('✗ ' + e.message); done_(true); });
+      }
+      pump();
+    }).catch(e => { addLog('✗ ' + e.message); done_(true); });
+  }
+
+  function addLog(text) { importLog(log, text); }
+
+  function done_(isErr) {
+    document.getElementById('btn-wl-import').disabled = false;
+    importLogSummary(log, isErr);
+    if (!isErr) { importLog(log, '↻ Recargando lista…'); setTimeout(() => loadTracks(), 1200); }
+  }
+})();
+
+// ── Import from disk ───────────────────────────────────────────────
+(function () {
+  let fbCurrentPath = null;
+
+  async function loadTempFiles() {
+    const list  = document.getElementById('import-file-list');
+    const count = document.getElementById('import-picker-count');
+    const btn   = document.getElementById('btn-import-start');
+    const src   = document.getElementById('import-src-path').value.trim();
+    list.innerHTML = '<span style="color:#94a3b8;font-size:12px">Cargando...</span>';
+    btn.disabled = true;
+    try {
+      const url = '/api/db/temp-files' + (src ? '?src=' + encodeURIComponent(src) : '');
+      const files = await fetch(url).then(r => r.json());
+      if (!files.length) {
+        list.innerHTML = '<span style="color:#94a3b8;font-size:12px">La carpeta está vacía o no existe.</span>';
+        count.textContent = '0 archivos';
+        return;
+      }
+      count.textContent = `${files.length} archivo${files.length !== 1 ? 's' : ''}`;
+      list.innerHTML = files.map(f => {
+        const dir = f.rel.includes('/') ? f.rel.slice(0, f.rel.lastIndexOf('/')) : '';
+        return `<label class="import-file-item">
+          <input type="checkbox" class="import-file-cb" value="${f.rel}" checked>
+          <span class="ifl-name">${f.name}</span>
+          ${dir ? `<span class="ifl-dir">${dir}/</span>` : ''}
+        </label>`;
+      }).join('');
+      btn.disabled = false;
+    } catch(e) {
+      list.innerHTML = `<span style="color:#f87171;font-size:12px">Error: ${e.message}</span>`;
+      count.textContent = 'Error';
+    }
+  }
+
+  async function fbNavigate(dirPath) {
+    const list = document.getElementById('fb-list');
+    list.innerHTML = '<div class="fb-empty">Cargando…</div>';
+    try {
+      const d = await fetch('/api/fs/dirs?path=' + encodeURIComponent(dirPath)).then(r => r.json());
+      if (d.error) { list.innerHTML = `<div class="fb-empty">${d.error}</div>`; return; }
+      fbCurrentPath = d.current;
+      document.getElementById('fb-selected-path').textContent = d.current;
+      const bc = document.getElementById('fb-breadcrumb');
+      const segs = d.current.replace(/\\/g, '/').split('/').filter(Boolean);
+      let cum = '';
+      bc.innerHTML = segs.map((seg, i) => {
+        if (i === 0 && /^[A-Za-z]:$/.test(seg)) { cum = seg + '\\'; }
+        else { cum = cum.endsWith('\\') ? cum + seg : cum + '\\' + seg; }
+        const p = cum;
+        return `<span class="fb-crumb" data-path="${p}">${seg}</span>${i < segs.length-1 ? '<span class="fb-sep">›</span>' : ''}`;
+      }).join('');
+      bc.querySelectorAll('.fb-crumb').forEach(el => el.addEventListener('click', () => fbNavigate(el.dataset.path)));
+      let html = '';
+      if (d.parent) html += `<div class="fb-item fb-up" data-path="${d.parent}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> ..</div>`;
+      if (!d.dirs.length && !d.parent) html += '<div class="fb-empty">No hay subcarpetas.</div>';
+      html += d.dirs.map(dir => `<div class="fb-item" data-path="${dir.path}"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${dir.name}</div>`).join('');
+      if (d.files && d.files.length) {
+        html += `<div class="fb-divider">📍 ${d.files.length} track${d.files.length !== 1 ? 's' : ''} en esta carpeta</div>`;
+        html += d.files.map(f => `<div class="fb-item fb-file"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>${f.name.replace(/\.gpx$/i,'')}</div>`).join('');
+      }
+      list.innerHTML = html;
+      const selBtn = document.getElementById('btn-fb-select');
+      selBtn.textContent = d.files && d.files.length ? `Seleccionar (${d.files.length} track${d.files.length !== 1 ? 's' : ''})` : 'Seleccionar';
+      list.querySelectorAll('.fb-item:not(.fb-file)').forEach(el => el.addEventListener('click', () => fbNavigate(el.dataset.path)));
+    } catch(e) {
+      list.innerHTML = `<div class="fb-empty">Error: ${e.message}</div>`;
+    }
+  }
+
+  function fbClose() { document.getElementById('fb-overlay').classList.remove('open'); }
+
+  document.getElementById('btn-import-browse').addEventListener('click', async () => {
+    const src = document.getElementById('import-src-path').value.trim();
+    const startPath = /^[A-Za-z]:[/\\]/.test(src) ? src : (await fetch('/api/fs/dirs').then(r=>r.json()).catch(()=>({current:''}))).current;
+    fbNavigate(startPath);
+    document.getElementById('fb-overlay').classList.add('open');
+  });
+  document.getElementById('btn-fb-close').addEventListener('click', fbClose);
+  document.getElementById('btn-fb-cancel').addEventListener('click', fbClose);
+  document.getElementById('fb-overlay').addEventListener('click', e => { if (e.target === document.getElementById('fb-overlay')) fbClose(); });
+  document.getElementById('btn-fb-select').addEventListener('click', () => {
+    if (fbCurrentPath) {
+      document.getElementById('import-src-path').value = fbCurrentPath;
+      fbClose();
+      loadTempFiles();
+    }
+  });
+
+  document.getElementById('btn-import-load').addEventListener('click', loadTempFiles);
+  document.getElementById('import-sel-all').addEventListener('click', () => {
+    document.querySelectorAll('.import-file-cb').forEach(cb => cb.checked = true);
+  });
+  document.getElementById('import-sel-none').addEventListener('click', () => {
+    document.querySelectorAll('.import-file-cb').forEach(cb => cb.checked = false);
+  });
+
+  document.getElementById('btn-import-start').addEventListener('click', () => {
+    const sel = [...document.querySelectorAll('.import-file-cb:checked')].map(cb => cb.value);
+    if (!sel.length) { alert('Selecciona al menos un archivo.'); return; }
+    const force  = document.getElementById('import-force').checked;
+    const src    = document.getElementById('import-src-path').value.trim() || null;
+    const isTemp = !src || src.replace(/\\/g, '/').includes('_TEMP_');
+    const keep   = !isTemp;
+    if (isTemp) {
+      if (!confirm(`Se importarán ${sel.length} archivo(s) desde _TEMP_ y se eliminarán tras importar. ¿Continuar?`)) return;
+    }
+    const log = document.getElementById('import-disk-log');
+    log.hidden = false; log.innerHTML = '';
+    document.getElementById('btn-import-start').disabled = true;
+    fetch('/api/db/import-temp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: sel, force, src, keep }),
+    }).then(resp => {
+      if (!resp.ok) {
+        return resp.text().then(t => { diskLog('✗ HTTP ' + resp.status + ': ' + t); doneImport(true); });
+      }
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      function pump() {
+        reader.read().then(({ done, value }) => {
+          if (done) { doneImport(false); return; }
+          buf += dec.decode(value, { stream: true });
+          const parts = buf.split('\n\n'); buf = parts.pop();
+          for (const part of parts) {
+            const dl = part.split('\n').find(l => l.startsWith('data:'));
+            if (!dl) continue;
+            try {
+              const evt = JSON.parse(dl.slice(5));
+              if (evt.type === 'log' || evt.type === 'progress') diskLog(evt.text);
+              else if (evt.type === 'warn') diskLog('⚠ ' + evt.text);
+              else if (evt.type === 'error') diskLog('✗ ' + evt.text);
+              else if (evt.type === 'done') { doneImport(evt.code !== 0); return; }
+            } catch {}
+          }
+          pump();
+        }).catch(e => { diskLog('✗ ' + e.message); doneImport(true); });
+      }
+      pump();
+    }).catch(e => { diskLog('✗ ' + e.message); doneImport(true); });
+  });
+
+  function diskLog(text) {
+    const log = document.getElementById('import-disk-log');
+    importLog(log, text);
+  }
+  function doneImport(isErr) {
+    document.getElementById('btn-import-start').disabled = false;
+    const log = document.getElementById('import-disk-log');
+    importLogSummary(log, isErr);
+    if (!isErr) { importLog(log, '↻ Recargando lista…'); setTimeout(() => loadTracks(), 800); }
+  }
+})();
 
 })();
 </script>

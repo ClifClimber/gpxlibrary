@@ -58,6 +58,24 @@
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
+/* Logs tab */
+#log-viewer { font-family: ui-monospace, Consolas, 'Courier New', monospace; font-size: 12px; line-height: 1.6; }
+.lv-row { display: flex; gap: 10px; padding: 4px 8px; border-radius: 6px; }
+.lv-row:hover { background: var(--soft); }
+.lv-row.lv-error { background: rgba(239,68,68,.08); }
+.lv-row.lv-warn  { background: rgba(245,158,11,.08); }
+.lv-ts  { color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+.lv-lvl { width: 36px; flex-shrink: 0; font-weight: 700; text-transform: uppercase; font-size: 10px; padding-top:2px; }
+.lv-lvl.info  { color: var(--accent); }
+.lv-lvl.error { color: #ef4444; }
+.lv-lvl.warn  { color: #f59e0b; }
+.lv-lvl.raw   { color: var(--muted); }
+.lv-op  { color: var(--ink-2); width: 140px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lv-msg { color: var(--ink); flex: 1; word-break: break-word; }
+#log-filter-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+#log-filter-bar .chip { padding: 4px 12px; font-size: 12px; }
+#log-search { flex: 1; min-width: 140px; max-width: 260px; }
+
 /* Changelog */
 .changelog-entry { padding: 20px 24px; border-bottom: 1px solid var(--line); }
 .changelog-entry:last-child { border-bottom: none; }
@@ -70,46 +88,6 @@
 .cl-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
 .cl-list li { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
 .cl-list code { font-size: 11px; background: rgba(0,0,0,.07); padding: 1px 5px; border-radius: 4px; }
-/* Import modal */
-#import-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1500; display:none; align-items:center; justify-content:center; }
-#import-overlay.open { display:flex; }
-#import-modal { background:var(--surface); border-radius:10px; padding:20px; width:580px; max-width:96vw; display:flex; flex-direction:column; gap:12px; box-shadow:0 8px 40px rgba(0,0,0,.25); }
-#import-modal h3 { font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; }
-#import-picker { display:flex; flex-direction:column; gap:10px; }
-#import-picker-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.import-sel-btn { padding:3px 9px; border:1.5px solid var(--line); border-radius:5px; background:transparent; color:var(--muted); font-size:11px; cursor:pointer; white-space:nowrap; }
-.import-sel-btn:hover { border-color:var(--ink); color:var(--ink); }
-#import-file-list { max-height:220px; overflow-y:auto; background:#0f172a; border-radius:6px; padding:6px 8px; display:flex; flex-direction:column; gap:1px; }
-.import-file-item { display:flex; align-items:center; gap:8px; padding:5px 4px; cursor:pointer; border-radius:4px; }
-.import-file-item:hover { background:rgba(255,255,255,.05); }
-.import-file-item input[type=checkbox] { accent-color:#3b82f6; cursor:pointer; flex-shrink:0; width:13px; height:13px; }
-.import-file-item .ifl-name { font-size:11px; font-family:'Cascadia Code',Consolas,monospace; color:#e2e8f0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.import-file-item .ifl-dir { font-size:10px; color:#475569; flex-shrink:0; }
-#btn-import-start { padding:7px 16px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; }
-#btn-import-start:disabled { opacity:.5; cursor:not-allowed; }
-/* Folder browser */
-#fb-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:2000; display:none; align-items:center; justify-content:center; }
-#fb-overlay.open { display:flex; }
-#fb-modal { background:var(--surface); border-radius:12px; width:560px; max-width:96vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 12px 48px rgba(0,0,0,.35); overflow:hidden; }
-#fb-topbar { display:flex; align-items:center; gap:10px; padding:14px 16px 10px; border-bottom:1px solid var(--line); }
-#fb-topbar h3 { font-size:14px; font-weight:600; flex:1; }
-#fb-breadcrumb { display:flex; align-items:center; flex-wrap:wrap; gap:2px; padding:8px 14px; background:var(--soft); border-bottom:1px solid var(--line); font-size:11px; min-height:34px; }
-.fb-crumb { color:var(--accent); cursor:pointer; padding:2px 4px; border-radius:4px; white-space:nowrap; }
-.fb-crumb:hover { background:var(--accent-soft); }
-.fb-sep { color:var(--muted); padding:0 1px; }
-#fb-list { overflow-y:auto; flex:1; padding:6px 8px; display:flex; flex-direction:column; gap:1px; }
-.fb-item { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px; cursor:pointer; font-size:13px; color:var(--ink); }
-.fb-item:hover { background:var(--soft); }
-.fb-item.fb-up { color:var(--muted); font-size:12px; }
-.fb-item svg { flex-shrink:0; color:#f59e0b; }
-.fb-item.fb-up svg { color:var(--muted); }
-.fb-item.fb-file { color:var(--muted); cursor:default; font-size:12px; padding:5px 10px; }
-.fb-item.fb-file:hover { background:transparent; }
-.fb-item.fb-file svg { color:#64748b; }
-.fb-divider { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding:8px 10px 3px; }
-.fb-empty { padding:20px; text-align:center; color:var(--muted); font-size:13px; }
-#fb-footer { display:flex; align-items:center; gap:10px; padding:10px 14px; border-top:1px solid var(--line); background:var(--soft); }
-#fb-selected-path { flex:1; font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace,Consolas,monospace; }
 </style>
 </head>
 <body>
@@ -118,6 +96,7 @@
   <span class="logo">GPX Library</span>
   <a href="/">Visor</a>
   <a href="/editor">Catálogo</a>
+  <a href="/compare">Comparar</a>
   <a href="/config">Config</a>
   <a href="/admin" style="color:#f8fafc">Admin</a>
 </nav>
@@ -134,6 +113,7 @@
   <div class="seg-tabs" id="admin-tabs" style="margin-bottom:16px">
     <button class="seg-tab active" data-tab="bd">Base de datos</button>
     <button class="seg-tab" data-tab="tracks">Gestión de Tracks</button>
+    <button class="seg-tab" data-tab="logs">Logs</button>
     <button class="seg-tab" data-tab="about">Acerca de</button>
   </div>
 
@@ -212,16 +192,6 @@
       <div class="card-head"><h2>Gestión de Tracks</h2></div>
       <div class="card-body">
         <div class="ops-grid">
-
-          <div class="op-item">
-            <div class="op-head">
-              <h3>Importar tracks</h3>
-              <div class="op-btns">
-                <button class="btn btn-primary btn-sm" id="btn-import">Importar Tracks</button>
-              </div>
-            </div>
-            <p>Selecciona la carpeta origen y los archivos a importar. Geocodifica con Nominatim, clasifica por actividad y mueve a <code>TracksGps/&lt;Actividad&gt;/&lt;Sierra&gt;/</code>. Si la carpeta es <code>_TEMP_</code> los archivos se eliminan tras importar; si es otra carpeta, los originales se conservan.</p>
-          </div>
 
           <div class="op-item">
             <div class="op-head">
@@ -352,6 +322,11 @@
               </button>
               <p style="margin:0 0 2px 2px;font-size:11px;color:var(--muted)">Aplica los tipos de camino a todos los tracks usando la caché que ya tienes descargada. No consulta la red. Perfecto si ya descargaste las zonas y quieres enriquecer tracks nuevos o reimportar.</p>
 
+              <button class="btn btn-ghost btn-sm" id="btn-osm-missing-only" style="justify-content:flex-start">
+                ⬇ Descargar solo zonas sin caché
+              </button>
+              <p style="margin:0 0 2px 2px;font-size:11px;color:var(--muted)">Consulta Overpass únicamente para las zonas que aún no tienen caché descargada. Zonas ya cacheadas se saltan.</p>
+
               <button class="btn btn-ghost btn-sm" id="btn-osm-cache-only" style="justify-content:flex-start">
                 ☁ Solo descargar caché (sin enriquecer tracks)
               </button>
@@ -375,6 +350,33 @@
             <p>Descarga datos de España desde Geofabrik y filtra las vías con osmium-tool. El archivo resultante ocupa ~200 MB. Requiere osmium-tool en el PATH.</p>
           </div>
 
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Logs ── -->
+  <div class="tab-panel" id="tab-logs">
+    <div class="card">
+      <div class="card-head">
+        <h2>Log de operaciones</h2>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" id="btn-log-refresh">↻ Actualizar</button>
+          <a class="btn btn-ghost btn-sm" id="btn-log-download" href="/api/admin/logs/download" download>⬇ Descargar</a>
+          <button class="btn btn-danger btn-sm" id="btn-log-clear">Limpiar</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="log-filter-bar">
+          <button class="chip active" data-lv="all">Todos</button>
+          <button class="chip" data-lv="info">Info</button>
+          <button class="chip" data-lv="warn">Warn</button>
+          <button class="chip" data-lv="error">Error</button>
+          <input type="search" class="input log-search" id="log-search" placeholder="Buscar…" autocomplete="off">
+          <span id="log-count" style="font-size:12px;color:var(--muted);margin-left:auto"></span>
+        </div>
+        <div id="log-viewer" style="max-height:60vh;overflow-y:auto">
+          <div style="color:var(--muted);font-size:13px;padding:8px">Cargando…</div>
         </div>
       </div>
     </div>
@@ -502,57 +504,6 @@
 
 </main>
 
-<!-- Folder browser -->
-<div id="fb-overlay">
-  <div id="fb-modal">
-    <div id="fb-topbar">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-      <h3>Seleccionar carpeta</h3>
-      <button class="btn btn-ghost btn-sm" id="btn-fb-close">✕</button>
-    </div>
-    <div id="fb-breadcrumb"></div>
-    <div id="fb-list"></div>
-    <div id="fb-footer">
-      <span id="fb-selected-path"></span>
-      <button class="btn btn-ghost btn-sm" id="btn-fb-cancel">Cancelar</button>
-      <button class="btn btn-primary btn-sm" id="btn-fb-select">Seleccionar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Import modal -->
-<div id="import-overlay">
-  <div id="import-modal">
-    <h3>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      Importar Tracks
-    </h3>
-    <div id="import-picker">
-      <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:12px;color:var(--muted);white-space:nowrap">Carpeta:</label>
-        <input type="text" id="import-src-path" class="input" style="font-size:12px;flex:1;padding:4px 8px" value="TracksGps/_TEMP_">
-        <button class="btn btn-ghost btn-sm" id="btn-import-browse" title="Seleccionar carpeta">📂</button>
-        <button class="btn btn-ghost btn-sm" id="btn-import-load">Cargar</button>
-      </div>
-      <div id="import-picker-toolbar">
-        <span id="import-picker-count" style="font-size:12px;color:var(--muted);flex:1">—</span>
-        <button class="import-sel-btn" id="import-sel-all">Todos</button>
-        <button class="import-sel-btn" id="import-sel-none">Ninguno</button>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--muted);font-size:12px">
-          <input type="checkbox" id="import-force"> --force
-        </label>
-      </div>
-      <div id="import-file-list"><span style="color:#64748b;font-size:12px">Introduce una carpeta y pulsa Cargar.</span></div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button id="btn-import-start" disabled>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Importar seleccionados
-        </button>
-        <button class="btn btn-ghost btn-sm" id="btn-import-modal-close" style="margin-left:auto">Cerrar</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <div id="log-modal" hidden>
   <div class="modal lm-box">
@@ -804,148 +755,6 @@ document.getElementById('btn-write-attrs').addEventListener('click', function() 
     .finally(() => { this.disabled = false; });
 });
 
-// ── Import Tracks modal ─────────────────────────────────────────────
-async function loadTempFiles() {
-  const list  = document.getElementById('import-file-list');
-  const count = document.getElementById('import-picker-count');
-  const btn   = document.getElementById('btn-import-start');
-  const src   = document.getElementById('import-src-path').value.trim();
-  list.innerHTML = '<span style="color:#64748b;font-size:12px">Cargando...</span>';
-  btn.disabled = true;
-  try {
-    const url = '/api/db/temp-files' + (src ? '?src=' + encodeURIComponent(src) : '');
-    const files = await fetch(url).then(r => r.json());
-    if (!files.length) {
-      list.innerHTML = '<span style="color:#64748b;font-size:12px">La carpeta está vacía o no existe.</span>';
-      count.textContent = '0 archivos';
-      return;
-    }
-    count.textContent = `${files.length} archivo${files.length !== 1 ? 's' : ''}`;
-    list.innerHTML = files.map(f => {
-      const dir = f.rel.includes('/') ? f.rel.slice(0, f.rel.lastIndexOf('/')) : '';
-      return `<label class="import-file-item">
-        <input type="checkbox" class="import-file-cb" value="${f.rel}" checked>
-        <span class="ifl-name">${f.name}</span>
-        ${dir ? `<span class="ifl-dir">${dir}/</span>` : ''}
-      </label>`;
-    }).join('');
-    btn.disabled = false;
-  } catch(e) {
-    list.innerHTML = `<span style="color:#f87171;font-size:12px">Error: ${e.message}</span>`;
-    count.textContent = 'Error';
-  }
-}
-
-document.getElementById('btn-import').addEventListener('click', () => {
-  document.getElementById('import-src-path').value = 'TracksGps/_TEMP_';
-  document.getElementById('import-overlay').classList.add('open');
-  document.getElementById('import-file-list').innerHTML = '<span style="color:#64748b;font-size:12px">Introduce una carpeta y pulsa Cargar.</span>';
-  document.getElementById('import-picker-count').textContent = '—';
-  document.getElementById('btn-import-start').disabled = true;
-});
-
-// ── Folder browser ─────────────────────────────────────────────────
-let fbCurrentPath = null;
-
-async function fbNavigate(dirPath) {
-  const list = document.getElementById('fb-list');
-  list.innerHTML = '<div class="fb-empty">Cargando…</div>';
-  try {
-    const d = await fetch('/api/fs/dirs?path=' + encodeURIComponent(dirPath)).then(r => r.json());
-    if (d.error) { list.innerHTML = `<div class="fb-empty">${d.error}</div>`; return; }
-    fbCurrentPath = d.current;
-    document.getElementById('fb-selected-path').textContent = d.current;
-
-    // Breadcrumb
-    const bc = document.getElementById('fb-breadcrumb');
-    const segs = d.current.replace(/\\/g, '/').split('/').filter(Boolean);
-    let cum = '';
-    bc.innerHTML = segs.map((seg, i) => {
-      if (i === 0 && /^[A-Za-z]:$/.test(seg)) { cum = seg + '\\'; }
-      else { cum = cum.endsWith('\\') ? cum + seg : cum + '\\' + seg; }
-      const p = cum;
-      return `<span class="fb-crumb" data-path="${p}">${seg}</span>${i < segs.length-1 ? '<span class="fb-sep">›</span>' : ''}`;
-    }).join('');
-    bc.querySelectorAll('.fb-crumb').forEach(el => el.addEventListener('click', () => fbNavigate(el.dataset.path)));
-
-    // List — folders
-    let html = '';
-    if (d.parent) html += `<div class="fb-item fb-up" data-path="${d.parent}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> ..</div>`;
-    if (!d.dirs.length && !d.parent) html += '<div class="fb-empty">No hay subcarpetas.</div>';
-    html += d.dirs.map(dir => `<div class="fb-item" data-path="${dir.path}"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${dir.name}</div>`).join('');
-    // Files section
-    if (d.files && d.files.length) {
-      html += `<div class="fb-divider">📍 ${d.files.length} track${d.files.length !== 1 ? 's' : ''} en esta carpeta</div>`;
-      html += d.files.map(f => `<div class="fb-item fb-file"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>${f.name.replace(/\.gpx$/i,'')}</div>`).join('');
-    }
-    list.innerHTML = html;
-    // Update select button label
-    const selBtn = document.getElementById('btn-fb-select');
-    selBtn.textContent = d.files && d.files.length ? `Seleccionar (${d.files.length} track${d.files.length !== 1 ? 's' : ''})` : 'Seleccionar';
-    list.querySelectorAll('.fb-item:not(.fb-file)').forEach(el => el.addEventListener('click', () => fbNavigate(el.dataset.path)));
-  } catch(e) {
-    list.innerHTML = `<div class="fb-empty">Error: ${e.message}</div>`;
-  }
-}
-
-document.getElementById('btn-import-browse').addEventListener('click', async () => {
-  const src = document.getElementById('import-src-path').value.trim();
-  // start at the input path if it looks absolute, else at project root
-  const startPath = /^[A-Za-z]:[/\\]/.test(src) ? src : (await fetch('/api/fs/dirs').then(r=>r.json()).catch(()=>({current:''}))).current;
-  fbNavigate(startPath);
-  document.getElementById('fb-overlay').classList.add('open');
-});
-
-function fbClose() { document.getElementById('fb-overlay').classList.remove('open'); }
-
-document.getElementById('btn-fb-close').addEventListener('click', fbClose);
-document.getElementById('btn-fb-cancel').addEventListener('click', fbClose);
-document.getElementById('fb-overlay').addEventListener('click', e => { if (e.target === document.getElementById('fb-overlay')) fbClose(); });
-document.getElementById('btn-fb-select').addEventListener('click', () => {
-  if (fbCurrentPath) {
-    document.getElementById('import-src-path').value = fbCurrentPath;
-    fbClose();
-    loadTempFiles();
-  }
-});
-
-document.getElementById('btn-import-load').addEventListener('click', loadTempFiles);
-
-document.getElementById('import-sel-all').addEventListener('click', () => {
-  document.querySelectorAll('.import-file-cb').forEach(cb => cb.checked = true);
-});
-document.getElementById('import-sel-none').addEventListener('click', () => {
-  document.querySelectorAll('.import-file-cb').forEach(cb => cb.checked = false);
-});
-
-document.getElementById('btn-import-modal-close').addEventListener('click', () => {
-  document.getElementById('import-overlay').classList.remove('open');
-});
-document.getElementById('import-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('import-overlay'))
-    document.getElementById('import-overlay').classList.remove('open');
-});
-
-document.getElementById('btn-import-start').addEventListener('click', () => {
-  const selected = [...document.querySelectorAll('.import-file-cb:checked')].map(cb => cb.value);
-  if (!selected.length) { alert('Selecciona al menos un archivo.'); return; }
-  const force  = document.getElementById('import-force').checked;
-  const src    = document.getElementById('import-src-path').value.trim() || null;
-  const isTemp = !src || src.replace(/\\/g, '/').includes('_TEMP_');
-  const keep   = !isTemp;
-  if (isTemp) {
-    if (!confirm(`Se importarán ${selected.length} archivo(s) desde _TEMP_ y se eliminarán de esa carpeta tras importar. ¿Continuar?`)) return;
-  }
-  document.getElementById('import-overlay').classList.remove('open');
-  streamScript('/api/db/import-temp', 'Importar Tracks', { files: selected, force, src, keep }, () => {
-    document.getElementById('log-osm-offer').hidden = false;
-  }).finally(() => {
-    loadStats();
-    const catBtn = document.getElementById('log-modal-catalog');
-    catBtn.hidden = false;
-    document.getElementById('log-modal-btn').textContent = 'Cerrar';
-  });
-});
 
 document.getElementById('btn-clean').addEventListener('click', function() {
   const minDist = parseFloat(document.getElementById('inp-mindist').value) || 0;
@@ -1073,18 +882,35 @@ async function loadOsmCache() {
   el.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando…</div>';
   try {
     const entries = await fetch('/api/admin/osm-cache').then(r => r.json());
-    if (!entries.length) {
-      el.innerHTML = '<div style="color:var(--muted);font-size:13px">Sin caché todavía.</div>';
-      return;
+    const cached   = entries.filter(e => e.cached);
+    const missing  = entries.filter(e => !e.cached);
+    const ttlH     = (osmSettings.cacheTtlDays || 30) * 24;
+    let html = '';
+    if (missing.length) {
+      html += `<div style="margin-top:6px;font-size:12px;font-weight:600;color:var(--warn,#b45309)">Sin caché (${missing.length})</div>`;
+      html += `<table class="table" style="font-size:12px;margin-top:2px">
+        <thead><tr><th>Zona</th><th class="num">Tracks</th></tr></thead>
+        <tbody>${missing.map(e => `<tr>
+          <td>${e.label}</td>
+          <td class="num">${e.trackCount}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
     }
-    el.innerHTML = `<table class="table" style="font-size:12px;margin-top:4px">
-      <thead><tr><th>Sierra</th><th class="num">Tamaño</th><th class="num">Antigüedad</th></tr></thead>
-      <tbody>${entries.map(e => `<tr>
-        <td style="font-family:ui-monospace,Consolas,monospace">${e.name}</td>
-        <td class="num">${fmtSize(e.size)}</td>
-        <td class="num" style="color:${e.ageHours > (osmSettings.cacheTtlDays||30)*24 ? 'var(--warn,#b45309)' : 'var(--muted)'}">${e.ageHours < 1 ? '<1h' : e.ageHours < 48 ? e.ageHours+'h' : Math.round(e.ageHours/24)+'d'}</td>
-      </tr>`).join('')}</tbody>
-    </table>`;
+    if (cached.length) {
+      html += `<div style="margin-top:8px;font-size:12px;font-weight:600;color:var(--ink-2)">Con caché (${cached.length})</div>`;
+      html += `<table class="table" style="font-size:12px;margin-top:2px">
+        <thead><tr><th>Zona</th><th class="num">Tracks</th><th class="num">Tamaño</th><th class="num">Antigüedad</th></tr></thead>
+        <tbody>${cached.map(e => `<tr>
+          <td>${e.label}</td>
+          <td class="num">${e.trackCount}</td>
+          <td class="num">${fmtSize(e.size)}</td>
+          <td class="num" style="color:${e.ageHours > ttlH ? 'var(--warn,#b45309)' : 'var(--muted)'}">${e.ageHours < 1 ? '<1h' : e.ageHours < 48 ? e.ageHours+'h' : Math.round(e.ageHours/24)+'d'}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+    if (!entries.length) html = '<div style="color:var(--muted);font-size:13px">Sin zonas todavía.</div>';
+    el.innerHTML = html;
+    document.getElementById('btn-osm-missing-only').disabled = missing.length === 0;
   } catch { el.innerHTML = '<div style="color:var(--danger,#b91c1c);font-size:13px">Error al cargar caché</div>'; }
 }
 
@@ -1128,6 +954,12 @@ document.getElementById('btn-osm-enrich-only').addEventListener('click', functio
     .finally(() => { this.disabled = false; loadOsmCache(); });
 });
 
+document.getElementById('btn-osm-missing-only').addEventListener('click', function() {
+  this.disabled = true;
+  streamScript('/api/db/osm-precache?missing-only=1', 'OSM: descargar zonas sin caché')
+    .finally(() => { this.disabled = false; loadOsmCache(); });
+});
+
 document.getElementById('btn-osm-cache-only').addEventListener('click', function() {
   this.disabled = true;
   streamScript('/api/db/osm-precache?cache-only=1', 'OSM: solo descargar caché')
@@ -1142,6 +974,86 @@ document.getElementById('btn-osm-precache-force').addEventListener('click', func
 });
 
 loadOsmStrategy();
+
+// ── Logs tab ──────────────────────────────────────────────────────
+let allLogEntries = [];
+let lvFilter = 'all';
+let lvSearch = '';
+
+function fmtLogTs(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return d.toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit' })
+       + ' ' + d.toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+function renderLogs() {
+  const filtered = allLogEntries.filter(e => {
+    if (lvFilter !== 'all' && e.level !== lvFilter) return false;
+    if (lvSearch) {
+      const hay = ((e.op||'') + ' ' + (e.msg||'')).toLowerCase();
+      if (!hay.includes(lvSearch)) return false;
+    }
+    return true;
+  });
+  const viewer = document.getElementById('log-viewer');
+  document.getElementById('log-count').textContent = `${filtered.length} entradas`;
+  if (!filtered.length) {
+    viewer.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">Sin entradas.</div>';
+    return;
+  }
+  viewer.innerHTML = filtered.slice(-500).map(e => {
+    const lvl = e.level || 'raw';
+    return `<div class="lv-row lv-${lvl}">
+      <span class="lv-ts">${fmtLogTs(e.ts)}</span>
+      <span class="lv-lvl ${lvl}">${lvl}</span>
+      <span class="lv-op" title="${e.op||''}">${e.op||''}</span>
+      <span class="lv-msg">${(e.msg||'').replace(/</g,'&lt;')}</span>
+    </div>`;
+  }).join('');
+  viewer.scrollTop = viewer.scrollHeight;
+}
+
+async function loadLogs() {
+  const viewer = document.getElementById('log-viewer');
+  viewer.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">Cargando…</div>';
+  try {
+    allLogEntries = await fetch('/api/admin/logs').then(r => r.json());
+    renderLogs();
+  } catch (e) {
+    viewer.innerHTML = `<div style="color:var(--danger,#b91c1c);font-size:13px;padding:8px">Error: ${e.message}</div>`;
+  }
+}
+
+document.getElementById('btn-log-refresh').addEventListener('click', loadLogs);
+
+document.getElementById('btn-log-clear').addEventListener('click', async () => {
+  if (!confirm('¿Limpiar el log de operaciones?')) return;
+  const r = await fetch('/api/admin/logs/clear', { method: 'POST' });
+  if (r.ok) { allLogEntries = []; renderLogs(); toast('Log limpiado'); }
+  else toast('Error al limpiar', true);
+});
+
+document.querySelectorAll('#log-filter-bar .chip[data-lv]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#log-filter-bar .chip[data-lv]').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    lvFilter = chip.dataset.lv;
+    renderLogs();
+  });
+});
+
+document.getElementById('log-search').addEventListener('input', function() {
+  lvSearch = this.value.trim().toLowerCase();
+  renderLogs();
+});
+
+// Load logs when the Logs tab is activated
+document.querySelectorAll('#admin-tabs .seg-tab').forEach(btn => {
+  if (btn.dataset.tab === 'logs') {
+    btn.addEventListener('click', () => { if (!allLogEntries.length) loadLogs(); });
+  }
+});
 </script>
 </body>
 </html>

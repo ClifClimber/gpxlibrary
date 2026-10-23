@@ -171,16 +171,16 @@ const segHL = {
   _layers: [],
   show(latlngs, color) {
     this.hide();
-    if (activeIdx !== null && items[activeIdx]) items[activeIdx].layer.setStyle({ opacity:0.1 });
+    // Keep the main track fully visible — only add the segment highlight on top
     this._layers.push(
-      L.polyline(latlngs, { color:'#111827', weight:8, opacity:0.55, interactive:false, lineCap:'round', lineJoin:'round' }).addTo(map),
-      L.polyline(latlngs, { color,           weight:4, opacity:1,    interactive:false, lineCap:'round', lineJoin:'round' }).addTo(map)
+      L.polyline(latlngs, { color:'#111827', weight:8,  opacity:0.45, interactive:false, lineCap:'round', lineJoin:'round' }).addTo(map),
+      L.polyline(latlngs, { color,           weight:4,  opacity:1,    interactive:false, lineCap:'round', lineJoin:'round' }).addTo(map)
     );
     this._layers.forEach(l => l.bringToFront());
   },
   hide() {
     this._layers.forEach(l => l.remove()); this._layers = [];
-    if (activeIdx !== null && items[activeIdx]) items[activeIdx].layer.setStyle({ weight:4.5, opacity:1 });
+    // No need to restore the main track — we never changed its opacity
   }
 };
 const hoverMarker = L.circleMarker([0,0], { radius:7, color:'white', weight:2.5, fillOpacity:1, interactive:false, pane:'shadowPane' });
@@ -426,11 +426,33 @@ function fillDetailHeader(track, color) {
   catEl.style.setProperty('--pc', actColor(act));
   catEl.onclick = () => pickColor(actColor(act), c => setActivityColor(act, c, false), c => setActivityColor(act, c, true));
 
-  $('pd-dist').innerHTML = `<b>${nf1.format(track.distance)}</b> km`;
-  $('pd-gain').innerHTML = `↑ <b>${nf0.format(track.elevationGain)}</b> m`;
-  $('pd-loss').innerHTML = `↓ <b>${nf0.format(track.elevationLoss)}</b> m`;
-  $('pd-alt').innerHTML  = track.minElevation != null ? `⛰ <b>${nf0.format(track.minElevation)}–${nf0.format(track.maxElevation)}</b> m` : '';
-  $('pd-date').innerHTML = track.date ? `<b>${escHtml(track.date)}</b>` : '';
+  function fmtSec(s) {
+    if (!s) return null;
+    const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+    return h ? `${h}h ${m}m` : `${m}m`;
+  }
+  const movT  = fmtSec(track.movingTime);
+  const totT  = fmtSec((track.movingTime || 0) + (track.stoppedTime || 0));
+
+  const distEl = $('pd-dist');
+  distEl.innerHTML = `&#128207; <b>${nf1.format(track.distance)}</b> km`;
+  distEl.title = 'Distancia total del recorrido';
+
+  const gainEl = $('pd-gain');
+  gainEl.innerHTML = `↗<b>${nf0.format(track.elevationGain)}</b>&thinsp;m &nbsp;↘<b>${nf0.format(track.elevationLoss)}</b>&thinsp;m`;
+  gainEl.title = 'Desnivel acumulado positivo / negativo';
+
+  $('pd-loss').innerHTML = '';
+
+  const altEl = $('pd-alt');
+  if (movT) {
+    altEl.innerHTML = `⏱<b>${movT}</b>${totT && totT !== movT ? `&nbsp;·&nbsp;<b>${totT}</b>` : ''}`;
+    altEl.title = totT && totT !== movT ? 'Tiempo en movimiento · tiempo total' : 'Tiempo en movimiento';
+  } else {
+    altEl.innerHTML = track.date ? `<b>${escHtml(track.date)}</b>` : '';
+    altEl.title = 'Fecha';
+  }
+  $('pd-date').innerHTML = '';
 
   const detailEl = $('pd-detail');
   if (track.id) { detailEl.href = `/track?id=${track.id}`; detailEl.hidden = false; }
@@ -685,8 +707,6 @@ function trackItemHtml(track, ri) {
       <div class="ti-stats">
         <span><b>${nf1.format(track.distance)}</b> km</span>
         <span>↑ <b>${nf0.format(track.elevationGain)}</b> m</span>
-        ${ibpHtml}
-        ${track.hasOsm ? '<span class="ti-osm" title="Tipos de camino OSM disponibles">OSM</span>' : ''}
         <span title="${track.circular ? 'Circular' : 'Lineal'}">${track.circular ? '🔄' : '↔'}</span>
       </div>
     </div>

@@ -13,6 +13,7 @@
   <span class="logo">GPX Library</span>
   <a href="/" style="color:#f8fafc">Visor</a>
   <a href="/editor">Catálogo</a>
+  <a href="/compare">Comparar</a>
   <a href="/config">Config</a>
   <a href="/admin">Admin</a>
 </nav>
@@ -80,13 +81,6 @@
           <span id="pd-name"></span>
           <span id="pd-cat" title="Color de la actividad (clic para cambiar)"></span>
         </div>
-        <div id="pd-row2">
-          <span class="pd-stat" id="pd-dist"></span>
-          <span class="pd-stat" id="pd-gain"></span>
-          <span class="pd-stat" id="pd-loss"></span>
-          <span class="pd-stat" id="pd-alt"></span>
-          <span class="pd-stat" id="pd-date"></span>
-        </div>
         <a id="pd-detail" href="#" target="_blank" title="Ver página de detalle">Ver detalle
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
         </a>
@@ -94,10 +88,19 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <div id="profile-svg-wrap">
-        <svg id="profile-svg" preserveAspectRatio="none"></svg>
-        <div id="profile-tooltip"></div>
-        <div id="no-elevation">Sin datos de altitud</div>
+      <div id="pd-body">
+        <div id="pd-stats">
+          <span class="pd-stat" id="pd-dist"></span>
+          <span class="pd-stat" id="pd-gain"></span>
+          <span class="pd-stat" id="pd-loss"></span>
+          <span class="pd-stat" id="pd-alt"></span>
+          <span class="pd-stat" id="pd-date"></span>
+        </div>
+        <div id="profile-svg-wrap">
+          <svg id="profile-svg" preserveAspectRatio="none"></svg>
+          <div id="profile-tooltip"></div>
+          <div id="no-elevation">Sin datos de altitud</div>
+        </div>
       </div>
       <div id="sel-bar">
         <span class="sel-tag">Tramo</span>

@@ -71,6 +71,7 @@ tr.inactive td { opacity: .4; }
   <span class="logo">GPX Library</span>
   <a href="/">Visor</a>
   <a href="/editor">Catálogo</a>
+  <a href="/compare">Comparar</a>
   <a href="/config" style="color:#f8fafc">Config</a>
   <a href="/admin">Admin</a>
 </nav>
@@ -86,6 +87,7 @@ tr.inactive td { opacity: .4; }
   <button class="seg-tab tab active" data-tab="activities">Actividades</button>
   <button class="seg-tab tab" data-tab="sierras">Sierras / Zonas</button>
   <button class="seg-tab tab" data-tab="geo">Provincias &amp; CCAA</button>
+  <button class="seg-tab tab" data-tab="params">Parámetros</button>
 </div>
 
 <div id="content">
@@ -146,6 +148,76 @@ tr.inactive td { opacity: .4; }
     <div id="geo-ccaa" class="chip-grid" style="margin-bottom:24px"></div>
     <div class="section-header"><h2>Sierras en uso</h2></div>
     <div id="geo-zones" class="chip-grid" style="margin-bottom:12px"></div>
+  </div>
+
+  <!-- ── Parámetros ── -->
+  <div id="panel-params" class="panel card panel-card">
+    <div class="section-header"><h2>Wikiloc</h2></div>
+    <p class="section-desc">Los tracks <strong>públicos de Wikiloc se importan directamente</strong> sin necesidad de cuenta. Para importar tracks privados necesitas un token de API, que Wikiloc solo concede previa solicitud por email a su equipo de developers.</p>
+
+    <!-- Estado de conexión -->
+    <div id="wl-status" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:10px;font-size:13px"></div>
+    <div id="wl-connect-wrap" style="display:none;margin-bottom:16px;display:flex;gap:8px">
+      <a href="/auth/wikiloc" class="btn btn-primary btn-sm" id="btn-wl-connect" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:4px"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Conectar con Wikiloc
+      </a>
+      <button class="btn btn-ghost btn-sm" id="btn-wl-disconnect" style="display:none">Desconectar</button>
+    </div>
+
+    <!-- Credenciales OAuth (Client ID / Secret) -->
+    <details id="wl-creds-details" style="margin-bottom:16px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);user-select:none;padding:4px 0">⚙ Credenciales de app OAuth</summary>
+      <div class="edit-form" style="max-width:480px;margin-top:10px">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Si Wikiloc te ha aprobado como developer, pega aquí las credenciales de tu app OAuth. El redirect URI que debes configurar en tu app es <code>http://localhost:8080/auth/wikiloc/callback</code>.</p>
+        <div class="f-field">
+          <label>Client ID</label>
+          <input type="text" id="wl-client-id" class="input" placeholder="" style="font-family:monospace;font-size:12px">
+        </div>
+        <div class="f-field" style="margin-top:8px">
+          <label>Client Secret</label>
+          <input type="password" id="wl-client-secret" class="input" placeholder="" style="font-family:monospace;font-size:12px">
+        </div>
+        <button class="btn btn-primary btn-sm" id="btn-wl-creds-save" style="margin-top:10px">Guardar credenciales</button>
+      </div>
+    </details>
+
+    <!-- Token manual (fallback) -->
+    <details style="margin-bottom:24px">
+      <summary style="cursor:pointer;font-size:12px;color:var(--muted);user-select:none;padding:4px 0">Token manual (sin OAuth)</summary>
+      <div class="edit-form" style="max-width:480px;margin-top:8px">
+        <div class="f-field">
+          <label>Token de acceso (Bearer)</label>
+          <input type="password" id="wl-token-input" class="input" placeholder="eyJ…" style="width:100%;margin-top:4px;font-family:monospace;font-size:12px">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-primary btn-sm" id="btn-wl-token-save">Guardar</button>
+          <button class="btn btn-ghost btn-sm" id="btn-wl-token-clear">Borrar</button>
+        </div>
+      </div>
+    </details>
+    <div class="section-header" style="margin-top:8px"><h2>Parámetros de detección de subidas</h2></div>
+    <p class="section-desc">Umbrales usados en la pestaña <em>Subidas</em> del detalle de track. Se guarda por navegador. Una subida se muestra si cumple <strong>cualquiera</strong> de los dos umbrales de desnivel o pendiente (además del mínimo de distancia).</p>
+    <div class="edit-form" style="max-width:480px">
+      <div class="form-row">
+        <div class="f-field">
+          <label>Desnivel mínimo (m)</label>
+          <input type="number" id="p-min-gain" min="0" max="2000" step="10" value="80">
+        </div>
+        <div class="f-field">
+          <label>Pendiente mínima (%)</label>
+          <input type="number" id="p-min-grad" min="0" max="30" step="0.5" value="4">
+        </div>
+        <div class="f-field">
+          <label>Distancia mínima (km)</label>
+          <input type="number" id="p-min-dist" min="0.05" max="5" step="0.05" value="0.2">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn btn-primary btn-sm" id="btn-params-save">Guardar</button>
+        <button class="btn btn-ghost btn-sm" id="btn-params-reset">Restablecer</button>
+      </div>
+    </div>
   </div>
 
 </div><!-- #content -->
@@ -761,6 +833,153 @@ async function loadGeo() {
     geoLoaded = true;
   } catch(e) { console.error(e); }
 }
+
+// ── PARÁMETROS ───────────────────────────────────────────────────────
+const PARAMS_KEY = 'gpx-climb-params';
+const PARAMS_DEF = { minGain: 80, minGrad: 4, minDist: 0.2 };
+
+function loadParams() {
+  try { return Object.assign({}, PARAMS_DEF, JSON.parse(localStorage.getItem(PARAMS_KEY) || '{}')); } catch { return { ...PARAMS_DEF }; }
+}
+
+function initParamsPanel() {
+  const p = loadParams();
+  document.getElementById('p-min-gain').value = p.minGain;
+  document.getElementById('p-min-grad').value = p.minGrad;
+  document.getElementById('p-min-dist').value = p.minDist;
+
+  document.getElementById('btn-params-save').addEventListener('click', () => {
+    const params = {
+      minGain: parseFloat(document.getElementById('p-min-gain').value) || PARAMS_DEF.minGain,
+      minGrad: parseFloat(document.getElementById('p-min-grad').value) || PARAMS_DEF.minGrad,
+      minDist: parseFloat(document.getElementById('p-min-dist').value) || PARAMS_DEF.minDist,
+    };
+    try { localStorage.setItem(PARAMS_KEY, JSON.stringify(params)); } catch {}
+    showToast('Parámetros guardados');
+  });
+
+  document.getElementById('btn-params-reset').addEventListener('click', () => {
+    try { localStorage.removeItem(PARAMS_KEY); } catch {}
+    document.getElementById('p-min-gain').value = PARAMS_DEF.minGain;
+    document.getElementById('p-min-grad').value = PARAMS_DEF.minGrad;
+    document.getElementById('p-min-dist').value = PARAMS_DEF.minDist;
+    showToast('Parámetros restablecidos');
+  });
+}
+
+// ── WIKILOC / OAUTH ───────────────────────────────────────────────────
+async function initWikiloc() {
+  // Resultado del callback OAuth en la URL
+  const urlp = new URLSearchParams(location.search);
+  if (urlp.get('wl-ok'))    { history.replaceState(null, '', location.pathname); showToast('✓ Wikiloc conectado'); }
+  if (urlp.get('wl-error')) { history.replaceState(null, '', location.pathname); showToast('Error OAuth: ' + urlp.get('wl-error')); }
+
+  let s = {};
+  try { const r = await fetch('/api/config/settings'); if (r.ok) s = await r.json(); } catch {}
+
+  // Rellenar campos
+  if (s.wikiloc_client_id)     document.getElementById('wl-client-id').value = s.wikiloc_client_id;
+  if (s.wikiloc_client_secret) document.getElementById('wl-client-secret').placeholder = '(configurado)';
+  if (s.wikiloc_token)         document.getElementById('wl-token-input').placeholder = '(configurado)';
+
+  // Mostrar estado de conexión
+  const statusEl     = document.getElementById('wl-status');
+  const connectBtn   = document.getElementById('btn-wl-connect');
+  const disconnectBtn= document.getElementById('btn-wl-disconnect');
+  document.getElementById('wl-connect-wrap').style.display = 'flex';
+  statusEl.style.display = '';
+
+  function updateStatus(settings) {
+    if (settings.wikiloc_token) {
+      statusEl.style.background = 'var(--accent-soft,#dbeafe)';
+      statusEl.style.color = 'var(--accent)';
+      statusEl.textContent = '✓ Conectado a Wikiloc (token activo)';
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = '';
+    } else if (settings.wikiloc_client_id) {
+      statusEl.style.background = 'var(--soft)';
+      statusEl.style.color = 'var(--ink-2)';
+      statusEl.textContent = 'Credenciales configuradas. Haz clic en "Conectar" para autorizar.';
+      connectBtn.style.display = '';
+      disconnectBtn.style.display = 'none';
+    } else {
+      statusEl.style.background = 'var(--soft)';
+      statusEl.style.color = 'var(--muted)';
+      statusEl.textContent = 'No conectado. Configura las credenciales para usar OAuth, o introduce un token manualmente.';
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = 'none';
+    }
+  }
+  updateStatus(s);
+
+  // Guardar credenciales (client_id / secret)
+  document.getElementById('btn-wl-creds-save').addEventListener('click', async () => {
+    const clientId     = document.getElementById('wl-client-id').value.trim();
+    const clientSecret = document.getElementById('wl-client-secret').value.trim();
+    if (!clientId) { showToast('Introduce el Client ID'); return; }
+    try {
+      const body = { wikiloc_client_id: clientId };
+      if (clientSecret) body.wikiloc_client_secret = clientSecret;
+      const r = await fetch('/api/config/settings', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      if (clientSecret) { document.getElementById('wl-client-secret').value = ''; document.getElementById('wl-client-secret').placeholder = '(configurado)'; }
+      s.wikiloc_client_id = clientId;
+      updateStatus(s);
+      showToast('Credenciales guardadas');
+    } catch(e) { showToast('Error: ' + e.message); }
+  });
+
+  // Desconectar
+  document.getElementById('btn-wl-disconnect').addEventListener('click', async () => {
+    if (!confirm('¿Desconectar la cuenta de Wikiloc?')) return;
+    try {
+      const r = await fetch('/auth/wikiloc/disconnect', { method: 'POST' });
+      if (!r.ok) throw new Error(await r.text());
+      delete s.wikiloc_token; delete s.wikiloc_refresh_token;
+      document.getElementById('wl-token-input').placeholder = 'eyJ…';
+      updateStatus(s);
+      showToast('Wikiloc desconectado');
+    } catch(e) { showToast('Error: ' + e.message); }
+  });
+
+  // Token manual
+  document.getElementById('btn-wl-token-save').addEventListener('click', async () => {
+    const val = document.getElementById('wl-token-input').value.trim();
+    if (!val) { showToast('Introduce el token'); return; }
+    try {
+      const r = await fetch('/api/config/settings', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wikiloc_token: val }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      document.getElementById('wl-token-input').value = '';
+      document.getElementById('wl-token-input').placeholder = '(configurado)';
+      s.wikiloc_token = '(configured)';
+      updateStatus(s);
+      showToast('Token guardado');
+    } catch(e) { showToast('Error: ' + e.message); }
+  });
+
+  document.getElementById('btn-wl-token-clear').addEventListener('click', async () => {
+    try {
+      await fetch('/api/config/settings', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wikiloc_token: '' }),
+      });
+      document.getElementById('wl-token-input').value = '';
+      document.getElementById('wl-token-input').placeholder = 'eyJ…';
+      delete s.wikiloc_token;
+      updateStatus(s);
+      showToast('Token eliminado');
+    } catch(e) { showToast('Error: ' + e.message); }
+  });
+}
+
+initWikiloc();
+initParamsPanel();
 
 // ── Init ─────────────────────────────────────────────────────────────
 loadActivities();

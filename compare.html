@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparar tracks — GPX Library</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/shared.css">
+<style>
+html, body { height: 100%; overflow: hidden; }
+#map { position: fixed; inset: 0; top: 44px; z-index: 0; transition: bottom .25s; }
+#map.with-profile { bottom: 210px; }
+
+/* ── Panel izquierdo ── */
+#cmp-panel {
+  position: fixed; top: 56px; left: 10px; z-index: 1000;
+  width: 250px; max-height: calc(100vh - 68px);
+  background: var(--surface); border-radius: 14px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.15), 0 1px 4px rgba(0,0,0,.08);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#cmp-head {
+  padding: 10px 13px 8px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+#cmp-head h2 { font-size: 13px; font-weight: 700; flex: 1; color: var(--ink); }
+#cmp-body { overflow-y: auto; flex: 1; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+#cmp-foot {
+  flex-shrink: 0; padding: 7px 8px; border-top: 1px solid var(--line);
+  display: flex; gap: 5px; justify-content: flex-end;
+}
+.cmp-icon-btn { padding: 5px 8px !important; display: flex; align-items: center; justify-content: center; }
+
+/* ── Compact track row ── */
+.cmp-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; border-radius: 8px; cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background .12s, border-color .12s;
+}
+.cmp-row:hover { background: var(--soft); }
+.cmp-row.active { border-color: var(--c); background: var(--soft); }
+.cmp-row.hidden-track { opacity: .4; }
+.cmp-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.cmp-row-info { flex: 1; min-width: 0; }
+.cmp-row-name { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-row-sub  { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-eye {
+  background: none; border: none; cursor: pointer; padding: 3px;
+  border-radius: 4px; color: var(--muted); display: flex; flex-shrink: 0;
+}
+.cmp-eye:hover { background: var(--line); color: var(--ink); }
+
+/* ── Detail view (panel left when profile open) ── */
+#cmp-detail { display: none; flex-direction: column; gap: 6px; padding: 10px 10px 6px; }
+#cmp-detail.visible { display: flex; }
+#cmp-detail-name { font-size: 13px; font-weight: 700; color: var(--ink); line-height: 1.3; }
+#cmp-detail-act  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.cmp-detail-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 4px; }
+.cmp-detail-stat { font-size: 11px; color: var(--muted); }
+.cmp-detail-stat strong { display: block; font-size: 14px; color: var(--ink); font-weight: 700; }
+#cmp-detail-eye {
+  margin-top: 4px; width: 100%; padding: 5px; border: 1px solid var(--line);
+  background: var(--soft); border-radius: 7px; cursor: pointer;
+  font-size: 11px; color: var(--ink-2); display: flex; align-items: center; justify-content: center; gap: 5px;
+}
+#cmp-detail-eye:hover { background: var(--line); }
+
+/* ── Bottom profile panel ── */
+#profile-panel {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 210px;
+  background: var(--surface); border-top: 1px solid var(--line);
+  z-index: 900; display: none; flex-direction: column;
+}
+#profile-panel.visible { display: flex; }
+#profile-tabs {
+  display: flex; gap: 2px; padding: 5px 8px 0; overflow-x: auto;
+  border-bottom: 1px solid var(--line); flex-shrink: 0;
+}
+.ptab {
+  display: flex; align-items: center; gap: 5px; padding: 5px 11px;
+  border-radius: 8px 8px 0 0; font-size: 11px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; border: 1.5px solid transparent;
+  border-bottom: none; color: var(--muted); background: none;
+  transition: background .12s;
+}
+.ptab:hover { background: var(--soft); }
+.ptab.active { background: var(--surface); border-color: var(--line); border-bottom-color: var(--surface); color: var(--ink); margin-bottom: -1px; }
+.ptab-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+#profile-close {
+  position: absolute; top: 6px; right: 10px; z-index: 1;
+  background: none; border: none; cursor: pointer; color: var(--muted);
+  font-size: 16px; line-height: 1; padding: 2px 5px;
+}
+#profile-close:hover { color: var(--ink); }
+#profile-body { flex: 1; display: flex; gap: 0; overflow: hidden; }
+#profile-stats {
+  width: 140px; flex-shrink: 0; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 9px; justify-content: center;
+  border-right: 1px solid var(--line);
+}
+#ps-name { font-size: 13px; font-weight: 700; color: var(--ink); line-height: 1.3;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+#ps-act  { font-size: 12px; color: var(--muted); margin-top: -4px; }
+.ps-row  { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ps-row strong { color: var(--ink); font-weight: 600; }
+#ps-eye {
+  margin-top: 2px; width: 32px; height: 32px; padding: 0;
+  background: var(--soft); border: 1px solid var(--line);
+  border-radius: 8px; cursor: pointer;
+  color: var(--ink-2); display: flex; align-items: center; justify-content: center;
+}
+#ps-eye:hover { background: var(--line); color: var(--ink); }
+#profile-svg-wrap { flex: 1; position: relative; padding: 6px 10px; min-width: 0; }
+#profile-svg { width: 100%; height: 100%; display: block; }
+
+/* ── Tooltip ── */
+#cmp-tooltip {
+  position: fixed; z-index: 2000; pointer-events: none; display: none;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px 9px; font-size: 11px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+#cmp-tooltip .tt-row { color: var(--muted); }
+#cmp-tooltip .tt-val { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+<nav>
+  <span class="logo">GPX Library</span>
+  <a href="/">Visor</a>
+  <a href="/editor">Catálogo</a>
+  <a href="/compare" style="color:#f8fafc">Comparar</a>
+  <a href="/config">Config</a>
+  <a href="/admin">Admin</a>
+</nav>
+
+<div id="map"></div>
+
+<!-- Left panel -->
+<div id="cmp-panel">
+  <div id="cmp-head">
+    <h2 id="cmp-title">Comparar</h2>
+    <a href="/editor" class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px">← Catálogo</a>
+  </div>
+
+  <!-- Compact list (default) -->
+  <div id="cmp-body">
+    <div id="cmp-loading" style="padding:24px 12px;text-align:center;color:var(--muted);font-size:13px">Cargando…</div>
+  </div>
+
+  <div id="cmp-foot">
+    <button class="btn btn-ghost btn-sm cmp-icon-btn" id="btn-cmp-fit" title="Ajustar mapa a todos los tracks">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+    </button>
+    <button class="btn btn-ghost btn-sm cmp-icon-btn" id="btn-cmp-toggle-all" title="Ocultar todos los tracks">
+      <svg id="icon-eye" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="btn btn-ghost btn-sm cmp-icon-btn" id="btn-profile" title="Mostrar perfiles de altimetría">
+      <svg id="icon-profile" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Bottom elevation panel -->
+<div id="profile-panel">
+  <button id="profile-close" title="Cerrar">✕</button>
+  <div id="profile-tabs"></div>
+  <div id="profile-body">
+    <div id="profile-stats">
+      <div id="ps-name">—</div>
+      <div id="ps-act" title="Actividad"></div>
+      <div class="ps-row" title="Distancia total del recorrido">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h6M15 6h6M3 18h6M15 18h6"/></svg>
+        <strong id="ps-dist">—</strong>
+      </div>
+      <div class="ps-row" title="Desnivel acumulado positivo / negativo">
+        <span>↗ <strong id="ps-gain">—</strong> ↘ <strong id="ps-loss">—</strong></span>
+      </div>
+      <div class="ps-row" id="ps-time-row" title="Tiempo en movimiento · tiempo total">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span id="ps-time">—</span>
+      </div>
+      <button id="ps-eye" title="Alternar visibilidad del track en el mapa">
+        <svg id="ps-eye-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+    <div id="profile-svg-wrap">
+      <svg id="profile-svg"></svg>
+    </div>
+  </div>
+</div>
+
+<div id="cmp-tooltip">
+  <div class="tt-row">📏 <span class="tt-val" id="tt-dist"></span>
+    &nbsp; ↑ <span class="tt-val" id="tt-ele"></span></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+'use strict';
+
+const COLORS = ['#3b82f6','#ef4444','#22c55e','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#84cc16'];
+
+const ids = (new URLSearchParams(location.search).get('ids') || '')
+  .split(',').map(s => parseInt(s.trim())).filter(n => n > 0);
+
+// ── Map ──
+const map = L.map('map', { zoomControl: false }).setView([40, -3], 6);
+const tileLayers = {
+  'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19 }),
+  'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',   { attribution:'© OpenTopoMap', maxZoom:17 }),
+  'IGN Topográfico': L.tileLayer('https://www.ign.es/wmts/mapa-raster?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=MTN&STYLE=default&FORMAT=image/jpeg&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', { attribution:'© <a href="https://www.ign.es">IGN España</a>', maxZoom:20 }),
+  'Google Maps':     L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
+  'Google Satélite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
+  'Google Híbrido':  L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
+};
+let baseName = 'OpenStreetMap';
+try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}
+tileLayers[baseName].addTo(map);
+map.on('baselayerchange', e => { try { localStorage.setItem('visor-base-layer', e.name); } catch {} });
+L.control.layers(tileLayers, null, { position:'topright', collapsed:true }).addTo(map);
+L.control.zoom({ position:'topright' }).addTo(map);
+
+// ── Helpers ──
+function hav(a, b) {
+  const R = 6371, dLat = (b[0]-a[0])*Math.PI/180, dLon = (b[1]-a[1])*Math.PI/180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.asin(Math.sqrt(x));
+}
+function fmtKm(n) { return n == null ? '—' : (n >= 10 ? Math.round(n) : (+n).toFixed(1)) + ' km'; }
+function fmtM(n)  { return n == null ? '—' : Math.round(n) + ' m'; }
+function esc(s)   { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function ibpVal(d) {
+  if (['MTB','Mtb','Gravel','Bikepacking','Ciclismo de carretera'].includes(d.activity)) return d.ibp_bicycle;
+  if (['Trail Running','Running'].includes(d.activity)) return d.ibp_running;
+  return d.ibp_hiking;
+}
+
+// ── State ──
+const tracks   = [];
+let activeIdx  = null;   // highlighted track
+let profileTab = null;   // currently selected profile tab index
+let profileOpen = false;
+
+// ── Compact list ──
+function buildList() {
+  const body = document.getElementById('cmp-body');
+  body.innerHTML = '';
+  if (!tracks.length) {
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No se encontraron tracks.</div>';
+    return;
+  }
+  tracks.forEach((tr, i) => {
+    const d = tr.data;
+    const row = document.createElement('div');
+    row.className = 'cmp-row' + (tr.visible ? '' : ' hidden-track') + (activeIdx === i ? ' active' : '');
+    row.style.setProperty('--c', tr.color);
+    row.innerHTML = `
+      <span class="cmp-dot" style="background:${tr.color}"></span>
+      <div class="cmp-row-info">
+        <div class="cmp-row-name" title="${esc(d.name)}">${esc(d.name)}</div>
+        <div class="cmp-row-sub">${esc(d.activity||'')}${d.activity && d.distance ? ' · ' : ''}${fmtKm(d.distance)}</div>
+      </div>
+      <button class="cmp-eye" data-i="${i}" title="${tr.visible ? 'Ocultar' : 'Mostrar'}">
+        ${eyeIcon(tr.visible)}
+      </button>`;
+    row.addEventListener('click', e => { if (e.target.closest('.cmp-eye')) return; highlightTrack(i); });
+    row.querySelector('.cmp-eye').addEventListener('click', e => { e.stopPropagation(); toggleVisible(i); });
+    body.appendChild(row);
+  });
+}
+
+function eyeIcon(vis) {
+  return vis
+    ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+    : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+}
+
+function fmtSec(s) {
+  if (!s) return null;
+  const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+
+// ── Profile stats panel ──
+function updateProfileStats(i) {
+  const d    = tracks[i].data;
+  const movT = fmtSec(d.moving_time);
+  const totT = fmtSec((d.moving_time || 0) + (d.stopped_time || 0));
+  document.getElementById('ps-name').textContent = d.name;
+  document.getElementById('ps-act').textContent  = d.activity || '';
+  document.getElementById('ps-dist').textContent = fmtKm(d.distance);
+  document.getElementById('ps-gain').textContent = d.elevation_gain != null ? '+'+Math.round(d.elevation_gain)+'m' : '—';
+  document.getElementById('ps-loss').textContent = d.elevation_loss != null ? '-'+Math.round(d.elevation_loss)+'m' : '—';
+  const timeEl = document.getElementById('ps-time');
+  if (movT) {
+    timeEl.textContent = totT && totT !== movT ? `${movT} · ${totT}` : movT;
+    document.getElementById('ps-time-row').title = totT && totT !== movT
+      ? 'Tiempo en movimiento · tiempo total' : 'Tiempo en movimiento';
+  } else {
+    timeEl.textContent = '—';
+  }
+  updateEyeBtn(i);
+}
+
+const EYE_OPEN   = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+const EYE_CLOSED = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+
+function updateEyeBtn(i) {
+  const icon = document.getElementById('ps-eye-icon');
+  if (icon) icon.innerHTML = tracks[i].visible ? EYE_OPEN : EYE_CLOSED;
+  document.getElementById('ps-eye').title = tracks[i].visible ? 'Ocultar del mapa' : 'Mostrar en mapa';
+}
+
+document.getElementById('ps-eye').addEventListener('click', () => {
+  if (profileTab !== null) { toggleVisible(profileTab); updateEyeBtn(profileTab); }
+});
+
+// ── Highlight ──
+function highlightTrack(i) {
+  activeIdx = activeIdx === i ? null : i;
+  applyHighlight();
+  buildList();
+  if (activeIdx !== null && tracks[activeIdx].polyline)
+    map.fitBounds(tracks[activeIdx].polyline.getBounds(), { padding:[50,50] });
+}
+
+function applyHighlight() {
+  tracks.forEach((tr, j) => {
+    if (!tr.polyline) return;
+    const isHL = activeIdx === null || j === activeIdx;
+    tr.polyline.setStyle({ weight: j === activeIdx ? 5 : 3, opacity: isHL ? 1 : 0.6 });
+    if (j === activeIdx) tr.polyline.bringToFront();
+  });
+}
+
+// ── Visibility ──
+function toggleVisible(i) {
+  tracks[i].visible = !tracks[i].visible;
+  const tr = tracks[i];
+  if (tr.polyline) { tr.visible ? map.addLayer(tr.polyline) : map.removeLayer(tr.polyline); }
+  buildList();
+  if (profileTab === i) {
+    document.getElementById('cmp-detail-eye-label').textContent = tr.visible ? 'Visible en mapa' : 'Oculto en mapa';
+  }
+}
+
+// ── Fit all ──
+function fitAll() {
+  const vis = tracks.filter(t => t.visible && t.polyline);
+  if (!vis.length) return;
+  map.fitBounds(L.latLngBounds(vis.flatMap(t => t.polyline.getLatLngs())), { padding:[40,40] });
+}
+
+document.getElementById('btn-cmp-fit').addEventListener('click', fitAll);
+
+const EYE_ON  = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+const EYE_OFF = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+let allVis = true;
+document.getElementById('btn-cmp-toggle-all').addEventListener('click', () => {
+  allVis = !allVis;
+  tracks.forEach((t, i) => { if (t.visible !== allVis) toggleVisible(i); });
+  const btn = document.getElementById('btn-cmp-toggle-all');
+  document.getElementById('icon-eye').innerHTML = allVis ? EYE_ON : EYE_OFF;
+  btn.title = allVis ? 'Ocultar todos los tracks' : 'Mostrar todos los tracks';
+});
+
+// ── Profile panel ──
+document.getElementById('btn-profile').addEventListener('click', () => toggleProfile(!profileOpen));
+document.getElementById('profile-close').addEventListener('click', () => toggleProfile(false));
+
+function toggleProfile(open) {
+  profileOpen = open;
+  document.getElementById('profile-panel').classList.toggle('visible', open);
+  document.getElementById('map').classList.toggle('with-profile', open);
+  const profBtn = document.getElementById('btn-profile');
+  profBtn.title = open ? 'Cerrar perfiles de altimetría' : 'Mostrar perfiles de altimetría';
+  document.getElementById('icon-profile').innerHTML = open
+    ? '<polyline points="22 12 18 12 15 3 9 21 6 12 2 12"/>'
+    : '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>';
+  if (open) {
+    buildProfileTabs();
+    if (profileTab === null && tracks.length) selectProfileTab(0);
+  } else {
+    profileTab = null;
+    activeIdx  = null;
+    applyHighlight();
+    buildList();
+  }
+}
+
+function buildProfileTabs() {
+  const strip = document.getElementById('profile-tabs');
+  strip.innerHTML = '';
+  tracks.forEach((tr, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'ptab' + (i === profileTab ? ' active' : '');
+    btn.innerHTML = `<span class="ptab-dot" style="background:${tr.color}"></span>${esc(tr.data.name.length > 22 ? tr.data.name.slice(0,20)+'…' : tr.data.name)}`;
+    btn.addEventListener('click', () => selectProfileTab(i));
+    strip.appendChild(btn);
+  });
+}
+
+function selectProfileTab(i) {
+  profileTab = i;
+  activeIdx  = i;
+  applyHighlight();
+  buildProfileTabs();
+  updateProfileStats(i);
+  drawProfile(i);
+}
+
+// ── Draw elevation SVG for one track ──
+function drawProfile(i) {
+  const svg  = document.getElementById('profile-svg');
+  const tr   = tracks[i];
+  svg.innerHTML = '';
+  if (!tr.profile || tr.profile.length < 2) {
+    svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="var(--muted)" font-size="12">Sin datos de altimetría</text>';
+    return;
+  }
+
+  const pts = tr.profile.filter(p => p.e != null);
+  if (pts.length < 2) return;
+
+  const rect = document.getElementById('profile-svg-wrap').getBoundingClientRect();
+  const W = rect.width || 600, H = rect.height || 130;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const PAD = { t: 10, r: 8, b: 24, l: 42 };
+  const CW = W - PAD.l - PAD.r, CH = H - PAD.t - PAD.b;
+  const minE = Math.min(...pts.map(p => p.e)), maxE = Math.max(...pts.map(p => p.e));
+  const eRange = maxE - minE || 1;
+  const totalD = tr.totalDist || 1;
+
+  const xp = d => PAD.l + d * CW;
+  const yp = e => PAD.t + CH - ((e - minE) / eRange) * CH;
+
+  // Grid lines
+  const nLines = 4;
+  for (let k = 0; k <= nLines; k++) {
+    const e = minE + (eRange * k / nLines);
+    const y = yp(e);
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', PAD.l); line.setAttribute('x2', PAD.l + CW);
+    line.setAttribute('y1', y); line.setAttribute('y2', y);
+    line.setAttribute('stroke', 'var(--line)'); line.setAttribute('stroke-width', '0.5');
+    svg.appendChild(line);
+    const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    lbl.setAttribute('x', PAD.l - 4); lbl.setAttribute('y', y + 3.5);
+    lbl.setAttribute('text-anchor', 'end'); lbl.setAttribute('font-size', '9');
+    lbl.setAttribute('fill', 'var(--muted)'); lbl.textContent = Math.round(e) + ' m';
+    svg.appendChild(lbl);
+  }
+
+  // Distance labels
+  const distSteps = [1,2,5,10,20,50,100];
+  const targetTicks = 6;
+  const step = distSteps.find(s => totalD / s <= targetTicks) || Math.ceil(totalD / targetTicks);
+  for (let d = 0; d <= totalD; d += step) {
+    const x = xp(d / totalD);
+    const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    lbl.setAttribute('x', x); lbl.setAttribute('y', H - PAD.b + 13);
+    lbl.setAttribute('text-anchor', 'middle'); lbl.setAttribute('font-size', '9');
+    lbl.setAttribute('fill', 'var(--muted)'); lbl.textContent = d + ' km';
+    svg.appendChild(lbl);
+  }
+
+  // Fill area
+  const polyPts = [
+    [xp(pts[0].d), H - PAD.b],
+    ...pts.map(p => [xp(p.d), yp(p.e)]),
+    [xp(pts[pts.length-1].d), H - PAD.b],
+  ].map(([x,y]) => `${x},${y}`).join(' ');
+
+  const fill = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  fill.setAttribute('points', polyPts);
+  fill.setAttribute('fill', tr.color); fill.setAttribute('opacity', '0.15');
+  svg.appendChild(fill);
+
+  // Line
+  const linePts = pts.map(p => `${xp(p.d)},${yp(p.e)}`).join(' ');
+  const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+  line2.setAttribute('points', linePts); line2.setAttribute('fill', 'none');
+  line2.setAttribute('stroke', tr.color); line2.setAttribute('stroke-width', '2');
+  line2.setAttribute('stroke-linejoin', 'round');
+  svg.appendChild(line2);
+
+  // Hover cursor line
+  const cursor = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  cursor.setAttribute('stroke', 'var(--ink-2)'); cursor.setAttribute('stroke-width', '1');
+  cursor.setAttribute('stroke-dasharray', '3 2'); cursor.style.display = 'none';
+  cursor.setAttribute('y1', PAD.t); cursor.setAttribute('y2', PAD.t + CH);
+  svg.appendChild(cursor);
+
+  svg.onmousemove = e => {
+    const r  = svg.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    if (mx < PAD.l || mx > PAD.l + CW) { cursor.style.display = 'none'; document.getElementById('cmp-tooltip').style.display = 'none'; return; }
+    const rel = (mx - PAD.l) / CW;
+    let best = pts[0], bestD = Infinity;
+    pts.forEach(p => { const d = Math.abs(p.d - rel); if (d < bestD) { bestD = d; best = p; } });
+    cursor.setAttribute('x1', mx); cursor.setAttribute('x2', mx);
+    cursor.style.display = '';
+    const tt = document.getElementById('cmp-tooltip');
+    document.getElementById('tt-dist').textContent = (best.d * totalD).toFixed(1) + ' km';
+    document.getElementById('tt-ele').textContent  = Math.round(best.e) + ' m';
+    tt.style.display = '';
+    tt.style.left = (e.clientX + 12) + 'px';
+    tt.style.top  = (e.clientY - 20) + 'px';
+  };
+  svg.onmouseleave = () => {
+    cursor.style.display = 'none';
+    document.getElementById('cmp-tooltip').style.display = 'none';
+  };
+}
+
+// ── Load ──
+async function loadTracks() {
+  if (!ids.length) {
+    document.getElementById('cmp-loading').innerHTML = 'Ningún track seleccionado.<br><a href="/editor">← Ir al catálogo</a>';
+    return;
+  }
+
+  const results = await Promise.allSettled(ids.map(id => fetch('/api/tracks/' + id).then(r => r.ok ? r.json() : null)));
+
+  results.forEach(r => {
+    if (r.status !== 'fulfilled' || !r.value) return;
+    const data  = r.value;
+    const color = COLORS[tracks.length % COLORS.length];
+    const pts   = (data.points || []).filter(p => p[0] && p[1]);
+
+    let polyline = null;
+    if (pts.length > 1) {
+      polyline = L.polyline(pts.map(p => [p[0], p[1]]), { color, weight: 3, opacity: 0.9 }).addTo(map);
+      const idx = tracks.length;
+      polyline.on('click', () => { if (!profileOpen) highlightTrack(idx); else selectProfileTab(idx); });
+    }
+
+    let profile = null, totalDist = 0;
+    if (pts.length > 1 && pts.some(p => p[2] != null)) {
+      let cum = 0;
+      const segs = pts.map((p, i) => {
+        if (i > 0) cum += hav(pts[i-1], p);
+        return { e: p[2], cum };
+      });
+      totalDist = cum || 1;
+      profile = segs.map(s => ({ d: s.cum / totalDist, e: s.e }));
+    }
+
+    tracks.push({ id: data.id, data, color, polyline, visible: true, profile, totalDist });
+  });
+
+  document.getElementById('cmp-title').textContent = `Comparar (${tracks.length})`;
+  buildList();
+  fitAll();
+}
+
+loadTracks();
+</script>
+</body>
+</html>

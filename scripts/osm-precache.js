@@ -2,10 +2,11 @@
 'use strict';
 // Descarga datos Overpass por sierra y, por defecto, aplica el enriquecimiento
 // a todos los tracks de cada zona en el mismo paso.
-// Uso: node scripts/osm-precache.js [--force] [--cache-only] [--enrich-only] [--sierra X]
+// Uso: node scripts/osm-precache.js [--force] [--cache-only] [--enrich-only] [--missing-only] [--sierra X]
 //   --force        : re-descarga aunque la caché sea reciente
 //   --cache-only   : solo guarda la caché, no modifica los tracks
 //   --enrich-only  : solo enriquece desde caché existente, sin consultar Overpass
+//   --missing-only : descarga caché solo de zonas que aún no la tienen
 //   --sierra X     : procesa solo ese grupo
 
 const fs   = require('fs');
@@ -20,8 +21,9 @@ const MAX_BBOX_DEG = 3.5;
 async function main() {
   const args        = process.argv.slice(2);
   const force       = args.includes('--force');
-  const cacheOnly   = args.includes('--cache-only');
+  const cacheOnly   = args.includes('--cache-only') || args.includes('--missing-only');
   const enrichOnly  = args.includes('--enrich-only');
+  const missingOnly = args.includes('--missing-only');
   const sierraIdx   = args.indexOf('--sierra');
   const sierraArg   = sierraIdx !== -1 ? args[sierraIdx + 1] : null;
 
@@ -63,6 +65,13 @@ async function main() {
     const g    = groups[i];
     const file = path.join(CACHE_DIR, slugify(g.group_key) + '.json');
 
+    // --missing-only: skip groups that already have a valid cache file
+    if (missingOnly && fs.existsSync(file)) {
+      console.log(`[${i+1}/${groups.length}] ${g.group_key} — ya tiene caché, saltando`);
+      skipped++;
+      continue;
+    }
+
     // --enrich-only: only use existing cache, never query Overpass
     if (enrichOnly) {
       if (!fs.existsSync(file)) {
@@ -79,16 +88,26 @@ async function main() {
         continue;
       }
       const ageH = (() => { try { return Math.round((Date.now() - JSON.parse(fs.readFileSync(file,'utf8')).ts) / 3600000); } catch { return '?'; } })();
-      console.log(`[${i+1}/${groups.length}] ${g.group_key} (${g.track_count} tracks) — caché ${ageH}h`);
+      const osmFilter = force ? '' : "AND (road_types IS NULL OR road_types = '{}')";
       const tracks = db.prepare(
         `SELECT id, name, cleaned, sw_lat, sw_lon, ne_lat, ne_lon
-         FROM tracks WHERE COALESCE(sierra, province, 'sin-zona') = ? AND sw_lat IS NOT NULL`
+         FROM tracks WHERE COALESCE(sierra, province, 'sin-zona') = ? AND sw_lat IS NOT NULL ${osmFilter}`
       ).all(g.group_key);
+      console.log(`[${i+1}/${groups.length}] ${g.group_key} — caché ${ageH}h — ${tracks.length}/${g.track_count} pendientes`);
+      if (tracks.length === 0) {
+        console.log('  ✓ Todos los tracks ya tienen datos OSM');
+        cachedGroups++;
+        continue;
+      }
       let groupOk = 0;
-      for (const t of tracks) {
+      for (let j = 0; j < tracks.length; j++) {
+        const t = tracks[j];
+        console.log(`  [${j+1}/${tracks.length}] ${t.name}`);
         const pts = fetchTrackPts(t, db);
-        if (pts.length < 2) continue;
-        applyWaysToTrack(t, pts, filterWaysToBbox(ways, t), db);
+        if (pts.length < 2) { console.log('    ⚠ Sin puntos'); continue; }
+        const filtered = filterWaysToBbox(ways, t);
+        console.log(`    ${filtered.length} caminos cercanos`);
+        applyWaysToTrack(t, pts, filtered, db);
         groupOk++;
       }
       console.log(`  ✓ ${groupOk} tracks enriquecidos`);
@@ -140,17 +159,27 @@ async function main() {
 
     // Apply to tracks unless --cache-only
     if (!cacheOnly) {
+      const osmFilter2 = force ? '' : "AND (road_types IS NULL OR road_types = '{}')";
       const tracks = db.prepare(`
         SELECT id, name, cleaned, sw_lat, sw_lon, ne_lat, ne_lon
         FROM tracks
-        WHERE COALESCE(sierra, province, 'sin-zona') = ? AND sw_lat IS NOT NULL
+        WHERE COALESCE(sierra, province, 'sin-zona') = ? AND sw_lat IS NOT NULL ${osmFilter2}
       `).all(g.group_key);
+      if (tracks.length === 0) {
+        console.log('  ✓ Todos los tracks ya tienen datos OSM');
+        continue;
+      }
+      console.log(`  ${tracks.length}/${g.track_count} tracks pendientes`);
 
       let groupOk = 0;
-      for (const t of tracks) {
+      for (let j = 0; j < tracks.length; j++) {
+        const t = tracks[j];
+        console.log(`  [${j+1}/${tracks.length}] ${t.name}`);
         const pts = fetchTrackPts(t, db);
-        if (pts.length < 2) continue;
-        applyWaysToTrack(t, pts, filterWaysToBbox(ways, t), db);
+        if (pts.length < 2) { console.log('    ⚠ Sin puntos'); continue; }
+        const filtered = filterWaysToBbox(ways, t);
+        console.log(`    ${filtered.length} caminos cercanos`);
+        applyWaysToTrack(t, pts, filtered, db);
         groupOk++;
       }
       console.log(`  ✓ ${groupOk} tracks enriquecidos`);
