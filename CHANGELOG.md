@@ -22,6 +22,11 @@
 ### Admin
 - **Pestaña Logs**: visor de `data/operations.log` (NDJSON, auto-rotación 256 KB) con filtros por nivel (info/warn/error), búsqueda, descarga y borrado
 - Logging automático de inicio de servidor, arranque/fin/error de cada script ejecutado vía SSE
+- **OSM — botón "Solo enriquecer"**: enriquece sin re-descargar datos de Overpass (para tracks ya descargados)
+- **OSM — TTL 365 días**: los datos OSM descargados se reutilizan durante un año antes de expirar
+- **OSM pre-caché por sierra**: descarga datos Overpass y enriquece todos los tracks de una sierra en un solo paso
+- **Fix**: `osm-download` y `osm-precache` no respondían desde Admin (se colgaban sin actualizar el progreso)
+- **Pestaña "Acerca de"**: muestra versión actual y enlace al historial de cambios
 
 ### Config — Wikiloc
 - Flujo **OAuth 2.0** completo (Authorization Code): botón "Conectar con Wikiloc", callback `/auth/wikiloc/callback`, intercambio de código por token, almacenado en `osm-settings.json`
