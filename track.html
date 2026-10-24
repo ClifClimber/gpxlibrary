@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <link rel="stylesheet" href="/shared.css">
+  <script src="/theme.js"></script>
   <link rel="stylesheet" href="/track.css">
 </head>
 <body>
@@ -160,12 +161,12 @@ function actInfo(a) {
 const CYCLING_ACTS_T = ['MTB','MTB Enduro','Mtb','Gravel','Bikepacking','Ciclismo de carretera'];
 const RUNNING_ACTS_T = ['Trail Running','Running'];
 const IBP_LEVELS_T = [
-  { label:'Muy fácil', desc:'Recorridos planos o con escaso desnivel acumulado.',           min:0,   max:50,       color:'#16a34a', bg:'#f0fdf4' },
-  { label:'Fácil',     desc:'Rutas con desnivel y distancia moderados.',                    min:51,  max:100,      color:'#d97706', bg:'#fefce8' },
-  { label:'Moderada',  desc:'Exige buena condición física. Desnivel notable.',              min:101, max:150,      color:'#c2410c', bg:'#fff7ed' },
-  { label:'Dura',      desc:'Alta exigencia. Desnivel y distancia considerables.',          min:151, max:250,      color:'#b91c1c', bg:'#fef2f2' },
-  { label:'Muy dura',  desc:'Solo para deportistas muy entrenados y preparados.',           min:251, max:400,      color:'#7e22ce', bg:'#faf5ff' },
-  { label:'Extrema',   desc:'Alta montaña, gran fondo o rutas de expedición.',             min:401, max:Infinity,  color:'#cbd5e1', bg:'#1e293b' },
+  { label:'Muy fácil', desc:'Recorridos planos o con escaso desnivel acumulado.',           min:0,   max:50,       color:'#16a34a', bg:'color-mix(in srgb,#16a34a 12%,transparent)' },
+  { label:'Fácil',     desc:'Rutas con desnivel y distancia moderados.',                    min:51,  max:100,      color:'#d97706', bg:'color-mix(in srgb,#d97706 12%,transparent)' },
+  { label:'Moderada',  desc:'Exige buena condición física. Desnivel notable.',              min:101, max:150,      color:'#ea580c', bg:'color-mix(in srgb,#ea580c 12%,transparent)' },
+  { label:'Dura',      desc:'Alta exigencia. Desnivel y distancia considerables.',          min:151, max:250,      color:'#dc2626', bg:'color-mix(in srgb,#dc2626 12%,transparent)' },
+  { label:'Muy dura',  desc:'Solo para deportistas muy entrenados y preparados.',           min:251, max:400,      color:'#9333ea', bg:'color-mix(in srgb,#9333ea 12%,transparent)' },
+  { label:'Extrema',   desc:'Alta montaña, gran fondo o rutas de expedición.',             min:401, max:Infinity,  color:'#64748b', bg:'color-mix(in srgb,#64748b 12%,transparent)' },
 ];
 
 function ibpForTrackT(t) {
@@ -420,7 +421,8 @@ window.addEventListener('resize', () => {
 function initMap(t, color) {
   const map = L.map('map', { zoomControl: false });
   const tileLayers = {
-    'Claro (CARTO)':   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains:'abcd', attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>', maxZoom:20 }),
+    'Claro':           L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution:'© <a href="https://www.esri.com">Esri</a>, HERE, Garmin, © OpenStreetMap', maxZoom:16 }), L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom:16 })]),
+    'Oscuro':          L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution:'© <a href="https://www.esri.com">Esri</a>, HERE, Garmin, © OpenStreetMap', maxZoom:16 }), L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom:16 })]),
     'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19 }),
     'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',   { attribution:'© OpenTopoMap', maxZoom:17 }),
     'IGN Topográfico': L.tileLayer('https://www.ign.es/wmts/mapa-raster?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=MTN&STYLE=default&FORMAT=image/jpeg&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', { attribution:'© <a href="https://www.ign.es">IGN España</a>', maxZoom:20 }),
@@ -428,7 +430,7 @@ function initMap(t, color) {
     'Google Satélite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
     'Google Híbrido':  L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
   };
-  let baseName = 'Claro (CARTO)';
+  let baseName = 'Claro';
   try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}
   tileLayers[baseName].addTo(map);
   map.on('baselayerchange', e => { try { localStorage.setItem('visor-base-layer', e.name); } catch {} });
@@ -1006,7 +1008,7 @@ function buildContent(t, color, icon) {
     <div class="section" id="file-section">
       <div class="section-head">Archivo</div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <code style="font-size:11px;background:#f1f5f9;padding:4px 8px;border-radius:4px;color:#475569;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.file||'')}</code>
+        <code style="font-size:11px;background:var(--soft);padding:4px 8px;border-radius:4px;color:var(--ink-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.file||'')}</code>
         <a href="#" id="file-folder-link" style="font-size:12px;color:#3b82f6;white-space:nowrap;text-decoration:none" title="Abrir carpeta en explorador">📂 Carpeta</a>
       </div>
     </div>
@@ -1075,7 +1077,7 @@ function buildContent(t, color, icon) {
     : '';
   const tabCaminos = `<div id="road-section">
     ${roadMapBtn}
-    ${hwHTML ? `<div class="section-head">Tipos de camino</div>${hwHTML}` : '<p style="font-size:13px;color:#94a3b8;margin:0 0 8px">Sin datos de OpenStreetMap todavía.</p>'}
+    ${hwHTML ? `<div class="section-head">Tipos de camino</div>${hwHTML}` : '<p style="font-size:13px;color:var(--ink-3);margin:0 0 8px">Sin datos de OpenStreetMap todavía.</p>'}
     ${sfHTML ? `<div class="section-head" style="margin-top:20px">Superficie</div>${sfHTML}` : ''}
     ${enrichBtn}
   </div>`;
@@ -1090,10 +1092,10 @@ function buildContent(t, color, icon) {
       <div class="climb-info"><div class="climb-gain">▲ ${c.gain} m</div><div class="climb-sub">${c.km} km</div></div>
       <div class="climb-pct" style="color:${gc}">${c.grad}%</div>
     </div>`;
-  }).join('') : '<p style="color:#94a3b8;font-size:13px">No se han detectado subidas significativas.</p>');
+  }).join('') : '<p style="color:var(--ink-3);font-size:13px">No se han detectado subidas significativas.</p>');
 
   // ── Tab: Tiempo ───────────────────────────────────────────────
-  const tabTiempo = `<div id="weather-panel" style="color:#94a3b8;font-size:13px">Cargando datos meteorológicos…</div>`;
+  const tabTiempo = `<div id="weather-panel" style="color:var(--ink-3);font-size:13px">Cargando datos meteorológicos…</div>`;
 
   const tabs = [
     ['resumen',   'Resumen'],
@@ -1404,7 +1406,7 @@ async function loadWeather() {
       return `<div class="wx-day">
         <div class="wx-day-name">${name}</div>
         <div class="wx-day-icon">${de}</div>
-        <div class="wx-day-range">${mx}° <span style="font-weight:400;color:#94a3b8">${mn}°</span></div>
+        <div class="wx-day-range">${mx}° <span style="font-weight:400;color:var(--ink-3)">${mn}°</span></div>
         ${pr > 0 ? `<div class="wx-day-prec">💧${pr}mm</div>` : '<div class="wx-day-prec">&nbsp;</div>'}
       </div>`;
     }).join('');
@@ -1524,7 +1526,7 @@ async function enrichRoadTypes() {
           const hasMap = (hwHTML || sfHTML) && t.road_type_seq;
           sec.innerHTML = `
             ${hasMap ? `<div class="climb-map-bar"><button class="btn btn-outline btn-sm" id="road-map-btn" onclick="toggleRoadTypesOnMap()">Mostrar en mapa</button></div>` : ''}
-            ${hwHTML ? `<div class="section-head">Tipos de camino</div>${hwHTML}` : '<p style="font-size:13px;color:#94a3b8;margin:0 0 4px">Sin cobertura OSM en esta zona.</p>'}
+            ${hwHTML ? `<div class="section-head">Tipos de camino</div>${hwHTML}` : '<p style="font-size:13px;color:var(--ink-3);margin:0 0 4px">Sin cobertura OSM en esta zona.</p>'}
             ${sfHTML ? `<div class="section-head" style="margin-top:20px">Superficie</div>${sfHTML}` : ''}
             <button class="enrich-btn" onclick="enrichRoadTypes()" id="enrich-btn" style="margin-top:12px">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>

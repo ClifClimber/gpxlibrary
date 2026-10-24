@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GPX Library — Configuración</title>
 <link rel="stylesheet" href="/shared.css">
+<script src="/theme.js"></script>
 <style>
 /* Config — maquetación propia. Tokens y componentes en shared.css */
 :root { --text2: var(--muted); --bg2: var(--surface); --bg3: var(--soft); }
@@ -54,9 +55,9 @@ tr.inactive td { opacity: .4; }
 .icon-preview { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--line); object-fit: cover; display: none; }
 .icon-preview.has-icon { display: block; }
 .icon-upload-label { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 8px; cursor: pointer; font-size: 12px !important; font-weight: 600 !important; background: var(--soft); color: var(--ink) !important; text-transform: none !important; letter-spacing: 0 !important; }
-.icon-upload-label:hover { background: #e2e8f0; }
+.icon-upload-label:hover { background: var(--line); }
 .icon-clear-btn { background: none; border: none; cursor: pointer; color: var(--danger); font-size: 12px; padding: 4px 6px; border-radius: 6px; }
-.icon-clear-btn:hover { background: #fee2e2; }
+.icon-clear-btn:hover { background: color-mix(in srgb,#ef4444 14%,transparent); }
 
 .bbox-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .bbox-grid .f-field label { display: block; margin-bottom: 4px; }

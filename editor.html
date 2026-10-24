@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GPX Library — Gestión</title>
   <link rel="stylesheet" href="/shared.css">
+  <script src="/theme.js"></script>
   <style>
     /* Editor — maquetación propia. Tokens y componentes en shared.css */
     body { line-height:1.4; display:flex; flex-direction:column; overflow:hidden; }
@@ -36,28 +37,28 @@
     /* ── Action buttons ────────────────────── */
     .hbtn { height:34px; padding:0 13px; border-radius:9px; font-size:12px; font-weight:600; cursor:pointer; border:none; display:inline-flex; align-items:center; gap:6px; transition:background .12s, box-shadow .12s; white-space:nowrap; }
     .hbtn-outline { background:var(--surface); color:var(--text); box-shadow:var(--shadow); }
-    .hbtn-outline:hover { background:#f8fafc; }
+    .hbtn-outline:hover { background:var(--hover-bg); }
     .hbtn-primary { background:var(--text); color:#fff; box-shadow:var(--shadow); }
     .hbtn-primary:hover { background:#1e293b; }
     .hbtn-danger { background:transparent; color:#f87171; border:1.5px solid #7f1d1d; }
     .hbtn-danger:hover { background:#450a0a; }
     /* IBP badge */
     .ibp-badge { display:inline-block; font-size:11px; font-weight:700; padding:1px 6px; border-radius:4px; white-space:nowrap; }
-    .ibp-0  { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
-    .ibp-1  { background:#fefce8; color:#854d0e; border:1px solid #fde68a; }
-    .ibp-2  { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
-    .ibp-3  { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
-    .ibp-4  { background:#faf5ff; color:#7e22ce; border:1px solid #e9d5ff; }
-    .ibp-5  { background:#1e293b; color:#e2e8f0; border:1px solid #475569; }
+    .ibp-0  { background:color-mix(in srgb,#22c55e 14%,transparent); color:color-mix(in srgb,#16a34a 72%,var(--ink)); border:1px solid color-mix(in srgb,#22c55e 40%,transparent); }
+    .ibp-1  { background:color-mix(in srgb,#eab308 14%,transparent); color:color-mix(in srgb,#ca8a04 72%,var(--ink)); border:1px solid color-mix(in srgb,#eab308 40%,transparent); }
+    .ibp-2  { background:color-mix(in srgb,#f97316 14%,transparent); color:color-mix(in srgb,#ea580c 72%,var(--ink)); border:1px solid color-mix(in srgb,#f97316 40%,transparent); }
+    .ibp-3  { background:color-mix(in srgb,#ef4444 14%,transparent); color:color-mix(in srgb,#dc2626 72%,var(--ink)); border:1px solid color-mix(in srgb,#ef4444 40%,transparent); }
+    .ibp-4  { background:color-mix(in srgb,#a855f7 14%,transparent); color:color-mix(in srgb,#9333ea 72%,var(--ink)); border:1px solid color-mix(in srgb,#a855f7 40%,transparent); }
+    .ibp-5  { background:color-mix(in srgb,var(--ink) 85%,transparent); color:var(--bg); border:1px solid var(--ink-2); }
     /* IBP modal */
     #ibp-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:2000; align-items:center; justify-content:center; }
     #ibp-modal.open { display:flex; }
-    #ibp-box { background:#fff; border-radius:12px; padding:24px; width:440px; max-width:95vw; box-shadow:0 8px 40px rgba(0,0,0,.3); display:flex; flex-direction:column; gap:14px; }
+    #ibp-box { background:var(--surface); border-radius:12px; padding:24px; width:440px; max-width:95vw; box-shadow:0 8px 40px rgba(0,0,0,.3); display:flex; flex-direction:column; gap:14px; }
     #ibp-box h3 { font-size:15px; font-weight:700; margin:0; }
     #ibp-key-row { display:flex; gap:6px; }
     #ibp-key-input { flex:1; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:12px; font-family:monospace; outline:none; }
     #ibp-key-input:focus { border-color:var(--accent); }
-    #ibp-log { font-size:11px; font-family:monospace; background:#f8fafc; border:1px solid var(--border); border-radius:6px; padding:8px 10px; max-height:180px; overflow-y:auto; display:none; white-space:pre-wrap; line-height:1.5; }
+    #ibp-log { font-size:11px; font-family:monospace; background:var(--hover-bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px; max-height:180px; overflow-y:auto; display:none; white-space:pre-wrap; line-height:1.5; }
     #ibp-log.visible { display:block; }
     .ibp-log-err  { color:#dc2626; }
     .ibp-log-warn { color:#d97706; }
@@ -72,8 +73,8 @@
     #sel-count-label { font-weight:600; margin-right:8px; white-space:nowrap; }
     #sel-bar button { height:34px; padding:0 14px; border:none; border-radius:999px; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; background:rgba(255,255,255,.1); color:#fff; }
     #sel-bar button:hover { background:rgba(255,255,255,.2); }
-    #sel-bar #btn-bulk-edit { background:#fff; color:var(--text); }
-    #sel-bar #btn-bulk-edit:hover { background:#e2e8f0; }
+    #sel-bar #btn-bulk-edit { background:var(--surface); color:var(--text); }
+    #sel-bar #btn-bulk-edit:hover { background:var(--line); }
     #sel-bar #btn-bulk-delete { color:#fca5a5; }
     #sel-bar #btn-bulk-delete:hover { background:rgba(248,113,113,.2); }
 
@@ -103,10 +104,10 @@
     th.col-date  { width:88px; }
     th.col-notes { width:80px; }
 
-    tbody tr { border-bottom:1px solid #f1f5f9; transition:background .08s; }
+    tbody tr { border-bottom:1px solid var(--line); transition:background .08s; }
     tbody tr:hover { background:var(--hover-bg); }
     tbody tr.selected { background:var(--active-bg); }
-    tbody tr.editing-row { background:#fffbeb; }
+    tbody tr.editing-row { background:color-mix(in srgb,#f59e0b 14%,transparent); }
     td { padding:10px 10px; font-size:12px; vertical-align:middle; white-space:nowrap; }
     .tags-chip { white-space:nowrap; }
     th.col-act, td.col-act { position:sticky; right:0; background:var(--surface); box-shadow:-8px 0 8px -8px rgba(15,23,42,.12); padding-right:12px; }
@@ -128,7 +129,7 @@
     .empty-td { padding:40px 20px; text-align:center; color:var(--muted); font-size:13px; }
 
     /* ── Inline edit row ───────────────────── */
-    tr.inline-edit-row td { background:#f0f9ff; padding:12px 16px; }
+    tr.inline-edit-row td { background:color-mix(in srgb,#0ea5e9 14%,transparent); padding:12px 16px; }
     .edit-form { display:flex; flex-direction:column; gap:10px; }
     .edit-grid  { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
     .edit-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -154,7 +155,7 @@
     #bulk-close:hover { color:var(--text); }
     #bulk-body { flex:1; overflow-y:auto; padding:14px 16px; display:flex; flex-direction:column; gap:12px; }
     .bulk-field { display:flex; flex-direction:column; gap:5px; border:1px solid var(--border); border-radius:6px; padding:10px; background:var(--filter-bg); transition:border-color .12s; }
-    .bulk-field.active { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 4%,white); }
+    .bulk-field.active { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 4%, var(--surface)); }
     .bulk-field-header { display:flex; align-items:center; gap:7px; }
     .bulk-chk { width:14px; height:14px; cursor:pointer; }
     .bulk-lbl { font-size:12px; font-weight:600; cursor:pointer; }
@@ -193,20 +194,20 @@
     /* ── Activity badge ─────────────────────── */
     .act-badge { display:inline-block; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:700; white-space:nowrap; }
     .sierra-chip { font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; display:block; }
-    .tags-chip { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:999px; font-size:10px; background:#eff6ff; color:#2563eb; border:1px solid #bfdbfe; }
+    .tags-chip { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:999px; font-size:10px; background:color-mix(in srgb,#3b82f6 14%,transparent); color:#2563eb; border:1px solid color-mix(in srgb,#3b82f6 40%,transparent); }
 
     /* ── Tag input in inline edit ──────────────── */
     .tag-input-wrap { display:flex; flex-wrap:wrap; gap:5px; align-items:center; padding:5px 8px; border:1px solid var(--border); border-radius:5px; background:var(--input-bg); cursor:text; min-height:34px; position:relative; }
     .tag-input-wrap:focus-within { border-color:var(--accent); }
-    .tag-pill-edit { display:inline-flex; align-items:center; gap:3px; padding:2px 4px 2px 8px; border-radius:999px; font-size:11px; background:#eff6ff; color:#2563eb; border:1px solid #bfdbfe; white-space:nowrap; }
+    .tag-pill-edit { display:inline-flex; align-items:center; gap:3px; padding:2px 4px 2px 8px; border-radius:999px; font-size:11px; background:color-mix(in srgb,#3b82f6 14%,transparent); color:#2563eb; border:1px solid color-mix(in srgb,#3b82f6 40%,transparent); white-space:nowrap; }
     .tag-pill-edit .tag-rm { background:none; border:none; cursor:pointer; color:#60a5fa; font-size:14px; line-height:1; padding:0 1px; display:flex; align-items:center; }
-    .tag-pill-edit .tag-rm:hover { color:#1d4ed8; }
+    .tag-pill-edit .tag-rm:hover { color:color-mix(in srgb,#2563eb 72%,var(--ink)); }
     .tag-text-input { border:none; outline:none; font-size:12px; padding:0; background:transparent; color:var(--text); min-width:80px; flex:1; }
-    .tag-sug-box { display:none; position:fixed; background:#fff; border:1px solid var(--border); border-radius:7px; box-shadow:0 4px 16px rgba(0,0,0,.12); z-index:9999; max-height:180px; overflow-y:auto; min-width:160px; }
+    .tag-sug-box { display:none; position:fixed; background:var(--surface); border:1px solid var(--border); border-radius:7px; box-shadow:0 4px 16px rgba(0,0,0,.12); z-index:9999; max-height:180px; overflow-y:auto; min-width:160px; }
     .tag-sug-box.open { display:block; }
-    .tag-sug-item { padding:6px 12px; font-size:12px; cursor:pointer; color:var(--text); border-bottom:1px solid #f1f5f9; }
+    .tag-sug-item { padding:6px 12px; font-size:12px; cursor:pointer; color:var(--text); border-bottom:1px solid var(--line); }
     .tag-sug-item:last-child { border-bottom:none; }
-    .tag-sug-item:hover, .tag-sug-item.focused { background:#eff6ff; color:var(--accent); }
+    .tag-sug-item:hover, .tag-sug-item.focused { background:color-mix(in srgb,#3b82f6 14%,transparent); color:var(--accent); }
     .tag-sug-already { opacity:.4; cursor:default; font-style:italic; }
 
 
@@ -238,7 +239,7 @@
     /* ── Export GPX modal ───────────────────── */
     #export-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:2000; align-items:center; justify-content:center; }
     #export-modal.open { display:flex; }
-    #export-box { background:#fff; border-radius:12px; padding:22px; width:360px; max-width:95vw; box-shadow:0 8px 40px rgba(0,0,0,.3); display:flex; flex-direction:column; gap:14px; }
+    #export-box { background:var(--surface); border-radius:12px; padding:22px; width:360px; max-width:95vw; box-shadow:0 8px 40px rgba(0,0,0,.3); display:flex; flex-direction:column; gap:14px; }
     #export-box h3 { font-size:15px; font-weight:700; margin:0; }
     .export-opt label { display:flex; align-items:center; gap:7px; font-size:13px; cursor:pointer; padding:3px 0; }
     .export-pts-row { display:flex; align-items:center; gap:6px; margin-left:22px; font-size:11px; color:var(--muted); }
@@ -266,7 +267,7 @@
     .import-file-item:hover { background:rgba(255,255,255,.05); }
     .import-file-item input[type=checkbox] { accent-color:#3b82f6; cursor:pointer; flex-shrink:0; width:13px; height:13px; }
     .import-file-item .ifl-name { font-size:11px; font-family:'Cascadia Code',Consolas,monospace; color:#e2e8f0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .import-file-item .ifl-dir { font-size:10px; color:#475569; flex-shrink:0; }
+    .import-file-item .ifl-dir { font-size:10px; color:var(--ink-2); flex-shrink:0; }
     #btn-import-start { padding:7px 16px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; }
     #btn-import-start:disabled { opacity:.5; cursor:not-allowed; }
     /* ── Friendly import log ─────────────────────── */
@@ -279,7 +280,7 @@
     #fb-topbar h3 { font-size:14px; font-weight:600; flex:1; }
     #fb-breadcrumb { display:flex; align-items:center; flex-wrap:wrap; gap:2px; padding:8px 14px; background:var(--filter-bg); border-bottom:1px solid var(--border); font-size:11px; min-height:34px; }
     .fb-crumb { color:var(--accent); cursor:pointer; padding:2px 4px; border-radius:4px; white-space:nowrap; }
-    .fb-crumb:hover { background:#eff6ff; }
+    .fb-crumb:hover { background:color-mix(in srgb,#3b82f6 14%,transparent); }
     .fb-sep { color:var(--muted); padding:0 1px; }
     #fb-list { overflow-y:auto; flex:1; padding:6px 8px; display:flex; flex-direction:column; gap:1px; }
     .fb-item { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px; cursor:pointer; font-size:13px; color:var(--text); }
@@ -289,7 +290,7 @@
     .fb-item.fb-up svg { color:var(--muted); }
     .fb-item.fb-file { color:var(--muted); cursor:default; font-size:12px; padding:5px 10px; }
     .fb-item.fb-file:hover { background:transparent; }
-    .fb-item.fb-file svg { color:#64748b; }
+    .fb-item.fb-file svg { color:var(--muted); }
     .fb-divider { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding:8px 10px 3px; }
     .fb-empty { padding:20px; text-align:center; color:var(--muted); font-size:13px; }
     #fb-footer { display:flex; align-items:center; gap:10px; padding:10px 14px; border-top:1px solid var(--border); background:var(--filter-bg); }
@@ -604,7 +605,7 @@
         Todos (forzar re-enriquecer)
       </label>
     </div>
-    <div id="enrich-log"><span style="color:#475569">Elige el alcance y pulsa "Iniciar"...</span></div>
+    <div id="enrich-log"><span style="color:var(--ink-2)">Elige el alcance y pulsa "Iniciar"...</span></div>
     <div id="enrich-actions">
       <button id="btn-enrich-start">▶ Iniciar</button>
       <button id="btn-enrich-close">Cerrar</button>
@@ -647,7 +648,7 @@
         Arrastra ficheros .gpx a esta ventana para importarlos
       </div>
       <button class="import-net-btn" data-net="wikiloc">
-        <span class="import-net-icon" style="background:#fff;border:1px solid #e2e8f0;padding:2px">
+        <span class="import-net-icon" style="background:var(--surface);border:1px solid var(--line);padding:2px">
           <img src="/assets/wikiloc-logo.png" alt="Wikiloc" style="width:32px;height:32px;object-fit:contain;border-radius:6px">
         </span>
         <span class="import-net-label">Wikiloc</span>
@@ -701,7 +702,7 @@
             transition:border-color .15s,color .15s">
             📂 Arrastra ficheros .gpx aquí para añadirlos a la cola
           </div>
-          <div id="import-file-list"><span style="color:#94a3b8;font-size:12px">Introduce una carpeta y pulsa Cargar.</span></div>
+          <div id="import-file-list"><span style="color:var(--ink-3);font-size:12px">Introduce una carpeta y pulsa Cargar.</span></div>
           <div style="display:flex;gap:8px;align-items:center">
             <button id="btn-import-start" disabled>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -1235,7 +1236,7 @@ function renderTable() {
       <td style="text-align:right;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums">${t.id}</td>
       <td class="col-name" title="${escHtml(t.file||t.name)}">
         <a href="/track?id=${t.id}" target="_blank" class="track-detail-link" style="color:inherit;text-decoration:none;font-weight:500">${escHtml(t.name)}</a>
-        <span style="display:block;font-size:9px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px" title="${escHtml(t.file||'')}">${escHtml((t.file||'').replace('TracksGps/',''))}</span>
+        <span style="display:block;font-size:9px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px" title="${escHtml(t.file||'')}">${escHtml((t.file||'').replace('TracksGps/',''))}</span>
       </td>
       <td>${actBadge}</td>
       <td style="text-align:center">${(t.road_types && t.road_types !== '{}') ? '<span style="color:#16a34a;font-size:14px;font-weight:700" title="Tiene datos OSM">✓</span>' : ''}</td>
@@ -1340,11 +1341,11 @@ function injectEditRow(t) {
       <div class="ef-group" style="margin-top:2px">
         <label class="ef-label">Ruta física del archivo</label>
         <div style="display:flex;align-items:center;gap:8px">
-          <code style="font-size:11px;background:#f1f5f9;padding:4px 8px;border-radius:4px;flex:1;overflow:auto;white-space:nowrap;color:#475569">${escHtml(t.file||'')}</code>
+          <code style="font-size:11px;background:var(--soft);padding:4px 8px;border-radius:4px;flex:1;overflow:auto;white-space:nowrap;color:var(--ink-2)">${escHtml(t.file||'')}</code>
           <a href="#" class="url-link ef-file-link" data-file="${escHtml(t.file||'')}" title="Abrir carpeta" style="white-space:nowrap">📂 Carpeta</a>
           <button type="button" class="btn-cancel ef-move-toggle" style="font-size:11px;padding:4px 10px">Mover…</button>
         </div>
-        <div class="ef-move-box" style="display:none;margin-top:8px;padding:10px;background:#f8fafc;border:1px dashed var(--border);border-radius:6px;display:none">
+        <div class="ef-move-box" style="display:none;margin-top:8px;padding:10px;background:var(--hover-bg);border:1px dashed var(--border);border-radius:6px;display:none">
           <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Mover archivo a carpeta</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div class="ef-group"><label class="ef-label">Actividad (carpeta principal)</label>
@@ -1690,7 +1691,7 @@ function openEnrich(mode) {
     document.querySelector('input[name="enrich-scope"][value="selected"]').checked = true;
   }
   document.getElementById('enrich-overlay').classList.add('open');
-  document.getElementById('enrich-log').innerHTML = '<span style="color:#475569">Elige el alcance y pulsa "Iniciar"...</span>';
+  document.getElementById('enrich-log').innerHTML = '<span style="color:var(--ink-2)">Elige el alcance y pulsa "Iniciar"...</span>';
 }
 
 document.getElementById('btn-open-enrich').addEventListener('click', () => openEnrich('geo'));
@@ -2152,13 +2153,13 @@ loadTracks();
     const count = document.getElementById('import-picker-count');
     const btn   = document.getElementById('btn-import-start');
     const src   = document.getElementById('import-src-path').value.trim();
-    list.innerHTML = '<span style="color:#94a3b8;font-size:12px">Cargando...</span>';
+    list.innerHTML = '<span style="color:var(--ink-3);font-size:12px">Cargando...</span>';
     btn.disabled = true;
     try {
       const url = '/api/db/temp-files' + (src ? '?src=' + encodeURIComponent(src) : '');
       const files = await fetch(url).then(r => r.json());
       if (!files.length) {
-        list.innerHTML = '<span style="color:#94a3b8;font-size:12px">La carpeta está vacía o no existe.</span>';
+        list.innerHTML = '<span style="color:var(--ink-3);font-size:12px">La carpeta está vacía o no existe.</span>';
         count.textContent = '0 archivos';
         return;
       }

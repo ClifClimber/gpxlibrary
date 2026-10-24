@@ -106,7 +106,7 @@ Queries Overpass API for `highway` ways inside track bbox. Matches each GPS segm
 
 ## Design system — `shared.css` (MANDATORY for every page)
 
-Every page must `<link rel="stylesheet" href="/shared.css">` before its own CSS. Never hard-code colors — use CSS variables (`--ink`, `--ink-2`, `--muted`, `--soft`, `--line`, `--surface`, `--bg`, `--accent`, `--accent-soft`, `--success`, `--warn`, `--danger`, `--radius`, `--shadow`, etc.).
+Every page must `<link rel="stylesheet" href="/shared.css">` followed by `<script src="/theme.js"></script>` (applies light/dark theme before paint and adds the nav toggle). Dark mode works by redefining the tokens, so never hard-code neutral colors — for surfaces that use the ink color as a background (primary buttons, active chips/tabs, toasts) use `--solid` / `--on-solid`, and for tinted backgrounds use `color-mix(in srgb, <hue> N%, transparent)` instead of light pastel hex. Use CSS variables (`--ink`, `--ink-2`, `--muted`, `--soft`, `--line`, `--surface`, `--bg`, `--accent`, `--accent-soft`, `--success`, `--warn`, `--danger`, `--radius`, `--shadow`, etc.).
 
 Key component classes: `.btn` (+ modifiers), `.input`/`.select`, `.chip` (+ `.active`, `.open`), `.popover`, `.cat-pills`/`.cat-pill`, `.table`, `.stats-grid`/`.stat`, `.tag`, `.badge`, `.modal-overlay`/`.modal`, `.log-box`, `.floating`, `.card`.
 

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Admin — GPX Library</title>
 <link rel="stylesheet" href="/shared.css">
+<script src="/theme.js"></script>
 <style>
 /* Admin — maquetación propia. Tokens y componentes en shared.css */
 .page { max-width: 980px; }
@@ -21,7 +22,7 @@
 .op-btns { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .op-btns label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
 .op-item > p { font-size: 12px; color: var(--muted); line-height: 1.55; }
-.op-item code { background: #e2e8f0; }
+.op-item code { background: var(--line); }
 .db-num { width: 64px; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; font-size: 12px; outline: none; background: var(--surface); }
 .db-num:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
@@ -30,7 +31,7 @@
 .maint-item h3 { font-size: 14px; font-weight: 600; }
 .maint-item p { font-size: 12px; color: var(--muted); line-height: 1.55; flex: 1; }
 .result-line { font-size: 12px; color: var(--ink-2); }
-.result-line.ok { color: #15803d; } .result-line.err { color: #b91c1c; }
+.result-line.ok { color: color-mix(in srgb,#16a34a 72%,var(--ink)); } .result-line.err { color: color-mix(in srgb,#dc2626 72%,var(--ink)); }
 
 /* Modal de log en streaming */
 #log-modal { position: fixed; inset: 0; z-index: 2000; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -41,7 +42,7 @@
 .log-line.err { color: #f87171; } .log-line.ok { color: #4ade80; } .log-line.warn { color: #fbbf24; }
 
 .op-item .btn-ghost, .maint-item .btn-ghost, .backup-row .btn-ghost { background: var(--surface); }
-.op-item .btn-ghost:hover, .maint-item .btn-ghost:hover, .backup-row .btn-ghost:hover { background: #e2e8f0; }
+.op-item .btn-ghost:hover, .maint-item .btn-ghost:hover, .backup-row .btn-ghost:hover { background: var(--line); }
 .stats-table { margin-top: 16px; }
 .stats-table .red { color: var(--accent); font-weight: 600; }
 .srow { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); }
@@ -180,7 +181,7 @@
       <div class="card-body">
         <div style="font-size:12px;color:var(--muted);margin-bottom:8px" id="backup-auto-note"></div>
         <div id="backups-list" class="backups-list">
-          <div style="color:#94a3b8;font-size:13px">Cargando…</div>
+          <div style="color:var(--ink-3);font-size:13px">Cargando…</div>
         </div>
       </div>
     </div>
@@ -197,8 +198,8 @@
             <div class="op-head">
               <h3>Limpiar tracks</h3>
               <div class="op-btns">
-                <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">min-dist <input type="number" class="db-num" id="inp-mindist" value="5" min="0" max="100"> m</label>
-                <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">RDP <input type="number" class="db-num" id="inp-rdp" value="8" min="0" max="50"> m</label>
+                <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px">min-dist <input type="number" class="db-num" id="inp-mindist" value="5" min="0" max="100"> m</label>
+                <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px">RDP <input type="number" class="db-num" id="inp-rdp" value="8" min="0" max="50"> m</label>
                 <button class="btn btn-ghost btn-sm" id="btn-clean">Limpiar</button>
               </div>
             </div>
@@ -300,7 +301,7 @@
             <div class="op-head">
               <h3>Caché batch-sierra</h3>
               <div class="op-btns">
-                <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px">
+                <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px">
                   TTL <input type="number" class="db-num" id="osm-cache-ttl" value="365" min="1" max="3650"> días
                 </label>
                 <button class="btn btn-ghost btn-sm" id="btn-osm-cache-refresh" title="Actualizar tabla de caché">↻</button>
@@ -648,7 +649,7 @@ async function loadBackups() {
     note.textContent = '';
   }
   if (!list.length) {
-    el.innerHTML = '<div style="color:#94a3b8;font-size:13px">Sin backups todavía.</div>';
+    el.innerHTML = '<div style="color:var(--ink-3);font-size:13px">Sin backups todavía.</div>';
     return;
   }
   el.innerHTML = list.map(b => `

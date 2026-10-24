@@ -135,7 +135,7 @@ function importLogSummary(container, isErr) {
         const osmTxt = mOsm[1].trim();
         const mWays = osmTxt.match(/^(\d+)\s+v[ií]as aplicadas/);
         if (mWays) {
-          osmHtml = `<span style="color:#15803d;font-weight:600">${mWays[1]} vías</span><span style="color:var(--muted);font-size:10.5px"> (caché)</span>`;
+          osmHtml = `<span style="color:color-mix(in srgb,#16a34a 72%,var(--ink));font-weight:600">${mWays[1]} vías</span><span style="color:var(--muted);font-size:10.5px"> (caché)</span>`;
         } else if (/sin cach|obsoleta|sin puntos|error/i.test(osmTxt)) {
           osmHtml = naGray;
         }

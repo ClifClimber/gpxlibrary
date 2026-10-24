@@ -7,7 +7,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 
 /* ── Layout ──────────────────────────────────────────────────────── */
 #app { position: relative; flex: 1; min-height: 0; }
-#map { position: absolute; inset: 0; z-index: 0; background: #dfe3e8; }
+#map { position: absolute; inset: 0; z-index: 0; background: var(--line); }
 
 #overlay {
   position: absolute; inset: var(--gap); z-index: 500;
@@ -70,7 +70,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 /* ── Dual range slider ───────────────────────────────────────────── */
 .dual-range-outer { padding: 4px 4px 0; }
 .dual-range-track { position: relative; height: 4px; background: var(--line); border-radius: 2px; margin: 12px 0; }
-.dual-range-fill  { position: absolute; top: 0; height: 100%; background: var(--ink); border-radius: 2px; pointer-events: none; }
+.dual-range-fill  { position: absolute; top: 0; height: 100%; background: var(--solid); border-radius: 2px; pointer-events: none; }
 #ibp-rs-fill { background: linear-gradient(to right,#16a34a,#d97706,#c2410c,#b91c1c,#7e22ce,#1e293b) !important; }
 .dual-range-inputs { position: relative; height: 22px; margin: -21px 0 0; }
 .dual-range-inputs input[type=range] {
@@ -81,13 +81,13 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .dual-range-inputs input[type=range]::-webkit-slider-thumb {
   pointer-events: all; -webkit-appearance: none;
   width: 22px; height: 22px; border-radius: 50%;
-  background: #fff; border: 2px solid var(--ink);
+  background: var(--surface); border: 2px solid var(--ink);
   box-shadow: 0 1px 4px rgba(0,0,0,.2); cursor: grab; transition: transform .1s;
 }
 .dual-range-inputs input[type=range]::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.1); }
 .dual-range-inputs input[type=range]::-moz-range-thumb {
   pointer-events: all; width: 18px; height: 18px; border-radius: 50%;
-  background: #fff; border: 2px solid var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,.2); cursor: grab;
+  background: var(--surface); border: 2px solid var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,.2); cursor: grab;
 }
 .dual-range-inputs input[type=range]::-webkit-slider-runnable-track,
 .dual-range-inputs input[type=range]::-moz-range-track { background: transparent; }
@@ -132,7 +132,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   transition: background .1s;
 }
 .track-item:hover { background: var(--soft); }
-.track-item.active { background: color-mix(in srgb, var(--c) 18%, white); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 70%, white); }
+.track-item.active { background: color-mix(in srgb, var(--c) 18%, var(--surface)); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 70%, var(--surface)); }
 .track-item.active .ti-name { color: color-mix(in srgb, var(--c) 80%, #111); }
 .ti-icon {
   width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
@@ -179,7 +179,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #pd-name { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #pd-cat {
   flex-shrink: 0; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; cursor: pointer;
-  color: var(--pc); background: color-mix(in srgb, var(--pc) 12%, white);
+  color: var(--pc); background: color-mix(in srgb, var(--pc) 12%, var(--surface));
 }
 #pd-body { display: flex; gap: 10px; margin-top: 10px; align-items: stretch; }
 #pd-stats { display: flex; flex-direction: column; gap: 5px; width: 100px; flex-shrink: 0; justify-content: center; }
@@ -196,13 +196,13 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #profile-svg { width: 100%; height: 100%; display: block; user-select: none; }
 #profile-tooltip {
   display: none; position: absolute; pointer-events: none; z-index: 2;
-  background: var(--ink); color: #fff; font-size: 11px; font-weight: 500;
+  background: var(--solid); color: var(--on-solid); font-size: 11px; font-weight: 500;
   padding: 4px 8px; border-radius: 6px; white-space: nowrap;
 }
 #no-elevation { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; color: var(--ink-3); font-size: 12px; }
 #sel-bar { display: none; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; }
 #sel-bar.visible { display: flex; }
-.sel-tag { font-size: 11px; font-weight: 600; color: #fff; background: var(--ink); padding: 2px 8px; border-radius: 999px; }
+.sel-tag { font-size: 11px; font-weight: 600; color: var(--on-solid); background: var(--solid); padding: 2px 8px; border-radius: 999px; }
 .sel-stat { color: var(--ink-2); }
 .sel-stat b { color: var(--ink); }
 #sel-clear { width: 24px; height: 24px; }

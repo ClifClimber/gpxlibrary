@@ -22,13 +22,16 @@ const $$ = sel => [...document.querySelectorAll(sel)];
 
 // ── IBP difficulty levels ────────────────────────────────────────────
 const IBP_LEVELS = [
-  { label:'Muy fácil', min:0,   max:50,       color:'#15803d', bg:'#f0fdf4', border:'#bbf7d0' },
-  { label:'Fácil',     min:51,  max:100,      color:'#854d0e', bg:'#fefce8', border:'#fde68a' },
-  { label:'Moderada',  min:101, max:150,      color:'#c2410c', bg:'#fff7ed', border:'#fed7aa' },
-  { label:'Dura',      min:151, max:250,      color:'#b91c1c', bg:'#fef2f2', border:'#fecaca' },
-  { label:'Muy dura',  min:251, max:400,      color:'#7e22ce', bg:'#faf5ff', border:'#e9d5ff' },
-  { label:'Extrema',   min:401, max:Infinity, color:'#e2e8f0', bg:'#1e293b', border:'#475569' },
+  { label:'Muy fácil', min:0,   max:50,       ...ibpTone('#16a34a') },
+  { label:'Fácil',     min:51,  max:100,      ...ibpTone('#ca8a04') },
+  { label:'Moderada',  min:101, max:150,      ...ibpTone('#ea580c') },
+  { label:'Dura',      min:151, max:250,      ...ibpTone('#dc2626') },
+  { label:'Muy dura',  min:251, max:400,      ...ibpTone('#9333ea') },
+  { label:'Extrema',   min:401, max:Infinity, color:'var(--bg)', bg:'color-mix(in srgb,var(--ink) 85%,transparent)', border:'var(--ink-2)' },
 ];
+function ibpTone(c) {
+  return { color:`color-mix(in srgb,${c} 72%,var(--ink))`, bg:`color-mix(in srgb,${c} 13%,transparent)`, border:`color-mix(in srgb,${c} 40%,transparent)` };
+}
 const CYCLING_ACTS_V = ['MTB','MTB Enduro','Mtb','Gravel','Bikepacking','Ciclismo de carretera'];
 const RUNNING_ACTS_V = ['Trail Running','Running'];
 function ibpForTrackV(t) {
@@ -132,7 +135,8 @@ CATALOG.forEach(t => { t._q = norm([t.name, t.sierra, t.zone, ...(t.tags || [])]
 const map = L.map('map', { center:[40.4,-3.7], zoom:7, zoomControl:false, renderer:L.canvas({ tolerance:4 }) });
 
 const tileLayers = {
-  'Claro (CARTO)':   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains:'abcd', attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>', maxZoom:20 }),
+  'Claro':           L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution:'© <a href="https://www.esri.com">Esri</a>, HERE, Garmin, © OpenStreetMap', maxZoom:16 }), L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom:16 })]),
+  'Oscuro':          L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution:'© <a href="https://www.esri.com">Esri</a>, HERE, Garmin, © OpenStreetMap', maxZoom:16 }), L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom:16 })]),
   'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19 }),
   'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',   { attribution:'© OpenTopoMap', maxZoom:17 }),
   'IGN Topográfico': L.tileLayer('https://www.ign.es/wmts/mapa-raster?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=MTN&STYLE=default&FORMAT=image/jpeg&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', { attribution:'© <a href="https://www.ign.es">IGN España</a>', maxZoom:20 }),
@@ -140,7 +144,7 @@ const tileLayers = {
   'Google Satélite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
   'Google Híbrido':  L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
 };
-let baseName = 'Claro (CARTO)';
+let baseName = 'Claro';
 try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}
 tileLayers[baseName].addTo(map);
 map.on('baselayerchange', e => { try { localStorage.setItem('visor-base-layer', e.name); } catch {} });
@@ -531,7 +535,7 @@ function showProfile(track, color) {
             stroke="${color}" stroke-opacity=".5" stroke-width="1" clip-path="url(#cp${gid})" style="display:none"/>
       <line id="sel-s" x1="0" y1="${P.t}" x2="0" y2="${P.t+CH}" stroke="${color}" stroke-width="2" style="display:none"/>
       <line id="sel-e" x1="0" y1="${P.t}" x2="0" y2="${P.t+CH}" stroke="${color}" stroke-width="2" style="display:none"/>
-      <line id="phl" x1="0" y1="${P.t}" x2="0" y2="${P.t+CH}" stroke="#475569" stroke-width="1" stroke-dasharray="3,2" opacity="0" pointer-events="none"/>
+      <line id="phl" x1="0" y1="${P.t}" x2="0" y2="${P.t+CH}" style="stroke:var(--ink-3)" stroke-width="1" stroke-dasharray="3,2" opacity="0" pointer-events="none"/>
       <circle id="phd" r="4.5" fill="${color}" stroke="white" stroke-width="2" opacity="0" pointer-events="none"/>
       <rect id="pho" x="${P.l}" y="${P.t}" width="${CW}" height="${CH}" fill="transparent" style="cursor:crosshair"/>
     `;
