@@ -66,7 +66,7 @@ Pure Node.js HTTP server. No framework. Routes:
 - `/editor` → `editor.html` — CRUD list, import from `_TEMP_`, tag editing
 - `/config` → `config.html` — activity/sierra config, Parámetros (climb thresholds + Wikiloc token)
 - `/admin` → `admin.html` — backup/restore/vacuum, IBP calc, stats
-- `/trazar` → `trazar.html` — route drawing/editing (draw, drag/insert/delete vertices, trim, undo). Optional trail snapping via BRouter (brouter.de) and elevation via Open-Meteo. Saving builds a GPX client-side, uploads it with `/api/import/upload`, runs `/api/db/import-temp`, then PATCHes activity/notes. Editing an existing track always saves a new copy — source GPX files are never rewritten.
+- `/trazar` → `trazar.html` — route drawing/editing (draw, drag/insert/delete vertices, trim, waypoints, join other tracks, undo). `?join=1,2` opens several tracks joined in order (used by Comparar → Unir). Optional trail snapping via BRouter (brouter.de) and elevation via Open-Meteo. Saving builds a GPX client-side, uploads it with `/api/import/upload`, runs `/api/db/import-temp`, then PATCHes activity/notes. Editing an existing track always saves a new copy — source GPX files are never rewritten.
 
 ### Visor (`visor.js`)
 - Loads track data by fetching `GET /api/catalog` asynchronously at startup (async IIFE). No longer depends on the global `catalog-data.js` file.

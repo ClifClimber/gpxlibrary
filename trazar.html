@@ -34,8 +34,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .p-row { display: flex; gap: 8px; align-items: center; }
 
 /* Herramientas */
-.tool-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: var(--soft); border-radius: var(--radius-md); }
-.tool-tab { height: 34px; border: none; border-radius: 8px; background: transparent; color: var(--ink-2); font-size: 12.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.tool-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; background: var(--soft); border-radius: var(--radius-md); }
+.tool-tab { height: 34px; border: none; border-radius: 8px; background: transparent; color: var(--ink-2); font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 4px; }
 .tool-tab:hover { color: var(--ink); }
 .tool-tab.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 #mode-hint { font-size: 12px; color: var(--ink-2); line-height: 1.5; background: var(--accent-soft); border-radius: var(--radius-sm); padding: 8px 10px; }
@@ -58,8 +58,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 
 /* Buscar lugar */
 #place-box { position: relative; }
-#place-results { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow); padding: 4px; }
-#place-results.open { display: block; }
+#place-results, #join-results { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow); padding: 4px; }
+#place-results.open, #join-results.open { display: block; }
 .place-item { padding: 7px 9px; border-radius: 8px; cursor: pointer; font-size: 12.5px; }
 .place-item:hover { background: var(--soft); }
 .place-item small { display: block; color: var(--muted); font-size: 11px; }
@@ -81,6 +81,19 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .vtx:hover { transform: scale(1.35); }
 .leaflet-dragging .vtx { cursor: grabbing; }
 .vtx-trim { cursor: pointer; border-style: dashed; }
+.wpt-pin { width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #f59e0b; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; }
+.wpt-pin span { transform: rotate(45deg); color: #fff; font: 800 11px Inter, sans-serif; }
+.wpt-list { display: flex; flex-direction: column; gap: 4px; }
+.wpt-item { display: flex; align-items: center; gap: 6px; }
+.wpt-item .wpt-n { width: 20px; height: 20px; flex-shrink: 0; border-radius: 50%; background: #f59e0b; color: #fff; font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.wpt-item input { flex: 1; min-width: 0; height: 30px; font-size: 12.5px; }
+.wpt-empty { font-size: 12px; color: var(--muted); }
+.wpt-pop { display: flex; flex-direction: column; gap: 6px; min-width: 200px; }
+.wpt-pop .p-row .btn { flex: 1; }
+#join-results .add-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 8px; cursor: pointer; }
+#join-results .add-item:hover, #join-results .add-item.focused { background: var(--soft); }
+#join-results .add-item-name { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#join-results .add-item-sub { font-size: 11px; color: var(--muted); }
 .end-pin { width: 24px; height: 24px; border-radius: 50%; color: #fff; font: 800 12px Inter, sans-serif; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
 .trim-pop { display: flex; flex-direction: column; gap: 6px; min-width: 190px; }
 .trim-pop .btn { justify-content: flex-start; }
@@ -149,6 +162,9 @@ body { display: flex; flex-direction: column; overflow: hidden; }
           <button class="tool-tab" data-mode="edit">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="5" cy="18" r="2.5"/><circle cx="12" cy="7" r="2.5"/><circle cx="19" cy="14" r="2.5"/><path d="M6.6 16 10.6 9M14 8.5l3.6 4"/></svg>Editar
           </button>
+          <button class="tool-tab" data-mode="wpt">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>Puntos
+          </button>
           <button class="tool-tab" data-mode="trim">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>Recortar
           </button>
@@ -161,6 +177,19 @@ body { display: flex; flex-direction: column; overflow: hidden; }
             <option value="hiking-mountain">A pie</option>
             <option value="trekking">En bici</option>
           </select>
+        </div>
+      </div>
+
+      <div class="p-block" id="wpt-block" hidden>
+        <span class="p-lbl">Puntos de paso</span>
+        <div class="wpt-list" id="wpt-list"></div>
+      </div>
+
+      <div class="p-block">
+        <span class="p-lbl">Unir otra ruta</span>
+        <div id="join-box" style="position:relative">
+          <input class="input" id="join-input" placeholder="Añadir otra ruta al final…" autocomplete="off">
+          <div id="join-results" class="place-results-box"></div>
         </div>
       </div>
 
@@ -186,7 +215,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
           <div><div class="t-stat-v" id="s-loss">0<small>m</small></div><div class="t-stat-l">Bajada</div></div>
           <div><div class="t-stat-v" id="s-pts">0</div><div class="t-stat-l">Puntos</div></div>
         </div>
-        <div id="ele-note"></div>
+        <div class="p-row" style="justify-content:space-between">
+          <div id="ele-note"></div>
+          <button class="btn btn-ghost btn-sm" id="a-ele" title="Sustituir todas las altitudes por las del modelo digital del terreno (útil si el GPS tiene saltos)" style="margin-left:auto">Recalcular altitudes</button>
+        </div>
       </div>
 
       <div class="p-block">
@@ -231,7 +263,7 @@ function toast(msg, isErr) {
 }
 
 // ── Map ─────────────────────────────────────────────────────────────
-const map = L.map('map', { zoomControl: false });
+const map = L.map('map', { zoomControl: false }).setView([40.4, -3.7], 6);
 const ESRI = (v, k) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${v}_Gray_${k}/MapServer/tile/{z}/{y}/{x}`;
 const ESRI_ATTR = '© <a href="https://www.esri.com">Esri</a>, HERE, Garmin, © OpenStreetMap';
 const tileLayers = {
@@ -254,6 +286,7 @@ const renderer = L.canvas({ padding: 0.5, tolerance: 8 });
 let lineColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#006783';
 const line = L.polyline([], { color: lineColor, weight: 4, opacity: .95, renderer, interactive: true }).addTo(map);
 const vertexLayer = L.layerGroup().addTo(map);
+const wptLayer = L.layerGroup().addTo(map);
 const trimPreview = L.polyline([], { color: '#94a3b8', weight: 6, opacity: .8, dashArray: '6 6', renderer, interactive: false }).addTo(map);
 const pin = (txt, bg) => L.divIcon({ className: '', html: `<div class="end-pin" style="background:${bg}">${txt}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
 const startMk = L.marker([0, 0], { icon: pin('A', '#16a34a'), interactive: false, keyboard: false });
@@ -262,19 +295,21 @@ const hoverMk = L.circleMarker([0, 0], { radius: 6, color: '#fff', weight: 2, fi
 
 // ── State ───────────────────────────────────────────────────────────
 let pts = [];              // [lat, lon, ele|null]
+let wpts = [];             // { lat, lon, ele, name, sym, desc }
 let mode = 'draw';
 let srcTrack = null;
 let dirty = false, saving = false, routing = false;
 const undoStack = [], redoStack = [];
 const MAX_VERTICES = 400;
 
-const snapshot = () => pts.map(p => p.slice());
+const snapshot = () => ({ p: pts.map(p => p.slice()), w: wpts.map(w => ({ ...w })) });
+function restore(snap) { pts = snap.p; wpts = snap.w; }
 function pushHistory(snap = snapshot()) {
   undoStack.push(snap); if (undoStack.length > 200) undoStack.shift();
   redoStack.length = 0;
 }
-function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); pts = undoStack.pop(); changed(); }
-function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); pts = redoStack.pop(); changed(); }
+function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); restore(undoStack.pop()); changed(); }
+function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); changed(); }
 
 function changed() {
   dirty = true;
@@ -369,11 +404,12 @@ function redraw() {
   if (pts.length > 1) { endMk.setLatLng(lls[lls.length - 1]).addTo(map); } else endMk.remove();
   trimPreview.setLatLngs([]);
   drawVertices();
+  renderWpts();
   updateStats();
   drawProfile();
   $('a-undo').disabled = !undoStack.length;
   $('a-redo').disabled = !redoStack.length;
-  ['a-reverse', 'a-close', 'a-simplify', 'a-clear'].forEach(id => $(id).disabled = pts.length < 2);
+  ['a-reverse', 'a-close', 'a-simplify', 'a-clear', 'a-ele'].forEach(id => $(id).disabled = pts.length < 2);
   $('btn-save').disabled = pts.length < 2 || saving;
 }
 
@@ -381,7 +417,7 @@ let vertexNote = '';
 function drawVertices() {
   vertexLayer.clearLayers();
   vertexNote = '';
-  if (mode === 'draw' || !pts.length) { updateHint(); return; }
+  if (mode === 'draw' || mode === 'wpt' || !pts.length) { updateHint(); return; }
   const b = map.getBounds().pad(0.15);
   const vis = [];
   pts.forEach((p, i) => { if (b.contains([p[0], p[1]])) vis.push(i); });
@@ -428,6 +464,7 @@ const HINTS = {
   draw: 'Haz clic en el mapa para añadir puntos al final de la ruta. <kbd>Ctrl</kbd>+<kbd>Z</kbd> deshace.',
   edit: 'Arrastra un punto para moverlo · clic en la línea para insertar uno · clic derecho en un punto para borrarlo.',
   trim: 'Haz clic en un punto de la ruta y elige qué parte conservar.',
+  wpt: 'Haz clic en el mapa para añadir un punto de paso · arrástralo para moverlo · clic en él para renombrarlo o borrarlo.',
 };
 function updateHint() {
   $('mode-hint').innerHTML = HINTS[mode] + (vertexNote ? `<br><strong>${esc(vertexNote)}</strong>` : '');
@@ -438,13 +475,16 @@ function setMode(m) {
   document.querySelectorAll('.tool-tab').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
   $('map').classList.toggle('mode-draw', m === 'draw');
   $('snap-row').style.display = m === 'draw' ? '' : 'none';
+  $('map').classList.toggle('mode-draw', m === 'draw' || m === 'wpt');
   map.closePopup();
   drawVertices();
+  renderWpts();
 }
 document.querySelectorAll('.tool-tab').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
 // ── Draw ────────────────────────────────────────────────────────────
 map.on('click', async e => {
+  if (mode === 'wpt') { addWpt(e.latlng); return; }
   if (mode !== 'draw' || routing) return;
   const target = [e.latlng.lat, e.latlng.lng, null];
   const profile = $('f-snap').value;
@@ -501,6 +541,148 @@ function deletePoint(i) {
   changed();
 }
 
+// ── Waypoints ───────────────────────────────────────────────────────
+const wptIcon = n => L.divIcon({ className: '', html: `<div class="wpt-pin"><span>${n}</span></div>`, iconSize: [26, 26], iconAnchor: [13, 26], popupAnchor: [0, -24] });
+function renderWpts() {
+  wptLayer.clearLayers();
+  wpts.forEach((w, i) => {
+    const m = L.marker([w.lat, w.lon], { icon: wptIcon(i + 1), draggable: mode === 'wpt', keyboard: false, zIndexOffset: 800, bubblingMouseEvents: false });
+    m.bindTooltip(esc(w.name || `Punto ${i + 1}`), { direction: 'top', offset: [0, -26] });
+    if (mode === 'wpt') {
+      let before = null;
+      m.on('dragstart', () => { before = snapshot(); map.closePopup(); });
+      m.on('dragend', e => { const ll = e.target.getLatLng(); pushHistory(before); Object.assign(wpts[i], { lat: ll.lat, lon: ll.lng, ele: null }); changed(); });
+      m.on('click', () => openWptPopup(i));
+    }
+    wptLayer.addLayer(m);
+  });
+  const block = $('wpt-block');
+  block.hidden = mode !== 'wpt' && !wpts.length;
+  $('wpt-list').innerHTML = wpts.length
+    ? wpts.map((w, i) => `<div class="wpt-item"><span class="wpt-n" data-go="${i}" title="Ver en el mapa">${i + 1}</span>
+        <input class="input" data-wi="${i}" value="${esc(w.name || '')}" placeholder="Punto ${i + 1}" maxlength="80">
+        <button class="icon-btn" data-del="${i}" title="Borrar punto"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`).join('')
+    : '<div class="wpt-empty">Aún no hay puntos de paso.</div>';
+}
+function addWpt(ll) {
+  pushHistory();
+  wpts.push({ lat: ll.lat, lon: ll.lng, ele: null, name: `Punto ${wpts.length + 1}`, sym: '', desc: '' });
+  changed();
+  openWptPopup(wpts.length - 1);
+}
+function removeWpt(i) { pushHistory(); wpts.splice(i, 1); map.closePopup(); changed(); }
+function renameWpt(i, name, before) {
+  name = name.trim();
+  if (!wpts[i] || wpts[i].name === name) return;
+  pushHistory(before || snapshot());
+  wpts[i].name = name;
+  dirty = true;
+  renderWpts();
+}
+function openWptPopup(i) {
+  const w = wpts[i]; if (!w) return;
+  const pop = L.popup({ offset: [0, -24], autoPan: true }).setLatLng([w.lat, w.lon]).setContent(`<div class="wpt-pop">
+      <input class="input" id="wpt-name" value="${esc(w.name || '')}" maxlength="80" placeholder="Nombre del punto">
+      <div class="p-row"><button class="btn btn-sm btn-danger" id="wpt-del">Borrar</button><button class="btn btn-sm btn-primary" id="wpt-ok">Listo</button></div>
+    </div>`).openOn(map);
+  const el = pop.getElement(), inp = el.querySelector('#wpt-name');
+  const before = snapshot();
+  const commit = () => { renameWpt(i, inp.value, before); map.closePopup(); };
+  inp.focus(); inp.select();
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') map.closePopup(); });
+  el.querySelector('#wpt-ok').onclick = commit;
+  el.querySelector('#wpt-del').onclick = () => removeWpt(i);
+}
+(function () {
+  const list = $('wpt-list');
+  let before = null;
+  list.addEventListener('focusin', e => { if (e.target.dataset.wi != null) before = snapshot(); });
+  list.addEventListener('change', e => { const i = e.target.dataset.wi; if (i != null) renameWpt(+i, e.target.value, before); });
+  list.addEventListener('click', e => {
+    const del = e.target.closest('[data-del]'); if (del) { removeWpt(+del.dataset.del); return; }
+    const go = e.target.closest('[data-go]'); if (go) { const w = wpts[+go.dataset.go]; map.setView([w.lat, w.lon], Math.max(map.getZoom(), 14)); }
+  });
+})();
+
+// ── Join another route ──────────────────────────────────────────────
+const joinedNames = [];
+let nameAuto = false;
+const fmtLen = m => m >= 1000 ? `${nf1.format(m / 1000)} km` : `${nf0.format(m)} m`;
+async function fetchFullTrack(id) {
+  const r = await fetch(`/api/tracks/${id}?full=1`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+async function joinTrack(t, silent = false) {
+  let seg = (t.points || []).filter(p => p[0] != null && p[1] != null).map(p => [p[0], p[1], p[2] ?? null]);
+  if (seg.length < 2) { toast(`«${t.name}» no tiene puntos`, true); return false; }
+  const before = snapshot();
+  let info = '';
+  if (!pts.length) pts = seg;
+  else {
+    const last = pts.at(-1);
+    // Only flip when the far end is clearly closer; circular routes have both ends together.
+    if (hav(last, seg.at(-1)) < hav(last, seg[0]) - 150) { seg.reverse(); info = ' (invertida)'; }
+    const gap = hav(last, seg[0]);
+    if (gap > 30) {
+      const profile = $('f-snap').value;
+      const conn = profile ? await routeBetween(last, seg[0], profile) : null;
+      if (conn) pts.push(...conn.slice(1, -1));
+      info += ` · hueco de ${fmtLen(gap)} unido ${conn ? 'por caminos' : 'en línea recta'}`;
+      pts.push(...seg);
+    } else pts.push(...seg.slice(1));
+  }
+  wpts.push(...(t.waypoints || []).filter(w => w.lat != null).map(w => ({ lat: w.lat, lon: w.lon, ele: w.ele ?? null, name: w.name || '', sym: w.sym || '', desc: w.desc || '' })));
+  pushHistory(before);
+  joinedNames.push(t.name);
+  if (nameAuto || !$('f-name').value.trim()) { $('f-name').value = joinedNames.join(' + '); nameAuto = true; }
+  if (!$('f-activity').value && t.activity && ACTS.some(a => a.name === t.activity)) { $('f-activity').value = t.activity; applyActivityColor(); }
+  changed();
+  if (!silent) { toast(`Añadida «${t.name}»${info}`); map.fitBounds(line.getBounds(), fitPad()); }
+  return true;
+}
+(function () {
+  const inp = $('join-input'), box = $('join-results');
+  let all = null, shown = [], focus = -1;
+  const norm = v => (v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  async function ensure() {
+    if (all) return;
+    try { all = await fetch('/api/tracks').then(r => r.json()); } catch { all = []; }
+    all.forEach(t => { t._q = norm([t.name, t.sierra, t.activity].filter(Boolean).join(' ')); });
+  }
+  async function render() {
+    await ensure();
+    const q = norm(inp.value.trim());
+    if (!q) { box.classList.remove('open'); return; }
+    const words = q.split(/\s+/);
+    shown = all.filter(t => words.every(w => t._q.includes(w))).slice(0, 8);
+    focus = -1;
+    box.innerHTML = shown.length ? shown.map((t, k) => `<div class="add-item" data-k="${k}"><div style="flex:1;min-width:0">
+        <div class="add-item-name">${esc(t.name)}</div>
+        <div class="add-item-sub">${[t.activity, t.sierra, t.distance ? nf1.format(t.distance) + ' km' : null].filter(Boolean).map(esc).join(' · ')}</div></div></div>`).join('')
+      : '<div class="place-item" style="cursor:default;color:var(--muted)">Ninguna ruta coincide</div>';
+    box.classList.add('open');
+  }
+  async function pick(k) {
+    const t = shown[k]; if (!t) return;
+    inp.value = ''; box.classList.remove('open');
+    try { await joinTrack(await fetchFullTrack(t.id)); } catch { toast('No se pudo cargar la ruta', true); }
+  }
+  inp.addEventListener('input', render);
+  inp.addEventListener('focus', ensure);
+  inp.addEventListener('blur', () => setTimeout(() => box.classList.remove('open'), 150));
+  inp.addEventListener('keydown', e => {
+    const items = box.querySelectorAll('.add-item');
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      focus = Math.max(0, Math.min(items.length - 1, focus + (e.key === 'ArrowDown' ? 1 : -1)));
+      items.forEach((el, k) => el.classList.toggle('focused', k === focus));
+    } else if (e.key === 'Enter') { e.preventDefault(); pick(focus >= 0 ? focus : 0); }
+    else if (e.key === 'Escape') { inp.value = ''; box.classList.remove('open'); }
+  });
+  box.addEventListener('mousedown', e => { const el = e.target.closest('.add-item'); if (!el) return; e.preventDefault(); pick(+el.dataset.k); });
+})();
+
 // ── Trim ────────────────────────────────────────────────────────────
 function askTrim(i, latlng) {
   const n = pts.length;
@@ -549,6 +731,16 @@ $('a-simplify').onclick = () => {
   pushHistory(); pts = out; changed();
   toast(`Quitados ${nf0.format(removed)} puntos (quedan ${nf0.format(out.length)})`);
 };
+$('a-ele').onclick = async () => {
+  if (pts.length < 2) return;
+  if (pts.length > 5000 && !confirm(`Son ${nf0.format(pts.length)} puntos: tardará un poco. ¿Continuar?`)) return;
+  pushHistory();
+  pts.forEach(p => { p[2] = null; });
+  wpts.forEach(w => { w.ele = null; });
+  dirty = true; redraw();
+  const ok = await fillElevations();
+  toast(ok ? 'Altitudes recalculadas' : 'No se pudieron obtener todas las altitudes', !ok);
+};
 $('a-clear').onclick = () => {
   if (!pts.length || !confirm('¿Borrar todo el trazado?')) return;
   pushHistory(); pts = []; changed();
@@ -564,26 +756,72 @@ document.addEventListener('keydown', e => {
 // ── Elevation (Open-Meteo, 100 points per request) ──────────────────
 let eleTimer = null, eleBusy = false;
 function scheduleElevation() { clearTimeout(eleTimer); eleTimer = setTimeout(fillElevations, 900); }
+async function fetchElevations(coords) {
+  const url = `https://api.open-meteo.com/v1/elevation?latitude=${coords.map(c => c[0].toFixed(5)).join(',')}&longitude=${coords.map(c => c[1].toFixed(5)).join(',')}`;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const r = await fetch(url);
+    if (r.ok) return (await r.json()).elevation || [];
+    if (r.status !== 429) throw new Error(`HTTP ${r.status}`);
+    await new Promise(res => setTimeout(res, 2000 * (attempt + 1)));
+  }
+  throw new Error('límite de peticiones');
+}
+// The DEM behind Open-Meteo is ~90 m, so sample missing points every ~60 m and interpolate the rest.
 async function fillElevations() {
   if (eleBusy) return scheduleElevation();
   const missing = pts.map((p, i) => p[2] == null ? i : -1).filter(i => i >= 0);
   if (!missing.length) return true;
   eleBusy = true; updateStats();
+  const d = cumDist(pts);
+  const spacing = Math.max(60, (d.at(-1) || 0) / 600);
+  const sample = [];
+  let lastD = -Infinity;
+  missing.forEach((i, k) => {
+    const runEdge = k === 0 || missing[k - 1] !== i - 1 || missing[k + 1] !== i + 1;
+    if (runEdge || d[i] - lastD >= spacing) { sample.push(i); lastD = d[i]; }
+  });
   let ok = true;
   try {
-    for (let k = 0; k < missing.length; k += 100) {
-      const batch = missing.slice(k, k + 100).filter(i => pts[i]);
-      if (!batch.length) continue;
-      const lat = batch.map(i => pts[i][0].toFixed(5)).join(','), lon = batch.map(i => pts[i][1].toFixed(5)).join(',');
-      const r = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const { elevation } = await r.json();
-      batch.forEach((i, j) => { if (pts[i] && pts[i][2] == null && elevation?.[j] != null) pts[i][2] = elevation[j]; });
+    for (let k = 0; k < sample.length; k += 100) {
+      const batch = sample.slice(k, k + 100).filter(i => pts[i]);
+      const ele = await fetchElevations(batch.map(i => pts[i]));
+      batch.forEach((i, j) => { if (pts[i] && pts[i][2] == null && ele[j] != null) pts[i][2] = ele[j]; });
     }
   } catch { ok = false; }
+  // Interpolate the remaining gaps from the nearest known elevations on each side.
+  let prev = -1;
+  for (let i = 0; i < pts.length; i++) {
+    if (pts[i][2] == null) continue;
+    if (prev >= 0 && i - prev > 1) {
+      for (let j = prev + 1; j < i; j++) {
+        const t = (d[j] - d[prev]) / ((d[i] - d[prev]) || 1);
+        pts[j][2] = pts[prev][2] + (pts[i][2] - pts[prev][2]) * t;
+      }
+    }
+    prev = i;
+  }
   eleBusy = false;
   updateStats(); drawProfile();
-  return ok;
+  return ok && pts.every(p => p[2] != null);
+}
+
+async function fillWptElevations() {
+  const missing = wpts.filter(w => w.ele == null);
+  if (!missing.length) return;
+  const toFetch = [];
+  missing.forEach(w => {
+    let best = null, bestD = 40;
+    pts.forEach(p => { if (p[2] != null) { const d = hav([w.lat, w.lon], p); if (d < bestD) { bestD = d; best = p; } } });
+    if (best) w.ele = best[2]; else toFetch.push(w);
+  });
+  for (let k = 0; k < toFetch.length; k += 100) {
+    const batch = toFetch.slice(k, k + 100);
+    try {
+      const r = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${batch.map(w => w.lat.toFixed(5)).join(',')}&longitude=${batch.map(w => w.lon.toFixed(5)).join(',')}`);
+      const { elevation } = await r.json();
+      batch.forEach((w, j) => { if (elevation?.[j] != null) w.ele = elevation[j]; });
+    } catch {}
+  }
 }
 
 // ── Profile ─────────────────────────────────────────────────────────
@@ -683,15 +921,17 @@ function applyActivityColor() {
   if ($('f-snap').value) $('f-snap').value = cyc ? 'trekking' : 'hiking-mountain';
 }
 $('f-activity').addEventListener('change', () => { dirty = true; applyActivityColor(); });
-['f-name', 'f-notes'].forEach(id => $(id).addEventListener('input', () => { dirty = true; }));
+['f-name', 'f-notes'].forEach(id => $(id).addEventListener('input', () => { dirty = true; if (id === 'f-name') nameAuto = false; }));
 
 // ── Save ────────────────────────────────────────────────────────────
-function buildGpx(name, activity, notes, list, date) {
+function buildGpx(name, activity, notes, list, date, wlist = []) {
   const x = esc;
+  const wptXml = wlist.map(w => `  <wpt lat="${w.lat.toFixed(6)}" lon="${w.lon.toFixed(6)}">${w.ele != null ? `<ele>${(+w.ele).toFixed(1)}</ele>` : ''}<name>${x(w.name || 'Punto')}</name>${w.desc ? `<desc>${x(w.desc)}</desc>` : ''}${w.sym ? `<sym>${x(w.sym)}</sym>` : ''}</wpt>
+`).join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="GPX Library" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata><name>${x(name)}</name><time>${date}</time></metadata>
-  <trk>
+${wptXml}  <trk>
     <name>${x(name)}</name>${activity ? `\n    <type>${x(activity)}</type>` : ''}${notes ? `\n    <desc>${x(notes)}</desc>` : ''}
     <trkseg>
 ${list.map(p => `      <trkpt lat="${p[0].toFixed(6)}" lon="${p[1].toFixed(6)}">${p[2] != null ? `<ele>${(+p[2]).toFixed(1)}</ele>` : ''}</trkpt>`).join('\n')}
@@ -722,6 +962,7 @@ $('btn-save').addEventListener('click', async () => {
   try {
     const dense = densify(pts);
     if (dense.length !== pts.length) { pushHistory(); pts = dense; redraw(); }
+    await fillWptElevations();
     if (pts.some(p => p[2] == null)) {
       logLine('Obteniendo altitudes…');
       if (!(await fillElevations())) logLine('⚠ No se pudieron obtener todas las altitudes; se guarda sin ellas.');
@@ -733,7 +974,7 @@ $('btn-save').addEventListener('click', async () => {
     const up = await fetch('/api/import/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/gpx+xml', 'X-Filename': filename },
-      body: buildGpx(name, activity, notes, pts, `${day}T00:00:00Z`),
+      body: buildGpx(name, activity, notes, pts, `${day}T00:00:00Z`, wpts),
     });
     if (!up.ok) return fail(`Error al subir (HTTP ${up.status})`);
     const { filename: savedName } = await up.json();
@@ -787,6 +1028,7 @@ window.addEventListener('beforeunload', e => { if (dirty && !saving && pts.lengt
       const t = await fetch(`/api/tracks/${id}?full=1`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
       srcTrack = t;
       pts = (t.points || []).filter(p => p[0] != null && p[1] != null).map(p => [p[0], p[1], p[2] ?? null]);
+      wpts = (t.waypoints || []).filter(w => w.lat != null && w.lon != null).map(w => ({ lat: w.lat, lon: w.lon, ele: w.ele ?? null, name: w.name || '', sym: w.sym || '', desc: w.desc || '' }));
       $('p-title').textContent = 'Editar trazado';
       $('p-sub').innerHTML = `Copia de «${esc(t.name)}». Se guardará como una ruta nueva; la original no se modifica.`;
       $('f-name').value = `${t.name} (editada)`;
@@ -803,6 +1045,22 @@ window.addEventListener('beforeunload', e => { if (dirty && !saving && pts.lengt
     } catch {
       toast('No se pudo cargar la ruta', true);
     }
+  }
+  const joinIds = (new URLSearchParams(location.search).get('join') || '').split(',').map(Number).filter(Boolean);
+  if (joinIds.length) {
+    $('p-title').textContent = 'Unir rutas';
+    $('p-sub').textContent = `Unión de ${joinIds.length} rutas en el orden de Comparar. Se guardará como una ruta nueva; las originales no se modifican.`;
+    $('back-link').href = $('btn-cancel').href = '/compare';
+    nameAuto = true;
+    for (const jid of joinIds) {
+      try { await joinTrack(await fetchFullTrack(jid), true); } catch { toast(`No se pudo cargar la ruta ${jid}`, true); }
+    }
+    undoStack.length = 0;
+    setMode('edit');
+    redraw();
+    if (pts.length > 1) map.fitBounds(line.getBounds(), fitPad());
+    dirty = false;
+    return;
   }
   let view = null;
   try { view = JSON.parse(localStorage.getItem('trazar-view')); } catch {}

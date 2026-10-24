@@ -171,6 +171,10 @@ html, body { height: 100%; overflow: hidden; }
   <div id="cmp-head">
     <div class="cmp-title-row">
       <h2>Comparar <span id="cmp-count" class="cmp-count"></span></h2>
+      <a href="/trazar" id="btn-join" class="btn btn-ghost btn-sm" title="Unir las rutas en una sola, en el orden de la lista" hidden>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+        Unir
+      </a>
       <a href="/editor" class="btn btn-ghost btn-sm" title="Volver al catálogo">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         Catálogo
@@ -267,7 +271,13 @@ function nextColor() {
   const used = new Set(tracks.map(t => t.color));
   return COLORS.find(c => !used.has(c)) || COLORS[tracks.length % COLORS.length];
 }
-function setCount() { document.getElementById('cmp-count').textContent = tracks.length || ''; }
+function setCount() {
+  document.getElementById('cmp-count').textContent = tracks.length || '';
+  const dbIds = tracks.filter(t => t.id).map(t => t.id);
+  const join = document.getElementById('btn-join');
+  join.hidden = dbIds.length < 2;
+  join.href = `/trazar?join=${dbIds.join(',')}`;
+}
 
 function saveCompareState() {
   try {
