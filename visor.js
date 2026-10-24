@@ -1121,7 +1121,15 @@ window.addEventListener('resize', () => {
 // ── Init ─────────────────────────────────────────────────────────────
 buildFilters();
 applyFilters();
-if (CATALOG.length > 0) fitTo(L.latLngBounds(CATALOG.flatMap(t => t.bounds)), 12);
+if (CATALOG.length > 0) fitTo(L.latLngBounds(coreBounds(CATALOG)), 12);
+
+// Fit to where most tracks are, so a handful of far-away outliers don't zoom the map out to a continent.
+function coreBounds(tracks) {
+  const med = a => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
+  const c = L.latLng(med(tracks.map(t => t.center[0])), med(tracks.map(t => t.center[1])));
+  const core = tracks.filter(t => c.distanceTo(t.center) < 700000);
+  return (core.length >= tracks.length * 0.6 ? core : tracks).flatMap(t => t.bounds);
+}
 
 const _openFile = new URLSearchParams(location.search).get('file');
 if (_openFile) {
