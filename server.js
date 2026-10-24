@@ -243,7 +243,7 @@ function computeGpxTimes(filePath) {
 }
 
 // ── API /tracks/:id ───────────────────────────────────────────────
-function apiGetTrackById(res, id) {
+function apiGetTrackById(res, id, full = false) {
   try {
     const db = openDb();
     const track = db.prepare(`
@@ -261,7 +261,7 @@ function apiGetTrackById(res, id) {
     const ptTable = track.cleaned ? 'clean_points' : 'raw_points';
     const MAX_PTS = 800;
     let allPts = db.prepare(`SELECT lat, lon, ele FROM ${ptTable} WHERE track_id=? ORDER BY seq`).all(id);
-    if (allPts.length > MAX_PTS) {
+    if (!full && allPts.length > MAX_PTS) {
       const step = Math.ceil(allPts.length / MAX_PTS);
       allPts = allPts.filter((_, i) => i % step === 0);
     }
@@ -1355,7 +1355,7 @@ const server = http.createServer(async (req, res) => {
 
   const trackMatch = pathname.match(/^\/api\/tracks\/(\d+)$/);
   if (trackMatch && method === 'GET')
-    return apiGetTrackById(res, parseInt(trackMatch[1]));
+    return apiGetTrackById(res, parseInt(trackMatch[1]), searchParams.get('full') === '1');
   if (trackMatch && method === 'PATCH')
     return apiPatchTrack(req, res, parseInt(trackMatch[1]));
   if (trackMatch && method === 'DELETE')
@@ -1786,6 +1786,8 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/track' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'track.html'), req);
 
+  if (pathname === '/trazar' && method === 'GET')
+    return serveStatic(res, path.join(ROOT, 'trazar.html'), req);
   if (pathname === '/compare' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'compare.html'), req);
 

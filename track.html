@@ -17,6 +17,7 @@
   <a href="/" style="color:#f8fafc">Visor</a>
   <a href="/editor">Catálogo</a>
   <a href="/compare">Comparar</a>
+  <a href="/trazar">Trazar</a>
   <a href="/config">Config</a>
   <a href="/admin">Admin</a>
 </nav>
@@ -95,6 +96,9 @@
           <div id="ph-actions">
             <a class="ph-btn ph-icon" id="source-btn" target="_blank" rel="noopener" hidden>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+            <a class="ph-btn ph-icon" id="trace-btn" title="Editar trazado (crea una copia)" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="5" cy="18" r="2.5"/><circle cx="12" cy="7" r="2.5"/><circle cx="19" cy="14" r="2.5"/><path d="M6.6 16 10.6 9M14 8.5l3.6 4"/></svg>
             </a>
             <button class="ph-btn" id="edit-btn" onclick="openEditModal()" hidden>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -359,6 +363,8 @@ function render(t) {
   // Header
   updateHeader(t);
   document.getElementById('edit-btn').hidden = false;
+  const traceBtn = document.getElementById('trace-btn');
+  traceBtn.href = `/trazar?id=${t.id}`; traceBtn.hidden = false;
   if (t.file) document.getElementById('back-link').href = `/?file=${encodeURIComponent(t.file)}`;
 
   const hasEle = t.points && t.points.some(p => p[2] != null);

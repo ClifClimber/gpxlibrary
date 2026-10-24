@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trazar ruta — GPX Library</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/shared.css">
+<script src="/theme.js"></script>
+<style>
+/* Trazar — maquetación propia. Tokens y componentes en shared.css */
+:root { --tc: var(--accent); --panel-w: 340px; }
+body { display: flex; flex-direction: column; overflow: hidden; }
+#app { position: relative; flex: 1; min-height: 0; }
+#map { position: absolute; inset: 0; z-index: 0; background: var(--line); }
+#map.mode-draw { cursor: crosshair; }
+#map.mode-draw .leaflet-interactive { cursor: crosshair; }
+#map.busy, #map.busy .leaflet-interactive { cursor: progress !important; }
+
+/* ── Panel ── */
+#panel {
+  position: absolute; top: var(--gap); left: var(--gap); bottom: var(--gap); z-index: 500;
+  width: var(--panel-w); display: flex; flex-direction: column; overflow: hidden;
+}
+#p-head { padding: 12px 14px 12px 16px; border-bottom: 1px solid var(--line); }
+#p-top { display: flex; align-items: center; gap: 6px; }
+#back-link { margin-left: -8px; }
+#p-title { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+#p-sub { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
+#p-sub:empty { display: none; }
+#p-body { flex: 1; overflow-y: auto; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+.p-block { display: flex; flex-direction: column; gap: 8px; }
+.p-lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.p-row { display: flex; gap: 8px; align-items: center; }
+
+/* Herramientas */
+.tool-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: var(--soft); border-radius: var(--radius-md); }
+.tool-tab { height: 34px; border: none; border-radius: 8px; background: transparent; color: var(--ink-2); font-size: 12.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.tool-tab:hover { color: var(--ink); }
+.tool-tab.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+#mode-hint { font-size: 12px; color: var(--ink-2); line-height: 1.5; background: var(--accent-soft); border-radius: var(--radius-sm); padding: 8px 10px; }
+#mode-hint kbd { font: 600 10.5px ui-monospace, Consolas, monospace; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.actions-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.actions-grid .btn { padding: 0 6px; font-size: 11.5px; gap: 5px; }
+
+/* Stats */
+.t-stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.t-stats > div { padding: 8px 9px; min-width: 0; }
+.t-stats > div + div { border-left: 1px solid var(--line); }
+.t-stat-v { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.t-stat-v small { font-size: 10.5px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+.t-stat-l { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+#ele-note { font-size: 11px; color: var(--muted); }
+#ele-note:empty { display: none; }
+
+#p-foot { flex-shrink: 0; padding: 10px 14px; border-top: 1px solid var(--line); display: flex; gap: 8px; }
+#p-foot .btn { flex: 1; height: 38px; font-size: 13px; }
+
+/* Buscar lugar */
+#place-box { position: relative; }
+#place-results { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow); padding: 4px; }
+#place-results.open { display: block; }
+.place-item { padding: 7px 9px; border-radius: 8px; cursor: pointer; font-size: 12.5px; }
+.place-item:hover { background: var(--soft); }
+.place-item small { display: block; color: var(--muted); font-size: 11px; }
+
+/* ── Perfil ── */
+#profile {
+  position: absolute; z-index: 500; left: calc(var(--panel-w) + var(--gap) * 2); right: var(--gap); bottom: var(--gap);
+  padding: 8px 14px 6px; display: none;
+}
+#profile.visible { display: block; }
+#profile-head { display: flex; align-items: baseline; gap: 10px; font-size: 12px; }
+#profile-head strong { font-size: 13px; }
+#profile-head span { color: var(--ink-3); font-size: 11px; }
+#profile-svg { display: block; width: 100%; height: 110px; }
+#profile-tip { position: absolute; pointer-events: none; display: none; background: var(--solid); color: var(--on-solid); font-size: 11px; padding: 3px 7px; border-radius: 6px; transform: translate(-50%, -120%); white-space: nowrap; }
+
+/* ── Map pins ── */
+.vtx { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2.5px solid var(--line-c, var(--accent)); box-shadow: 0 1px 3px rgba(0,0,0,.35); cursor: grab; }
+.vtx:hover { transform: scale(1.35); }
+.leaflet-dragging .vtx { cursor: grabbing; }
+.vtx-trim { cursor: pointer; border-style: dashed; }
+.end-pin { width: 24px; height: 24px; border-radius: 50%; color: #fff; font: 800 12px Inter, sans-serif; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+.trim-pop { display: flex; flex-direction: column; gap: 6px; min-width: 190px; }
+.trim-pop .btn { justify-content: flex-start; }
+.trim-pop p { margin: 0 0 2px; font-size: 12px; color: var(--muted); }
+
+/* ── Save modal ── */
+#save-log { font-size: 12.5px; line-height: 1.7; color: var(--ink-2); max-height: 260px; overflow-y: auto; }
+#save-log .err { color: var(--danger); }
+#save-log .ok { color: var(--success); font-weight: 600; }
+
+@media (max-width: 760px) {
+  #panel { top: auto; right: var(--gap); width: auto; height: 46vh; }
+  #profile { left: var(--gap); bottom: calc(46vh + var(--gap) * 2); }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">GPX Library</span>
+  <a href="/">Visor</a>
+  <a href="/editor">Catálogo</a>
+  <a href="/compare">Comparar</a>
+  <a href="/trazar" style="color:#f8fafc">Trazar</a>
+  <a href="/config">Config</a>
+  <a href="/admin">Admin</a>
+</nav>
+
+<div id="app">
+  <div id="map" class="mode-draw"></div>
+
+  <aside id="panel" class="floating">
+    <div id="p-head">
+      <div id="p-top">
+        <a id="back-link" class="icon-btn" href="/editor" title="Volver">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        </a>
+        <h1 id="p-title">Nueva ruta</h1>
+      </div>
+      <div id="p-sub"></div>
+    </div>
+
+    <div id="p-body">
+      <div class="p-block">
+        <label class="p-lbl" for="f-name">Nombre</label>
+        <input class="input" id="f-name" maxlength="120" placeholder="Nombre de la ruta" autocomplete="off">
+        <div class="p-row">
+          <select class="select" id="f-activity" title="Actividad"><option value="">Actividad (automática)</option></select>
+        </div>
+      </div>
+
+      <div class="p-block" id="place-block">
+        <span class="p-lbl">Ir a un lugar</span>
+        <div id="place-box">
+          <input class="input" id="place-input" placeholder="Buscar pueblo, pico, refugio…" autocomplete="off">
+          <div id="place-results"></div>
+        </div>
+      </div>
+
+      <div class="p-block">
+        <span class="p-lbl">Herramienta</span>
+        <div class="tool-tabs" role="tablist">
+          <button class="tool-tab active" data-mode="draw">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Dibujar
+          </button>
+          <button class="tool-tab" data-mode="edit">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="5" cy="18" r="2.5"/><circle cx="12" cy="7" r="2.5"/><circle cx="19" cy="14" r="2.5"/><path d="M6.6 16 10.6 9M14 8.5l3.6 4"/></svg>Editar
+          </button>
+          <button class="tool-tab" data-mode="trim">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>Recortar
+          </button>
+        </div>
+        <div id="mode-hint"></div>
+        <div class="p-row" id="snap-row">
+          <label for="f-snap" style="font-size:12.5px;color:var(--ink-2);white-space:nowrap">Seguir caminos</label>
+          <select class="select" id="f-snap" style="height:32px">
+            <option value="">No (línea recta)</option>
+            <option value="hiking-mountain">A pie</option>
+            <option value="trekking">En bici</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions-grid">
+        <button class="btn btn-sm" id="a-undo" title="Deshacer (Ctrl+Z)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>Deshacer</button>
+        <button class="btn btn-sm" id="a-redo" title="Rehacer (Ctrl+Y)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>Rehacer</button>
+        <button class="btn btn-sm" id="a-reverse" title="Invertir el sentido de la ruta">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Invertir</button>
+        <button class="btn btn-sm" id="a-close" title="Unir el final con el inicio">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>Circular</button>
+        <button class="btn btn-sm" id="a-simplify" title="Reducir puntos manteniendo la forma (tolerancia 5 m)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 17 9 11 13 15 21 7"/></svg>Simplificar</button>
+        <button class="btn btn-sm btn-danger" id="a-clear" title="Borrar todo el trazado">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Borrar</button>
+      </div>
+
+      <div class="p-block">
+        <div class="t-stats">
+          <div><div class="t-stat-v" id="s-dist">0<small>km</small></div><div class="t-stat-l">Distancia</div></div>
+          <div><div class="t-stat-v" id="s-gain">0<small>m</small></div><div class="t-stat-l">Subida</div></div>
+          <div><div class="t-stat-v" id="s-loss">0<small>m</small></div><div class="t-stat-l">Bajada</div></div>
+          <div><div class="t-stat-v" id="s-pts">0</div><div class="t-stat-l">Puntos</div></div>
+        </div>
+        <div id="ele-note"></div>
+      </div>
+
+      <div class="p-block">
+        <label class="p-lbl" for="f-notes">Notas</label>
+        <textarea class="textarea" id="f-notes" rows="3" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+
+    <div id="p-foot">
+      <a class="btn" id="btn-cancel" href="/editor">Cancelar</a>
+      <button class="btn btn-primary" id="btn-save" disabled>Guardar ruta</button>
+    </div>
+  </aside>
+
+  <section id="profile" class="floating">
+    <div id="profile-head"><strong>Perfil</strong><span id="profile-range"></span></div>
+    <div style="position:relative"><svg id="profile-svg"></svg><div id="profile-tip"></div></div>
+  </section>
+</div>
+
+<div class="modal-overlay" id="save-modal">
+  <div class="modal" style="width:min(460px,100%)">
+    <div class="modal-head"><h2>Guardando ruta</h2></div>
+    <div class="modal-body"><div id="save-log"></div></div>
+    <div class="modal-foot" id="save-foot" hidden><button class="btn" id="save-close">Cerrar</button></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+const nf0 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 });
+
+function toast(msg, isErr) {
+  const t = $('toast'); t.textContent = msg;
+  t.style.background = isErr ? 'var(--danger)' : '';
+  t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// ── Map ─────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: false });
+const ESRI = (v, k) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${v}_Gray_${k}/MapServer/tile/{z}/{y}/{x}`;
+const ESRI_ATTR = '© <a href="https://www.esri.com">Esri</a>, HERE, Garmin, © OpenStreetMap';
+const tileLayers = {
+  'Claro':           L.layerGroup([L.tileLayer(ESRI('Light', 'Base'), { attribution: ESRI_ATTR, maxZoom: 16 }), L.tileLayer(ESRI('Light', 'Reference'), { maxZoom: 16 })]),
+  'Oscuro':          L.layerGroup([L.tileLayer(ESRI('Dark', 'Base'), { attribution: ESRI_ATTR, maxZoom: 16 }), L.tileLayer(ESRI('Dark', 'Reference'), { maxZoom: 16 })]),
+  'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19 }),
+  'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '© OpenTopoMap', maxZoom: 17 }),
+  'IGN Topográfico': L.tileLayer('https://www.ign.es/wmts/mapa-raster?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=MTN&STYLE=default&FORMAT=image/jpeg&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', { attribution: '© <a href="https://www.ign.es">IGN España</a>', maxZoom: 20 }),
+  'Google Satélite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains: '0123', attribution: '© Google', maxZoom: 20 }),
+};
+// Drawing needs trail detail, so default to a topo map unless the user picked something else.
+let baseName = 'OpenTopoMap';
+try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}
+tileLayers[baseName].addTo(map);
+map.on('baselayerchange', e => { try { localStorage.setItem('visor-base-layer', e.name); } catch {} });
+L.control.layers(tileLayers, null, { position: 'topright', collapsed: true }).addTo(map);
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+const renderer = L.canvas({ padding: 0.5, tolerance: 8 });
+let lineColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#006783';
+const line = L.polyline([], { color: lineColor, weight: 4, opacity: .95, renderer, interactive: true }).addTo(map);
+const vertexLayer = L.layerGroup().addTo(map);
+const trimPreview = L.polyline([], { color: '#94a3b8', weight: 6, opacity: .8, dashArray: '6 6', renderer, interactive: false }).addTo(map);
+const pin = (txt, bg) => L.divIcon({ className: '', html: `<div class="end-pin" style="background:${bg}">${txt}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
+const startMk = L.marker([0, 0], { icon: pin('A', '#16a34a'), interactive: false, keyboard: false });
+const endMk   = L.marker([0, 0], { icon: pin('B', '#dc2626'), interactive: false, keyboard: false });
+const hoverMk = L.circleMarker([0, 0], { radius: 6, color: '#fff', weight: 2, fillColor: lineColor, fillOpacity: 1, renderer, interactive: false });
+
+// ── State ───────────────────────────────────────────────────────────
+let pts = [];              // [lat, lon, ele|null]
+let mode = 'draw';
+let srcTrack = null;
+let dirty = false, saving = false, routing = false;
+const undoStack = [], redoStack = [];
+const MAX_VERTICES = 400;
+
+const snapshot = () => pts.map(p => p.slice());
+function pushHistory(snap = snapshot()) {
+  undoStack.push(snap); if (undoStack.length > 200) undoStack.shift();
+  redoStack.length = 0;
+}
+function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); pts = undoStack.pop(); changed(); }
+function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); pts = redoStack.pop(); changed(); }
+
+function changed() {
+  dirty = true;
+  redraw();
+  scheduleElevation();
+}
+
+// ── Geometry helpers ────────────────────────────────────────────────
+function hav(a, b) {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * toR, dLon = (b[1] - a[1]) * toR;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * toR) * Math.cos(b[0] * toR) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function cumDist(list) {
+  const out = [0];
+  for (let i = 1; i < list.length; i++) out.push(out[i - 1] + hav(list[i - 1], list[i]));
+  return out;
+}
+function eleStats(list) {
+  let gain = 0, loss = 0, prev = null;
+  for (const p of list) {
+    if (p[2] == null) continue;
+    if (prev != null) {
+      const d = p[2] - prev;
+      if (Math.abs(d) >= 2) { if (d > 0) gain += d; else loss -= d; prev = p[2]; }
+    } else prev = p[2];
+  }
+  return { gain, loss };
+}
+// Straight segments only carry elevation at their ends; add intermediate points so the
+// elevation service can fill the profile in between.
+function densify(list, step = 50) {
+  const out = [list[0]];
+  for (let i = 1; i < list.length; i++) {
+    const a = list[i - 1], b = list[i], d = hav(a, b);
+    const n = Math.min(400, Math.floor(d / step));
+    for (let k = 1; k < n; k++) {
+      const t = k / n;
+      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, null]);
+    }
+    out.push(b);
+  }
+  return out;
+}
+// Ramer–Douglas–Peucker in metres (local equirectangular projection)
+function simplifyMeters(list, tol) {
+  if (list.length < 3) return list.slice();
+  const lat0 = list[0][0] * Math.PI / 180, k = 111320;
+  const xy = list.map(p => [p[1] * k * Math.cos(lat0), p[0] * k]);
+  const keep = new Uint8Array(list.length); keep[0] = keep[list.length - 1] = 1;
+  const stack = [[0, list.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    let maxD = 0, idx = -1;
+    const [ax, ay] = xy[a], [bx, by] = xy[b], dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1;
+    for (let i = a + 1; i < b; i++) {
+      const t = Math.max(0, Math.min(1, ((xy[i][0] - ax) * dx + (xy[i][1] - ay) * dy) / len2));
+      const px = ax + t * dx - xy[i][0], py = ay + t * dy - xy[i][1];
+      const d = px * px + py * py;
+      if (d > maxD) { maxD = d; idx = i; }
+    }
+    if (idx > 0 && maxD > tol * tol) { keep[idx] = 1; stack.push([a, idx], [idx, b]); }
+  }
+  return list.filter((_, i) => keep[i]);
+}
+function nearestIndex(latlng, maxPx = 30) {
+  const p = map.latLngToContainerPoint(latlng);
+  let best = -1, bestD = Infinity;
+  pts.forEach((q, i) => {
+    const d = p.distanceTo(map.latLngToContainerPoint([q[0], q[1]]));
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  return bestD <= maxPx ? best : -1;
+}
+function nearestSegment(latlng) {
+  const p = map.latLngToLayerPoint(latlng);
+  let best = -1, bestD = Infinity;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = map.latLngToLayerPoint([pts[i][0], pts[i][1]]), b = map.latLngToLayerPoint([pts[i + 1][0], pts[i + 1][1]]);
+    const d = L.LineUtil.pointToSegmentDistance(p, a, b);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+// ── Rendering ───────────────────────────────────────────────────────
+function redraw() {
+  const lls = pts.map(p => [p[0], p[1]]);
+  line.setLatLngs(lls);
+  if (pts.length) { startMk.setLatLng(lls[0]).addTo(map); } else startMk.remove();
+  if (pts.length > 1) { endMk.setLatLng(lls[lls.length - 1]).addTo(map); } else endMk.remove();
+  trimPreview.setLatLngs([]);
+  drawVertices();
+  updateStats();
+  drawProfile();
+  $('a-undo').disabled = !undoStack.length;
+  $('a-redo').disabled = !redoStack.length;
+  ['a-reverse', 'a-close', 'a-simplify', 'a-clear'].forEach(id => $(id).disabled = pts.length < 2);
+  $('btn-save').disabled = pts.length < 2 || saving;
+}
+
+let vertexNote = '';
+function drawVertices() {
+  vertexLayer.clearLayers();
+  vertexNote = '';
+  if (mode === 'draw' || !pts.length) { updateHint(); return; }
+  const b = map.getBounds().pad(0.15);
+  const vis = [];
+  pts.forEach((p, i) => { if (b.contains([p[0], p[1]])) vis.push(i); });
+  if (vis.length > MAX_VERTICES) {
+    vertexNote = `Hay ${nf0.format(vis.length)} puntos en pantalla: acerca el zoom o usa «Simplificar» para editarlos.`;
+    updateHint(); return;
+  }
+  const icon = L.divIcon({ className: 'vtx' + (mode === 'trim' ? ' vtx-trim' : ''), iconSize: [12, 12], iconAnchor: [6, 6] });
+  const last = pts.length - 1;
+  vis.forEach(i => {
+    const ic = i === 0 ? pin('A', '#16a34a') : i === last ? pin('B', '#dc2626') : icon;
+    const m = L.marker([pts[i][0], pts[i][1]], { icon: ic, draggable: mode === 'edit', keyboard: false, autoPan: true, bubblingMouseEvents: false, zIndexOffset: i === 0 || i === last ? 500 : 0 });
+    if (i === 0) startMk.remove();
+    if (i === last && last > 0) endMk.remove();
+    m._idx = i;
+    if (mode === 'edit') {
+      m.on('dragstart', () => { drag = { idx: m._idx, before: snapshot() }; map.closePopup(); });
+      m.on('drag', e => onVertexDrag(m._idx, e.target.getLatLng()));
+      m.on('dragend', () => { if (drag) pushHistory(drag.before); drag = null; changed(); });
+      m.on('contextmenu', e => { L.DomEvent.preventDefault(e.originalEvent); deletePoint(m._idx); });
+    } else {
+      m.on('click', e => askTrim(m._idx, e.latlng));
+    }
+    vertexLayer.addLayer(m);
+  });
+  updateHint();
+}
+map.on('moveend', () => { if (mode !== 'draw' && !drag) drawVertices(); });
+
+function updateStats() {
+  const d = pts.length > 1 ? cumDist(pts).at(-1) : 0;
+  const { gain, loss } = eleStats(pts);
+  $('s-dist').innerHTML = `${nf1.format(d / 1000)}<small>km</small>`;
+  $('s-gain').innerHTML = `${nf0.format(gain)}<small>m</small>`;
+  $('s-loss').innerHTML = `${nf0.format(loss)}<small>m</small>`;
+  $('s-pts').textContent = nf0.format(pts.length);
+  const missing = pts.filter(p => p[2] == null).length;
+  $('ele-note').textContent = missing && pts.length > 1
+    ? (eleBusy ? 'Obteniendo altitudes…' : `${nf0.format(missing)} puntos sin altitud: se completarán al guardar.`)
+    : '';
+}
+
+const HINTS = {
+  draw: 'Haz clic en el mapa para añadir puntos al final de la ruta. <kbd>Ctrl</kbd>+<kbd>Z</kbd> deshace.',
+  edit: 'Arrastra un punto para moverlo · clic en la línea para insertar uno · clic derecho en un punto para borrarlo.',
+  trim: 'Haz clic en un punto de la ruta y elige qué parte conservar.',
+};
+function updateHint() {
+  $('mode-hint').innerHTML = HINTS[mode] + (vertexNote ? `<br><strong>${esc(vertexNote)}</strong>` : '');
+}
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.tool-tab').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+  $('map').classList.toggle('mode-draw', m === 'draw');
+  $('snap-row').style.display = m === 'draw' ? '' : 'none';
+  map.closePopup();
+  drawVertices();
+}
+document.querySelectorAll('.tool-tab').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+// ── Draw ────────────────────────────────────────────────────────────
+map.on('click', async e => {
+  if (mode !== 'draw' || routing) return;
+  const target = [e.latlng.lat, e.latlng.lng, null];
+  const profile = $('f-snap').value;
+  if (!pts.length || !profile) { pushHistory(); pts.push(target); changed(); return; }
+  const seg = await routeBetween(pts.at(-1), target, profile);
+  pushHistory();
+  pts.push(...(seg ? seg.slice(1) : [target]));
+  changed();
+});
+
+async function routeBetween(a, b, profile) {
+  routing = true; $('map').classList.add('busy');
+  try {
+    const url = `https://brouter.de/brouter?lonlats=${a[1].toFixed(6)},${a[0].toFixed(6)}|${b[1].toFixed(6)},${b[0].toFixed(6)}&profile=${profile}&alternativeidx=0&format=geojson`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    const coords = j.features?.[0]?.geometry?.coordinates;
+    if (!coords?.length) throw new Error('sin ruta');
+    return coords.map(c => [c[1], c[0], c[2] ?? null]);
+  } catch (err) {
+    toast('No se encontró camino: se añade en línea recta', true);
+    return null;
+  } finally { routing = false; $('map').classList.remove('busy'); }
+}
+
+// ── Edit: drag / insert / delete ────────────────────────────────────
+let drag = null;
+function onVertexDrag(i, ll) {
+  const p = pts[i];
+  p[0] = ll.lat; p[1] = ll.lng; p[2] = null;
+  line.setLatLngs(pts.map(q => [q[0], q[1]]));
+  if (i === 0) startMk.setLatLng(ll);
+  if (i === pts.length - 1) endMk.setLatLng(ll);
+}
+line.on('click', e => {
+  if (mode === 'edit' && pts.length > 1) {
+    L.DomEvent.stop(e);
+    const seg = nearestSegment(e.latlng);
+    if (seg < 0) return;
+    pushHistory();
+    pts.splice(seg + 1, 0, [e.latlng.lat, e.latlng.lng, null]);
+    changed();
+  } else if (mode === 'trim') {
+    L.DomEvent.stop(e);
+    const i = nearestIndex(e.latlng, 60);
+    if (i >= 0) askTrim(i, e.latlng);
+  }
+});
+function deletePoint(i) {
+  if (i == null || i < 0 || i >= pts.length) return;
+  pushHistory();
+  pts.splice(i, 1);
+  changed();
+}
+
+// ── Trim ────────────────────────────────────────────────────────────
+function askTrim(i, latlng) {
+  const n = pts.length;
+  if (i <= 0 || i >= n - 1) { toast('Elige un punto intermedio para recortar'); return; }
+  const d = cumDist(pts), km = v => nf1.format(v / 1000) + ' km';
+  const html = `<div class="trim-pop">
+    <p>Cortar en el km ${km(d[i])}</p>
+    <button class="btn btn-sm" data-keep="start">Conservar el inicio (${km(d[i])})</button>
+    <button class="btn btn-sm" data-keep="end">Conservar el final (${km(d[n - 1] - d[i])})</button>
+  </div>`;
+  const pop = L.popup({ closeButton: true, autoPan: true }).setLatLng(latlng).setContent(html).openOn(map);
+  const el = pop.getElement();
+  el.querySelectorAll('[data-keep]').forEach(btn => {
+    btn.addEventListener('mouseenter', () => {
+      const part = btn.dataset.keep === 'start' ? pts.slice(i) : pts.slice(0, i + 1);
+      trimPreview.setLatLngs(part.map(p => [p[0], p[1]]));
+    });
+    btn.addEventListener('mouseleave', () => trimPreview.setLatLngs([]));
+    btn.addEventListener('click', () => {
+      pushHistory();
+      pts = btn.dataset.keep === 'start' ? pts.slice(0, i + 1) : pts.slice(i);
+      map.closePopup();
+      changed();
+    });
+  });
+}
+
+// ── Actions ─────────────────────────────────────────────────────────
+$('a-undo').onclick = undo;
+$('a-redo').onclick = redo;
+$('a-reverse').onclick = () => { pushHistory(); pts.reverse(); changed(); };
+$('a-close').onclick = async () => {
+  if (pts.length < 2) return;
+  const a = pts.at(-1), b = pts[0];
+  if (hav(a, b) < 5) { toast('La ruta ya es circular'); return; }
+  const profile = $('f-snap').value;
+  const seg = profile ? await routeBetween(a, b, profile) : null;
+  pushHistory();
+  pts.push(...(seg ? seg.slice(1) : [b.slice()]));
+  changed();
+};
+$('a-simplify').onclick = () => {
+  const out = simplifyMeters(pts, 5);
+  if (out.length === pts.length) { toast('No hay puntos que se puedan quitar'); return; }
+  const removed = pts.length - out.length;
+  pushHistory(); pts = out; changed();
+  toast(`Quitados ${nf0.format(removed)} puntos (quedan ${nf0.format(out.length)})`);
+};
+$('a-clear').onclick = () => {
+  if (!pts.length || !confirm('¿Borrar todo el trazado?')) return;
+  pushHistory(); pts = []; changed();
+};
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, select')) return;
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+  else if (k === 'escape') map.closePopup();
+});
+
+// ── Elevation (Open-Meteo, 100 points per request) ──────────────────
+let eleTimer = null, eleBusy = false;
+function scheduleElevation() { clearTimeout(eleTimer); eleTimer = setTimeout(fillElevations, 900); }
+async function fillElevations() {
+  if (eleBusy) return scheduleElevation();
+  const missing = pts.map((p, i) => p[2] == null ? i : -1).filter(i => i >= 0);
+  if (!missing.length) return true;
+  eleBusy = true; updateStats();
+  let ok = true;
+  try {
+    for (let k = 0; k < missing.length; k += 100) {
+      const batch = missing.slice(k, k + 100).filter(i => pts[i]);
+      if (!batch.length) continue;
+      const lat = batch.map(i => pts[i][0].toFixed(5)).join(','), lon = batch.map(i => pts[i][1].toFixed(5)).join(',');
+      const r = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const { elevation } = await r.json();
+      batch.forEach((i, j) => { if (pts[i] && pts[i][2] == null && elevation?.[j] != null) pts[i][2] = elevation[j]; });
+    }
+  } catch { ok = false; }
+  eleBusy = false;
+  updateStats(); drawProfile();
+  return ok;
+}
+
+// ── Profile ─────────────────────────────────────────────────────────
+let prof = null;
+function drawProfile() {
+  const withEle = pts.filter(p => p[2] != null);
+  const box = $('profile');
+  if (pts.length < 2 || withEle.length < 2) { box.classList.remove('visible'); prof = null; return; }
+  box.classList.add('visible');
+  const svg = $('profile-svg');
+  const W = svg.clientWidth || 600, H = 110, P = { l: 38, r: 8, t: 8, b: 18 };
+  const d = cumDist(pts), total = d.at(-1) || 1;
+  const eles = withEle.map(p => p[2]);
+  let lo = Math.min(...eles), hi = Math.max(...eles);
+  if (hi - lo < 20) { lo -= 10; hi += 10; }
+  const x = v => P.l + v / total * (W - P.l - P.r), y = e => P.t + (1 - (e - lo) / (hi - lo)) * (H - P.t - P.b);
+  const idx = pts.map((p, i) => p[2] != null ? i : -1).filter(i => i >= 0);
+  const path = idx.map((i, k) => `${k ? 'L' : 'M'}${x(d[i]).toFixed(1)},${y(pts[i][2]).toFixed(1)}`).join('');
+  const area = `${path}L${x(d[idx.at(-1)]).toFixed(1)},${H - P.b}L${x(d[idx[0]]).toFixed(1)},${H - P.b}Z`;
+  const ticks = [lo, (lo + hi) / 2, hi].map(v => `<text x="${P.l - 5}" y="${y(v) + 3.5}" text-anchor="end" font-size="10" fill="#94a3b8">${Math.round(v)}</text>`).join('');
+  const km = total / 1000, step = km > 40 ? 10 : km > 15 ? 5 : km > 5 ? 2 : km > 2 ? 1 : 0.5;
+  let xt = '';
+  for (let v = 0; v <= km + 1e-9; v += step) xt += `<text x="${x(v * 1000)}" y="${H - 4}" text-anchor="middle" font-size="10" fill="#94a3b8">${+v.toFixed(1)}</text>`;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = `<path d="${area}" fill="${lineColor}" opacity=".14"/><path d="${path}" fill="none" stroke="${lineColor}" stroke-width="2"/>${ticks}${xt}
+    <line id="ph" x1="0" x2="0" y1="${P.t}" y2="${H - P.b}" style="stroke:var(--ink-3)" stroke-dasharray="3 2" opacity="0"/>
+    <rect x="${P.l}" y="0" width="${W - P.l - P.r}" height="${H}" fill="transparent" id="ph-area"/>`;
+  $('profile-range').textContent = `${Math.round(lo)}–${Math.round(hi)} m`;
+  prof = { d, total, x, P, W };
+  const area_ = $('ph-area'), ph = $('ph'), tip = $('profile-tip');
+  area_.addEventListener('mousemove', ev => {
+    const r = svg.getBoundingClientRect();
+    const sx = (ev.clientX - r.left) * (W / r.width);
+    const dist = Math.max(0, Math.min(1, (sx - P.l) / (W - P.l - P.r))) * total;
+    let i = d.findIndex(v => v >= dist); if (i < 0) i = d.length - 1;
+    ph.setAttribute('x1', x(d[i])); ph.setAttribute('x2', x(d[i])); ph.setAttribute('opacity', '1');
+    hoverMk.setLatLng([pts[i][0], pts[i][1]]).addTo(map);
+    tip.style.display = 'block'; tip.style.left = (x(d[i]) * r.width / W) + 'px'; tip.style.top = '20px';
+    tip.textContent = `${nf1.format(d[i] / 1000)} km · ${pts[i][2] != null ? Math.round(pts[i][2]) + ' m' : '—'}`;
+  });
+  area_.addEventListener('mouseleave', () => { ph.setAttribute('opacity', '0'); hoverMk.remove(); tip.style.display = 'none'; });
+}
+window.addEventListener('resize', () => drawProfile());
+
+// ── Place search (Nominatim) ────────────────────────────────────────
+(function () {
+  const inp = $('place-input'), box = $('place-results');
+  let timer = null, results = [];
+  inp.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = inp.value.trim();
+    if (q.length < 3) { box.classList.remove('open'); return; }
+    timer = setTimeout(async () => {
+      try {
+        results = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&accept-language=es&q=${encodeURIComponent(q)}`).then(r => r.json());
+      } catch { results = []; }
+      box.innerHTML = results.length
+        ? results.map((r, k) => `<div class="place-item" data-k="${k}">${esc(r.display_name.split(',')[0])}<small>${esc(r.display_name.split(',').slice(1, 4).join(','))}</small></div>`).join('')
+        : '<div class="place-item" style="cursor:default;color:var(--muted)">Sin resultados</div>';
+      box.classList.add('open');
+    }, 400);
+  });
+  box.addEventListener('mousedown', e => {
+    const el = e.target.closest('[data-k]'); if (!el) return;
+    e.preventDefault();
+    const r = results[+el.dataset.k];
+    if (r.boundingbox) {
+      const [s, n, w, ea] = r.boundingbox.map(Number);
+      map.fitBounds([[s, w], [n, ea]], { maxZoom: 15, ...fitPad() });
+    } else map.setView([+r.lat, +r.lon], 14);
+    box.classList.remove('open'); inp.blur();
+  });
+  inp.addEventListener('blur', () => setTimeout(() => box.classList.remove('open'), 150));
+})();
+
+function fitPad() {
+  if (window.innerWidth <= 760) return { padding: [30, 30] };
+  const left = $('panel').getBoundingClientRect().right + 30;
+  const bottom = $('profile').classList.contains('visible') ? 160 : 40;
+  return { paddingTopLeft: [left, 40], paddingBottomRight: [70, bottom] };
+}
+
+// ── Activities ──────────────────────────────────────────────────────
+let ACTS = [];
+async function loadActivities() {
+  try { ACTS = (await fetch('/api/config/activities').then(r => r.json())).filter(a => a.active); } catch { ACTS = []; }
+  $('f-activity').insertAdjacentHTML('beforeend', ACTS.map(a => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join(''));
+}
+function applyActivityColor() {
+  const a = ACTS.find(x => x.name === $('f-activity').value);
+  lineColor = a?.color || getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#006783';
+  line.setStyle({ color: lineColor });
+  document.documentElement.style.setProperty('--line-c', lineColor);
+  hoverMk.setStyle({ fillColor: lineColor });
+  drawVertices(); drawProfile();
+  const cyc = /mtb|bici|gravel|ciclis|bike/i.test($('f-activity').value);
+  if ($('f-snap').value) $('f-snap').value = cyc ? 'trekking' : 'hiking-mountain';
+}
+$('f-activity').addEventListener('change', () => { dirty = true; applyActivityColor(); });
+['f-name', 'f-notes'].forEach(id => $(id).addEventListener('input', () => { dirty = true; }));
+
+// ── Save ────────────────────────────────────────────────────────────
+function buildGpx(name, activity, notes, list, date) {
+  const x = esc;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPX Library" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>${x(name)}</name><time>${date}</time></metadata>
+  <trk>
+    <name>${x(name)}</name>${activity ? `\n    <type>${x(activity)}</type>` : ''}${notes ? `\n    <desc>${x(notes)}</desc>` : ''}
+    <trkseg>
+${list.map(p => `      <trkpt lat="${p[0].toFixed(6)}" lon="${p[1].toFixed(6)}">${p[2] != null ? `<ele>${(+p[2]).toFixed(1)}</ele>` : ''}</trkpt>`).join('\n')}
+    </trkseg>
+  </trk>
+</gpx>
+`;
+}
+function slugify(s) {
+  return (s || 'ruta').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 70) || 'ruta';
+}
+function logLine(text, cls) {
+  const el = document.createElement('div');
+  if (cls) el.className = cls;
+  el.textContent = text;
+  $('save-log').appendChild(el);
+  $('save-log').scrollTop = 1e9;
+}
+
+$('btn-save').addEventListener('click', async () => {
+  const name = $('f-name').value.trim();
+  if (!name) { $('f-name').focus(); toast('Ponle un nombre a la ruta', true); return; }
+  if (pts.length < 2) return;
+  saving = true; $('btn-save').disabled = true;
+  $('save-log').innerHTML = ''; $('save-foot').hidden = true;
+  $('save-modal').classList.add('open');
+  const fail = msg => { logLine('✗ ' + msg, 'err'); $('save-foot').hidden = false; saving = false; $('btn-save').disabled = false; };
+  try {
+    const dense = densify(pts);
+    if (dense.length !== pts.length) { pushHistory(); pts = dense; redraw(); }
+    if (pts.some(p => p[2] == null)) {
+      logLine('Obteniendo altitudes…');
+      if (!(await fillElevations())) logLine('⚠ No se pudieron obtener todas las altitudes; se guarda sin ellas.');
+    }
+    const activity = $('f-activity').value, notes = $('f-notes').value.trim();
+    const day = srcTrack?.date || new Date().toISOString().slice(0, 10);
+    const filename = `${day}_${slugify(name)}.gpx`;
+    logLine('Subiendo GPX…');
+    const up = await fetch('/api/import/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/gpx+xml', 'X-Filename': filename },
+      body: buildGpx(name, activity, notes, pts, `${day}T00:00:00Z`),
+    });
+    if (!up.ok) return fail(`Error al subir (HTTP ${up.status})`);
+    const { filename: savedName } = await up.json();
+
+    logLine('Importando (ubicación, zona, IBP)…');
+    const resp = await fetch('/api/db/import-temp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: [savedName] }),
+    });
+    if (!resp.ok || !resp.body) return fail(`Error al importar (HTTP ${resp.status})`);
+    const reader = resp.body.getReader(), dec = new TextDecoder();
+    let buf = '', newId = null, code = null;
+    const shown = /Ubicación|Sierra|Actividad|IBP|OSM|Importado|Ya existe|✗|⚠/;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split('\n\n'); buf = parts.pop();
+      for (const part of parts) {
+        const dl = part.split('\n').find(l => l.startsWith('data:'));
+        if (!dl) continue;
+        let evt; try { evt = JSON.parse(dl.slice(5)); } catch { continue; }
+        if (evt.text?.startsWith('IMPORTED_IDS:')) newId = +evt.text.split(':')[1].split(',')[0];
+        else if (evt.type === 'done') code = evt.code;
+        else if (evt.text && shown.test(evt.text)) logLine(evt.text.trim(), evt.type === 'error' ? 'err' : '');
+      }
+    }
+    if (!newId) return fail(code === 0 ? 'La ruta no se importó (¿ya existía un fichero igual?)' : 'La importación falló');
+
+    const patch = {};
+    if (activity) patch.activity = activity;
+    if (notes) patch.notes = notes;
+    if (Object.keys(patch).length) {
+      await fetch(`/api/tracks/${newId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+    }
+    logLine('✓ Ruta guardada', 'ok');
+    dirty = false;
+    setTimeout(() => { location.href = `/track?id=${newId}`; }, 700);
+  } catch (err) { fail(err.message); }
+});
+$('save-close').onclick = () => $('save-modal').classList.remove('open');
+
+window.addEventListener('beforeunload', e => { if (dirty && !saving && pts.length) { e.preventDefault(); e.returnValue = ''; } });
+
+// ── Init ────────────────────────────────────────────────────────────
+(async function init() {
+  await loadActivities();
+  const id = +new URLSearchParams(location.search).get('id');
+  if (id) {
+    try {
+      const t = await fetch(`/api/tracks/${id}?full=1`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+      srcTrack = t;
+      pts = (t.points || []).filter(p => p[0] != null && p[1] != null).map(p => [p[0], p[1], p[2] ?? null]);
+      $('p-title').textContent = 'Editar trazado';
+      $('p-sub').innerHTML = `Copia de «${esc(t.name)}». Se guardará como una ruta nueva; la original no se modifica.`;
+      $('f-name').value = `${t.name} (editada)`;
+      if (t.activity && ACTS.some(a => a.name === t.activity)) $('f-activity').value = t.activity;
+      $('f-notes').value = t.notes || '';
+      $('back-link').href = $('btn-cancel').href = `/track?id=${id}`;
+      document.title = `Editar trazado: ${t.name} — GPX Library`;
+      applyActivityColor();
+      redraw();
+      if (pts.length > 1) map.fitBounds(line.getBounds(), fitPad());
+      setMode('edit');
+      dirty = false;
+      return;
+    } catch {
+      toast('No se pudo cargar la ruta', true);
+    }
+  }
+  let view = null;
+  try { view = JSON.parse(localStorage.getItem('trazar-view')); } catch {}
+  if (view?.c) map.setView(view.c, view.z); else map.setView([40.75, -3.95], 11);
+  map.on('moveend', () => { try { localStorage.setItem('trazar-view', JSON.stringify({ c: map.getCenter(), z: map.getZoom() })); } catch {} });
+  setMode('draw');
+  redraw();
+  $('f-name').focus();
+})();
+</script>
+</body>
+</html>
