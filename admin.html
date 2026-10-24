@@ -593,7 +593,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.8.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.0.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">24 octubre 2026</div>
         </div>
       </div>
@@ -612,8 +612,23 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v1.8.0</span>
+            <span class="cl-version">v2.0.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">24 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Almacén inmutable de GPX</b>: los originales viven en <code>TracksGps/store/{uid}.gpx</code> y no se mueven ni se reescriben; el nombre, la actividad y la sierra están solo en la base de datos</li>
+            <li><b>Duplicados</b>: al importar un fichero idéntico a uno existente se avisa y se descarta la copia; los dudosos se importan con la etiqueta <i>revisar</i></li>
+            <li><b>Exportar en carpetas</b>: genera <code>Actividad/Sierra/Nombre.gpx</code> en la carpeta que elijas, sin sobrescribir nada</li>
+            <li>Descargar el original usa el nombre de la ruta con los datos actuales; el ZIP en árbol se genera desde la base de datos</li>
+            <li>Migración con simulación y reversión por manifiesto (Admin → Almacén de ficheros)</li>
+            <li>Retirados «Reorganizar carpetas» y «Escribir atributos a GPX»; <code>TracksGps/</code> deja de versionarse en git</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v1.8.0</span>
             <span class="cl-date">24 oct 2026</span>
           </div>
           <ul class="cl-list">

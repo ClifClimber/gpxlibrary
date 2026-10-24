@@ -1,5 +1,33 @@
 # Changelog
 
+## v2.0.0 — 2026-10-24
+
+Primera versión de la fase 1 hacia la nube (rama `cloud/fase-1`). **Cambia cómo se guardan los ficheros.**
+
+### Almacén inmutable de GPX
+- Los originales se guardan en `TracksGps/store/{uid}.gpx` y **no se mueven ni se reescriben nunca**; nombre, actividad, sierra, notas y URL viven solo en la base de datos
+- Nuevas columnas `uid` (clave estable del fichero) y `sha256` (huella del contenido)
+- Editar, mover o editar en bloque ya no mueve ficheros entre carpetas
+- `scripts/migrate-store.js` migra la biblioteca existente (`--dry-run` para simular, `--revert <manifiesto>` para deshacer); también desde Admin → Gestión de Tracks → «Almacén de ficheros»
+
+### Importación
+- **Duplicados**: si el fichero es idéntico a uno ya guardado se avisa («Ya existe … id=N») y se descarta la copia
+- Las rutas de baja confianza ya no se apartan a `_TEMP_/_REVIEW_`: se importan con la etiqueta **revisar**
+
+### Exportar
+- **Exportar en carpetas** (Admin → Gestión de Tracks): genera `Actividad/Sierra/Nombre.gpx` en la carpeta que elijas, con los datos actuales de cada ruta y sin sobrescribir nada
+- Descargar el GPX original usa el nombre de la ruta y aplica los metadatos actuales al vuelo
+- El ZIP «en árbol» se genera desde la base de datos
+
+### Retirado
+- «Reorganizar carpetas» y «Escribir atributos a GPX» (contradicen el almacén inmutable)
+- `TracksGps/` deja de versionarse en git (datos personales, como la base de datos)
+
+### Limpieza de datos
+- Eliminadas 3 rutas cuyo GPX ya no existía en disco (ids 406, 615, 756)
+
+---
+
 ## v1.8.0 — 2026-10-24
 
 ### Nueva página: Trazar (`/trazar`)
