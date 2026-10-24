@@ -8,8 +8,7 @@
 <link rel="stylesheet" href="/shared.css">
 <style>
 html, body { height: 100%; overflow: hidden; }
-#map { position: fixed; inset: 0; top: 44px; z-index: 0; transition: bottom .25s; }
-#map.with-profile { bottom: 210px; }
+#map { position: fixed; inset: 0; top: 44px; z-index: 0; }
 
 /* ── Panel izquierdo ── */
 #cmp-panel {
@@ -18,6 +17,7 @@ html, body { height: 100%; overflow: hidden; }
   background: var(--surface); border-radius: 14px;
   box-shadow: 0 4px 24px rgba(0,0,0,.15), 0 1px 4px rgba(0,0,0,.08);
   display: flex; flex-direction: column; overflow: hidden;
+  transition: box-shadow .15s;
 }
 #cmp-head {
   padding: 10px 13px 8px; border-bottom: 1px solid var(--line);
@@ -66,20 +66,24 @@ html, body { height: 100%; overflow: hidden; }
 }
 #cmp-detail-eye:hover { background: var(--line); }
 
-/* ── Bottom profile panel ── */
+/* ── Floating profile panel ── */
 #profile-panel {
-  position: fixed; bottom: 0; left: 0; right: 0; height: 210px;
-  background: var(--surface); border-top: 1px solid var(--line);
-  z-index: 900; display: none; flex-direction: column;
+  position: fixed; bottom: 12px; left: 270px; right: 12px;
+  height: 220px; z-index: 900;
+  background: var(--surface); border-radius: 14px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.18), 0 1px 4px rgba(0,0,0,.1);
+  display: none; flex-direction: column; overflow: hidden;
+  animation: panelUp .18s ease-out;
 }
+@keyframes panelUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
 #profile-panel.visible { display: flex; }
 #profile-tabs {
-  display: flex; gap: 2px; padding: 5px 8px 0; overflow-x: auto;
-  border-bottom: 1px solid var(--line); flex-shrink: 0;
+  display: flex; gap: 2px; padding: 6px 40px 0 8px; overflow-x: auto;
+  border-bottom: 1px solid var(--line); flex-shrink: 0; scrollbar-width: none;
 }
 .ptab {
   display: flex; align-items: center; gap: 5px; padding: 5px 11px;
-  border-radius: 8px 8px 0 0; font-size: 11px; font-weight: 600;
+  border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 600;
   cursor: pointer; white-space: nowrap; border: 1.5px solid transparent;
   border-bottom: none; color: var(--muted); background: none;
   transition: background .12s;
@@ -88,20 +92,18 @@ html, body { height: 100%; overflow: hidden; }
 .ptab.active { background: var(--surface); border-color: var(--line); border-bottom-color: var(--surface); color: var(--ink); margin-bottom: -1px; }
 .ptab-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 #profile-close {
-  position: absolute; top: 6px; right: 10px; z-index: 1;
+  position: absolute; top: 5px; right: 8px; z-index: 1;
   background: none; border: none; cursor: pointer; color: var(--muted);
-  font-size: 16px; line-height: 1; padding: 2px 5px;
+  font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 4px;
 }
-#profile-close:hover { color: var(--ink); }
+#profile-close:hover { color: var(--ink); background: var(--soft); }
 #profile-body { flex: 1; display: flex; gap: 0; overflow: hidden; }
 #profile-stats {
-  width: 140px; flex-shrink: 0; padding: 12px 14px;
+  width: 210px; flex-shrink: 0; padding: 12px 18px;
   display: flex; flex-direction: column; gap: 9px; justify-content: center;
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--line); overflow-y: auto;
 }
-#ps-name { font-size: 13px; font-weight: 700; color: var(--ink); line-height: 1.3;
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-#ps-act  { font-size: 12px; color: var(--muted); margin-top: -4px; }
+#ps-act  { font-size: 12px; color: var(--muted); }
 .ps-row  { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .ps-row strong { color: var(--ink); font-weight: 600; }
 #ps-eye {
@@ -113,6 +115,16 @@ html, body { height: 100%; overflow: hidden; }
 #ps-eye:hover { background: var(--line); color: var(--ink); }
 #profile-svg-wrap { flex: 1; position: relative; padding: 6px 10px; min-width: 0; }
 #profile-svg { width: 100%; height: 100%; display: block; }
+#cmp-sel-bar {
+  display: none; position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 20px;
+  padding: 4px 10px 4px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.15);
+  align-items: center; gap: 10px; font-size: 12px; white-space: nowrap; z-index: 10;
+}
+#cmp-sel-bar span { color: var(--ink); font-weight: 600; }
+#cmp-sel-bar button { background: none; border: none; cursor: pointer; color: var(--muted);
+  font-size: 14px; padding: 0 2px; line-height: 1; }
+#cmp-sel-bar button:hover { color: var(--ink); }
 
 /* ── Tooltip ── */
 #cmp-tooltip {
@@ -148,6 +160,10 @@ html, body { height: 100%; overflow: hidden; }
   <div id="cmp-body">
     <div id="cmp-loading" style="padding:24px 12px;text-align:center;color:var(--muted);font-size:13px">Cargando…</div>
   </div>
+  <div id="cmp-drop-hint" style="margin:8px 8px 4px;padding:14px 10px;border:2px dashed var(--line);
+    border-radius:10px;text-align:center;color:var(--muted);font-size:13px;cursor:default;user-select:none;line-height:1.6">
+    📂<br>Arrastra un .gpx<br>para añadirlo
+  </div>
 
   <div id="cmp-foot">
     <button class="btn btn-ghost btn-sm cmp-icon-btn" id="btn-cmp-fit" title="Ajustar mapa a todos los tracks">
@@ -155,6 +171,9 @@ html, body { height: 100%; overflow: hidden; }
     </button>
     <button class="btn btn-ghost btn-sm cmp-icon-btn" id="btn-cmp-toggle-all" title="Ocultar todos los tracks">
       <svg id="icon-eye" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="btn btn-ghost btn-sm cmp-icon-btn" id="btn-cmp-remove-all" title="Quitar todos los tracks" style="margin-right:auto">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
     </button>
     <button class="btn btn-ghost btn-sm cmp-icon-btn" id="btn-profile" title="Mostrar perfiles de altimetría">
       <svg id="icon-profile" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -168,7 +187,6 @@ html, body { height: 100%; overflow: hidden; }
   <div id="profile-tabs"></div>
   <div id="profile-body">
     <div id="profile-stats">
-      <div id="ps-name">—</div>
       <div id="ps-act" title="Actividad"></div>
       <div class="ps-row" title="Distancia total del recorrido">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h6M15 6h6M3 18h6M15 18h6"/></svg>
@@ -187,6 +205,13 @@ html, body { height: 100%; overflow: hidden; }
     </div>
     <div id="profile-svg-wrap">
       <svg id="profile-svg"></svg>
+      <div id="cmp-sel-bar">
+        <span>Tramo</span>
+        <span id="cmp-sel-dist"></span>
+        <span id="cmp-sel-gain"></span>
+        <span id="cmp-sel-loss"></span>
+        <button id="cmp-sel-clear" title="Cerrar zoom">✕</button>
+      </div>
     </div>
   </div>
 </div>
@@ -197,13 +222,25 @@ html, body { height: 100%; overflow: hidden; }
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/import-ui.js"></script>
 <script>
 'use strict';
 
 const COLORS = ['#3b82f6','#ef4444','#22c55e','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#84cc16'];
 
-const ids = (new URLSearchParams(location.search).get('ids') || '')
+let ids = (new URLSearchParams(location.search).get('ids') || '')
   .split(',').map(s => parseInt(s.trim())).filter(n => n > 0);
+if (!ids.length) {
+  try { const s = sessionStorage.getItem('compare-ids'); if (s) ids = s.split(',').map(Number).filter(Boolean); } catch {}
+}
+
+function saveCompareState() {
+  try {
+    const dbIds = tracks.filter(t => t.id).map(t => t.id);
+    if (dbIds.length) sessionStorage.setItem('compare-ids', dbIds.join(','));
+    else sessionStorage.removeItem('compare-ids');
+  } catch {}
+}
 
 // ── Map ──
 const map = L.map('map', { zoomControl: false }).setView([40, -3], 6);
@@ -242,6 +279,68 @@ function ibpVal(d) {
 const tracks   = [];
 let activeIdx  = null;   // highlighted track
 let profileTab = null;   // currently selected profile tab index
+let hideTodosTab = false;
+
+// ── Profile ↔ Map cursor ──
+let cursorMk  = null;              // circleMarker on map
+let gCursorLine  = null;           // SVG cursor line element (current profile)
+let gProfileSnap = null;           // { PAD, CW, totalD, pts } for map→profile
+
+function moveCursorMk(pt, color) {
+  const ll = [pt[0], pt[1]];
+  if (!cursorMk) {
+    cursorMk = L.circleMarker(ll, { radius: 7, color, weight: 2.5,
+      fillColor: '#fff', fillOpacity: 1, zIndexOffset: 500 }).addTo(map);
+  } else {
+    cursorMk.setLatLng(ll);
+    cursorMk.setStyle({ color });
+  }
+}
+function removeCursorMk() { if (cursorMk) { cursorMk.remove(); cursorMk = null; } }
+
+let selHL = null;
+function clearSelHL() { if (selHL) { selHL.remove(); selHL = null; } }
+function applySegHL(lls, color) {
+  if (!selHL) {
+    selHL = L.featureGroup([
+      L.polyline(lls, { color: 'white', weight: 13, opacity: 0.85 }),
+      L.polyline(lls, { color,          weight: 6,  opacity: 1    }),
+    ]).addTo(map);
+  } else {
+    const [halo, line] = selHL.getLayers();
+    halo.setLatLngs(lls); line.setLatLngs(lls);
+  }
+}
+
+function mapToProfile(latlng, rawPts, color) {
+  // find closest raw point
+  let bestI = 0, bestD2 = Infinity;
+  for (let j = 0; j < rawPts.length; j++) {
+    const dlat = latlng.lat - rawPts[j][0], dlon = latlng.lng - rawPts[j][1];
+    const d2 = dlat*dlat + dlon*dlon;
+    if (d2 < bestD2) { bestD2 = d2; bestI = j; }
+  }
+  moveCursorMk(rawPts[bestI], color);
+  // show cursor on profile SVG if open and snapped
+  if (!profileOpen || !gCursorLine || !gProfileSnap) return;
+  const snap = gProfileSnap;
+  // find matching profile point (rawIdx)
+  let bestP = snap.pts[0], bestPD = Infinity;
+  snap.pts.forEach(p => { const d = Math.abs(p.rawIdx - bestI); if (d < bestPD) { bestPD = d; bestP = p; } });
+  const svgX = snap.PAD.l + bestP.d * snap.CW;
+  gCursorLine.setAttribute('x1', svgX); gCursorLine.setAttribute('x2', svgX);
+  gCursorLine.style.display = '';
+  const tt = document.getElementById('cmp-tooltip');
+  document.getElementById('tt-dist').textContent = (bestP.d * snap.totalD).toFixed(1) + ' km';
+  document.getElementById('tt-ele').textContent  = Math.round(bestP.e) + ' m';
+  const svgEl = document.getElementById('profile-svg');
+  if (svgEl) {
+    const r = svgEl.getBoundingClientRect();
+    tt.style.display = '';
+    tt.style.left = (r.left + svgX + 12) + 'px';
+    tt.style.top  = (r.top + snap.PAD.t + 10) + 'px';
+  }
+}
 let profileOpen = false;
 
 // ── Compact list ──
@@ -265,9 +364,17 @@ function buildList() {
       </div>
       <button class="cmp-eye" data-i="${i}" title="${tr.visible ? 'Ocultar' : 'Mostrar'}">
         ${eyeIcon(tr.visible)}
+      </button>
+      ${tr.temp ? `<button class="cmp-eye" data-cat="${i}" title="Añadir al catálogo" style="color:var(--accent)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      </button>` : ''}
+      <button class="cmp-eye" data-rm="${i}" title="Quitar del comparador" style="color:var(--muted)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>`;
-    row.addEventListener('click', e => { if (e.target.closest('.cmp-eye')) return; highlightTrack(i); });
+    row.addEventListener('click', e => { if (e.target.closest('.cmp-eye, [data-cat], [data-rm]')) return; highlightTrack(i); });
     row.querySelector('.cmp-eye').addEventListener('click', e => { e.stopPropagation(); toggleVisible(i); });
+    if (tr.temp) row.querySelector('[data-cat]').addEventListener('click', e => { e.stopPropagation(); catalogTempTrack(i); });
+    row.querySelector('[data-rm]').addEventListener('click', e => { e.stopPropagation(); removeTrack(i); });
     body.appendChild(row);
   });
 }
@@ -286,10 +393,21 @@ function fmtSec(s) {
 
 // ── Profile stats panel ──
 function updateProfileStats(i) {
+  const statsRows = ['ps-dist', 'ps-gain', 'ps-time-row', 'ps-eye'].map(id => document.getElementById(id));
+  if (i === -1) {
+    document.getElementById('ps-act').innerHTML = tracks.map(tr =>
+      `<span style="display:flex;align-items:center;gap:5px;margin-bottom:3px">` +
+      `<span style="width:8px;height:8px;border-radius:50%;background:${tr.color};flex-shrink:0"></span>` +
+      `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${esc(tr.data.name.length > 20 ? tr.data.name.slice(0,18)+'…' : tr.data.name)}</span>` +
+      `<span style="opacity:.55;font-size:11px;flex-shrink:0">${fmtKm(tr.data.distance)}</span></span>`
+    ).join('');
+    statsRows.forEach(el => { if (el) el.style.display = 'none'; });
+    return;
+  }
+  statsRows.forEach(el => { if (el) el.style.display = ''; });
   const d    = tracks[i].data;
   const movT = fmtSec(d.moving_time);
   const totT = fmtSec((d.moving_time || 0) + (d.stopped_time || 0));
-  document.getElementById('ps-name').textContent = d.name;
   document.getElementById('ps-act').textContent  = d.activity || '';
   document.getElementById('ps-dist').textContent = fmtKm(d.distance);
   document.getElementById('ps-gain').textContent = d.elevation_gain != null ? '+'+Math.round(d.elevation_gain)+'m' : '—';
@@ -347,6 +465,42 @@ function toggleVisible(i) {
   }
 }
 
+// ── Remove track ──
+function removeTrack(i) {
+  const tr = tracks[i];
+  if (tr.polyline) map.removeLayer(tr.polyline);
+  tracks.splice(i, 1);
+  if (activeIdx === i) activeIdx = null;
+  else if (activeIdx > i) activeIdx--;
+  if (profileTab === -1) {
+    if (tracks.length >= 2) { buildProfileTabs(); drawAllProfiles(); updateProfileStats(-1); }
+    else if (tracks.length === 1) selectProfileTab(0);
+    else toggleProfile(false);
+  } else if (profileTab === i) {
+    profileTab = tracks.length ? 0 : null;
+    if (tracks.length) selectProfileTab(profileTab);
+    else toggleProfile(false);
+  } else if (profileTab > i) profileTab--;
+  document.getElementById('cmp-title').textContent = `Comparar (${tracks.length})`;
+  buildList();
+  if (profileOpen && tracks.length) buildProfileTabs();
+  removeCursorMk();
+  gCursorLine = null; gProfileSnap = null;
+  saveCompareState();
+}
+
+function removeAllTracks() {
+  tracks.forEach(tr => { if (tr.polyline) map.removeLayer(tr.polyline); });
+  tracks.length = 0;
+  activeIdx = null; profileTab = null;
+  toggleProfile(false);
+  document.getElementById('cmp-title').textContent = 'Comparar';
+  buildList();
+  removeCursorMk();
+  gCursorLine = null; gProfileSnap = null;
+  saveCompareState();
+}
+
 // ── Fit all ──
 function fitAll() {
   const vis = tracks.filter(t => t.visible && t.polyline);
@@ -355,6 +509,7 @@ function fitAll() {
 }
 
 document.getElementById('btn-cmp-fit').addEventListener('click', fitAll);
+document.getElementById('btn-cmp-remove-all').addEventListener('click', removeAllTracks);
 
 const EYE_ON  = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
 const EYE_OFF = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
@@ -374,7 +529,6 @@ document.getElementById('profile-close').addEventListener('click', () => toggleP
 function toggleProfile(open) {
   profileOpen = open;
   document.getElementById('profile-panel').classList.toggle('visible', open);
-  document.getElementById('map').classList.toggle('with-profile', open);
   const profBtn = document.getElementById('btn-profile');
   profBtn.title = open ? 'Cerrar perfiles de altimetría' : 'Mostrar perfiles de altimetría';
   document.getElementById('icon-profile').innerHTML = open
@@ -401,15 +555,143 @@ function buildProfileTabs() {
     btn.addEventListener('click', () => selectProfileTab(i));
     strip.appendChild(btn);
   });
+  if (tracks.filter(tr => tr.profile && tr.profile.length >= 2).length >= 2) {
+    if (!hideTodosTab) {
+      const btn = document.createElement('button');
+      btn.className = 'ptab' + (profileTab === -1 ? ' active' : '');
+      btn.style.cssText = 'font-style:normal;letter-spacing:0.02em;gap:8px';
+      btn.title = 'Ver todos los perfiles juntos';
+      const label = document.createElement('span');
+      label.textContent = '∥ Todos';
+      label.addEventListener('click', e => { e.stopPropagation(); selectProfileTab(-1); });
+      const closeX = document.createElement('span');
+      closeX.textContent = '✕';
+      closeX.title = 'Ocultar pestaña Todos';
+      closeX.style.cssText = 'font-size:10px;opacity:.55;line-height:1;padding:0 1px;cursor:pointer';
+      closeX.addEventListener('click', e => {
+        e.stopPropagation();
+        hideTodosTab = true;
+        if (profileTab === -1) { profileTab = 0; selectProfileTab(0); }
+        else buildProfileTabs();
+      });
+      btn.appendChild(label);
+      btn.appendChild(closeX);
+      btn.addEventListener('click', () => selectProfileTab(-1));
+      strip.appendChild(btn);
+    } else {
+      const restore = document.createElement('button');
+      restore.className = 'ptab';
+      restore.title = 'Mostrar pestaña Todos';
+      restore.style.cssText = 'opacity:.45;font-size:11px;padding:5px 8px';
+      restore.textContent = '∥';
+      restore.addEventListener('click', () => { hideTodosTab = false; buildProfileTabs(); });
+      strip.appendChild(restore);
+    }
+  }
 }
 
 function selectProfileTab(i) {
   profileTab = i;
+  if (i === -1) {
+    activeIdx = null;
+    applyHighlight();
+    buildProfileTabs();
+    updateProfileStats(-1);
+    drawAllProfiles();
+    return;
+  }
   activeIdx  = i;
   applyHighlight();
   buildProfileTabs();
   updateProfileStats(i);
   drawProfile(i);
+}
+
+// ── Draw all profiles overlaid ──
+function drawAllProfiles() {
+  const svg = document.getElementById('profile-svg');
+  svg.innerHTML = '';
+  gCursorLine = null; gProfileSnap = null;
+  document.getElementById('cmp-sel-bar').style.display = 'none';
+
+  const valid = tracks.filter(tr => tr.profile && tr.profile.length >= 2);
+  if (!valid.length) {
+    svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="var(--muted)" font-size="12">Sin datos de altimetría</text>';
+    return;
+  }
+
+  const refTrack = valid.reduce((a, b) => (a.totalDist || 0) >= (b.totalDist || 0) ? a : b);
+  const totalD = refTrack.totalDist || 1;
+
+  const allEles = valid.flatMap(tr => tr.profile.map(p => p.e).filter(e => e != null));
+  const minE = Math.min(...allEles), maxE = Math.max(...allEles);
+  const eRange = maxE - minE || 1;
+
+  const rect = document.getElementById('profile-svg-wrap').getBoundingClientRect();
+  const W = rect.width || 600, H = rect.height || 130;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const PAD = { t: 10, r: 8, b: 24, l: 42 };
+  const CW = W - PAD.l - PAD.r, CH = H - PAD.t - PAD.b;
+  const xp = d => PAD.l + d * CW;
+  const yp = e => PAD.t + CH - ((e - minE) / eRange) * CH;
+
+  // Grid lines
+  for (let k = 0; k <= 4; k++) {
+    const e = minE + (eRange * k / 4);
+    const y = yp(e);
+    const gl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    gl.setAttribute('x1', PAD.l); gl.setAttribute('x2', PAD.l + CW);
+    gl.setAttribute('y1', y); gl.setAttribute('y2', y);
+    gl.setAttribute('stroke', 'var(--line)'); gl.setAttribute('stroke-width', '0.5');
+    svg.appendChild(gl);
+    const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    lbl.setAttribute('x', PAD.l - 4); lbl.setAttribute('y', y + 3.5);
+    lbl.setAttribute('text-anchor', 'end'); lbl.setAttribute('font-size', '9');
+    lbl.setAttribute('fill', 'var(--muted)'); lbl.textContent = Math.round(e) + ' m';
+    svg.appendChild(lbl);
+  }
+
+  // Distance labels
+  const distSteps = [1,2,5,10,20,50,100];
+  const step = distSteps.find(s => totalD / s <= 6) || Math.ceil(totalD / 6);
+  for (let d = 0; d <= totalD; d += step) {
+    const x = xp(d / totalD);
+    const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    lbl.setAttribute('x', x); lbl.setAttribute('y', H - PAD.b + 13);
+    lbl.setAttribute('text-anchor', 'middle'); lbl.setAttribute('font-size', '9');
+    lbl.setAttribute('fill', 'var(--muted)'); lbl.textContent = d + ' km';
+    svg.appendChild(lbl);
+  }
+
+  // Draw each track (fills first, then lines on top)
+  valid.forEach(tr => {
+    const pts = tr.profile.filter(p => p.e != null);
+    if (pts.length < 2) return;
+    const trD = tr.totalDist || totalD;
+    const sx = d => PAD.l + (d * trD / totalD) * CW;
+    const polyPts = [
+      [sx(pts[0].d), H - PAD.b],
+      ...pts.map(p => [sx(p.d), yp(p.e)]),
+      [sx(pts[pts.length-1].d), H - PAD.b],
+    ].map(([x,y]) => `${x},${y}`).join(' ');
+    const fill = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    fill.setAttribute('points', polyPts);
+    fill.setAttribute('fill', tr.color); fill.setAttribute('opacity', '0.12');
+    svg.appendChild(fill);
+  });
+  valid.forEach(tr => {
+    const pts = tr.profile.filter(p => p.e != null);
+    if (pts.length < 2) return;
+    const trD = tr.totalDist || totalD;
+    const sx = d => PAD.l + (d * trD / totalD) * CW;
+    const linePts = pts.map(p => `${sx(p.d)},${yp(p.e)}`).join(' ');
+    const lineEl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    lineEl.setAttribute('points', linePts); lineEl.setAttribute('fill', 'none');
+    lineEl.setAttribute('stroke', tr.color); lineEl.setAttribute('stroke-width', '1.8');
+    lineEl.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(lineEl);
+  });
 }
 
 // ── Draw elevation SVG for one track ──
@@ -422,8 +704,9 @@ function drawProfile(i) {
     return;
   }
 
-  const pts = tr.profile.filter(p => p.e != null);
+  const pts = tr.profile.map((p, j) => ({ ...p, rawIdx: j })).filter(p => p.e != null);
   if (pts.length < 2) return;
+  const rawPts = tr.rawPts || [];
 
   const rect = document.getElementById('profile-svg-wrap').getBoundingClientRect();
   const W = rect.width || 600, H = rect.height || 130;
@@ -495,26 +778,128 @@ function drawProfile(i) {
   cursor.setAttribute('y1', PAD.t); cursor.setAttribute('y2', PAD.t + CH);
   svg.appendChild(cursor);
 
-  svg.onmousemove = e => {
-    const r  = svg.getBoundingClientRect();
-    const mx = e.clientX - r.left;
-    if (mx < PAD.l || mx > PAD.l + CW) { cursor.style.display = 'none'; document.getElementById('cmp-tooltip').style.display = 'none'; return; }
-    const rel = (mx - PAD.l) / CW;
+  // Drag-to-select rect
+  const selRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  selRect.setAttribute('y', PAD.t); selRect.setAttribute('height', CH);
+  selRect.setAttribute('fill', 'var(--accent)'); selRect.setAttribute('opacity', '0');
+  selRect.setAttribute('pointer-events', 'none');
+  svg.appendChild(selRect);
+
+  // store for map→profile reverse lookup
+  gCursorLine  = cursor;
+  gProfileSnap = { PAD, CW, totalD, pts, rawPts, color: tr.color };
+
+  function fracToIdx(rel) {
     let best = pts[0], bestD = Infinity;
     pts.forEach(p => { const d = Math.abs(p.d - rel); if (d < bestD) { bestD = d; best = p; } });
-    cursor.setAttribute('x1', mx); cursor.setAttribute('x2', mx);
+    return best;
+  }
+  function showTooltip(best, ex, ey) {
+    cursor.setAttribute('x1', PAD.l + best.d * CW);
+    cursor.setAttribute('x2', PAD.l + best.d * CW);
     cursor.style.display = '';
     const tt = document.getElementById('cmp-tooltip');
     document.getElementById('tt-dist').textContent = (best.d * totalD).toFixed(1) + ' km';
     document.getElementById('tt-ele').textContent  = Math.round(best.e) + ' m';
     tt.style.display = '';
-    tt.style.left = (e.clientX + 12) + 'px';
-    tt.style.top  = (e.clientY - 20) + 'px';
-  };
-  svg.onmouseleave = () => {
+    tt.style.left = (ex + 12) + 'px';
+    tt.style.top  = (ey - 20) + 'px';
+  }
+  function hideTooltip() {
     cursor.style.display = 'none';
     document.getElementById('cmp-tooltip').style.display = 'none';
+  }
+
+  function showSegStats(segRaw) {
+    let segDist = 0, segGain = 0, segLoss = 0;
+    for (let k = 1; k < segRaw.length; k++) {
+      segDist += hav(segRaw[k-1], segRaw[k]);
+      const de = (segRaw[k][2] || 0) - (segRaw[k-1][2] || 0);
+      if (de > 0) segGain += de; else segLoss -= de;
+    }
+    document.getElementById('cmp-sel-dist').textContent = segDist.toFixed(1) + ' km';
+    document.getElementById('cmp-sel-gain').textContent = '↑ ' + Math.round(segGain) + ' m';
+    document.getElementById('cmp-sel-loss').textContent = '↓ ' + Math.round(segLoss) + ' m';
+    document.getElementById('cmp-sel-bar').style.display = 'flex';
+  }
+
+  let dragAnchor = null, rafPending = false;
+
+  svg.addEventListener('mousedown', e => {
+    const r = svg.getBoundingClientRect();
+    dragAnchor = e.clientX - r.left;
+    selRect.setAttribute('x', dragAnchor); selRect.setAttribute('width', 0);
+    selRect.setAttribute('opacity', '0.15');
+    e.preventDefault();
+  });
+
+  svg.onmousemove = e => {
+    const r  = svg.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+
+    if (dragAnchor !== null) {
+      const x1 = Math.min(dragAnchor, mx), x2 = Math.max(dragAnchor, mx);
+      selRect.setAttribute('x', x1); selRect.setAttribute('width', x2 - x1);
+      if (!rafPending && x2 - x1 > 4) {
+        rafPending = true;
+        requestAnimationFrame(() => {
+          rafPending = false;
+          const rel1 = (Math.max(PAD.l, x1) - PAD.l) / CW;
+          const rel2 = (Math.min(PAD.l + CW, x2) - PAD.l) / CW;
+          const p1 = fracToIdx(rel1), p2 = fracToIdx(rel2);
+          if (p1.rawIdx < p2.rawIdx) {
+            const segRaw = rawPts.slice(p1.rawIdx, p2.rawIdx + 1);
+            applySegHL(segRaw.map(p => [p[0], p[1]]), tr.color);
+            showSegStats(segRaw);
+          }
+        });
+      }
+      return;
+    }
+
+    if (mx < PAD.l || mx > PAD.l + CW) { hideTooltip(); removeCursorMk(); return; }
+    const best = fracToIdx((mx - PAD.l) / CW);
+    showTooltip(best, e.clientX, e.clientY);
+    const rp = rawPts[best.rawIdx];
+    if (rp) moveCursorMk(rp, tr.color);
   };
+
+  svg.onmouseleave = () => { if (dragAnchor === null) { hideTooltip(); removeCursorMk(); } };
+
+  svg._commitSel = e => {
+    if (dragAnchor === null) return;
+    const r  = svg.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const x1 = Math.min(dragAnchor, mx), x2 = Math.max(dragAnchor, mx);
+    dragAnchor = null;
+    selRect.setAttribute('opacity', '0');
+    if (x2 - x1 < 6) { clearSelHL(); document.getElementById('cmp-sel-bar').style.display = 'none'; return; }
+    const rel1 = (Math.max(PAD.l, x1) - PAD.l) / CW;
+    const rel2 = (Math.min(PAD.l + CW, x2) - PAD.l) / CW;
+    const p1 = fracToIdx(rel1), p2 = fracToIdx(rel2);
+    if (p1.rawIdx < p2.rawIdx) {
+      const segRaw = rawPts.slice(p1.rawIdx, p2.rawIdx + 1);
+      const lls = segRaw.map(p => [p[0], p[1]]);
+      applySegHL(lls, tr.color);
+      map.fitBounds(L.latLngBounds(lls), { padding: [40, 40] });
+      showSegStats(segRaw);
+    }
+  };
+  if (!window._cmpMouseUp) {
+    window._cmpMouseUp = e => { document.getElementById('profile-svg')?._commitSel?.(e); };
+    window.addEventListener('mouseup', window._cmpMouseUp);
+  }
+
+  function resetSel() {
+    clearSelHL();
+    document.getElementById('cmp-sel-bar').style.display = 'none';
+    fitAll();
+  }
+  svg.addEventListener('dblclick', resetSel);
+
+  // wire up ✕ button (only once, replace handler each redraw)
+  const selClearBtn = document.getElementById('cmp-sel-clear');
+  selClearBtn.onclick = resetSel;
 }
 
 // ── Load ──
@@ -537,6 +922,8 @@ async function loadTracks() {
       polyline = L.polyline(pts.map(p => [p[0], p[1]]), { color, weight: 3, opacity: 0.9 }).addTo(map);
       const idx = tracks.length;
       polyline.on('click', () => { if (!profileOpen) highlightTrack(idx); else selectProfileTab(idx); });
+      polyline.on('mousemove', e => { mapToProfile(e.latlng, pts, color); });
+      polyline.on('mouseout',  () => { if (gCursorLine) gCursorLine.style.display = 'none'; document.getElementById('cmp-tooltip').style.display = 'none'; removeCursorMk(); });
     }
 
     let profile = null, totalDist = 0;
@@ -550,15 +937,359 @@ async function loadTracks() {
       profile = segs.map(s => ({ d: s.cum / totalDist, e: s.e }));
     }
 
-    tracks.push({ id: data.id, data, color, polyline, visible: true, profile, totalDist });
+    tracks.push({ id: data.id, data, color, polyline, visible: true, profile, totalDist, rawPts: pts });
   });
 
   document.getElementById('cmp-title').textContent = `Comparar (${tracks.length})`;
   buildList();
   fitAll();
+  saveCompareState();
+}
+
+// ── Add a temporary (non-DB) track from dropped GPX ──
+function addTempTrack({ name, pts, gpxText, filename }) {
+  const color = COLORS[tracks.length % COLORS.length];
+  const validPts = pts.filter(p => p[0] && p[1]);
+  if (validPts.length < 2) return;
+
+  const idx = tracks.length;
+  let polyline = L.polyline(validPts.map(p => [p[0], p[1]]), { color, weight: 3, opacity: 0.9 }).addTo(map);
+  polyline.on('click', () => { if (!profileOpen) highlightTrack(idx); else selectProfileTab(idx); });
+  polyline.on('mousemove', e => { mapToProfile(e.latlng, validPts, color); });
+  polyline.on('mouseout',  () => { if (gCursorLine) gCursorLine.style.display = 'none'; document.getElementById('cmp-tooltip').style.display = 'none'; removeCursorMk(); });
+
+  // compute stats from points
+  let distKm = 0, gain = 0, loss = 0;
+  for (let i = 1; i < validPts.length; i++) {
+    distKm += hav(validPts[i-1], validPts[i]);
+    const dEle = validPts[i][2] - validPts[i-1][2];
+    if (dEle > 0) gain += dEle; else loss += Math.abs(dEle);
+  }
+
+  let profile = null, totalDist = 0;
+  if (validPts.some(p => p[2] != null)) {
+    let cum = 0;
+    const segs = validPts.map((p, i) => {
+      if (i > 0) cum += hav(validPts[i-1], p);
+      return { e: p[2], cum };
+    });
+    totalDist = cum || 1;
+    profile = segs.map(s => ({ d: s.cum / totalDist, e: s.e }));
+  }
+
+  const fakeData = {
+    id: null, name, activity: 'GPX',
+    distance: Math.round(distKm * 10) / 10,
+    elevation_gain: Math.round(gain),
+    elevation_loss: Math.round(loss),
+    moving_time: null, stopped_time: null, points: validPts
+  };
+  tracks.push({ id: null, data: fakeData, color, polyline, visible: true, profile, totalDist,
+    rawPts: validPts, temp: true, gpxText, filename });
+
+  document.getElementById('cmp-title').textContent = `Comparar (${tracks.length})`;
+  buildList();
+  map.fitBounds(polyline.getBounds(), { padding: [40, 40] });
+}
+
+// ── Catalog a temp track (show import modal) ──
+function catalogTempTrack(i) {
+  const tr = tracks[i];
+  if (!tr || !tr.temp || !tr.gpxText) return;
+
+  const modalOvl = document.getElementById('dnd-modal-overlay');
+  const logEl    = document.getElementById('dnd-log');
+  const nameEl   = document.getElementById('dnd-filename');
+  const foot     = document.getElementById('dnd-foot');
+  const choice   = document.getElementById('dnd-choice');
+
+  nameEl.textContent = tr.filename || tr.data.name + '.gpx';
+  logEl.innerHTML = '';
+  logEl.style.display = 'block';
+  choice.style.display = 'none';
+  foot.style.display = 'none';
+  modalOvl.style.display = 'flex';
+
+  function addLog(text) { importLog(logEl, text); }
+  function showClose(fn) {
+    foot.style.display = 'flex';
+    foot.innerHTML = '<button class="btn" id="dnd-done-btn">Cerrar</button>';
+    document.getElementById('dnd-done-btn').onclick = fn || (() => { modalOvl.style.display = 'none'; });
+  }
+
+  addLog('⬆ Subiendo ' + nameEl.textContent + '…');
+  const blob = new Blob([tr.gpxText], { type: 'application/gpx+xml' });
+  fetch('/api/import/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/gpx+xml', 'X-Filename': tr.filename || 'track.gpx' },
+    body: blob
+  }).then(r => r.json()).then(uploaded => {
+    if (!uploaded.ok) { addLog('✗ Error en servidor'); showClose(); return; }
+    addLog('✓ Fichero guardado, iniciando importación…');
+    let isErr = false;
+    fetch('/api/db/import-temp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: [uploaded.filename], keep: true })
+    }).then(resp => {
+      const reader = resp.body.getReader(), dec = new TextDecoder();
+      let buf = '';
+      function pump() {
+        reader.read().then(({ done, value }) => {
+          if (done) { finish(isErr); return; }
+          buf += dec.decode(value, { stream: true });
+          const parts = buf.split('\n\n'); buf = parts.pop();
+          for (const part of parts) {
+            const dl = part.split('\n').find(l => l.startsWith('data:'));
+            if (!dl) continue;
+            try {
+              const evt = JSON.parse(dl.slice(5));
+              if (evt.type === 'log' || evt.type === 'progress') addLog(evt.text);
+              if (evt.type === 'warn')  addLog('⚠ ' + evt.text);
+              if (evt.type === 'error') { addLog('✗ ' + evt.text); isErr = true; }
+              if (evt.type === 'done')  { isErr = evt.code !== 0; finish(isErr); return; }
+            } catch {}
+          }
+          pump();
+        }).catch(e => { addLog('✗ ' + e.message); finish(true); });
+      }
+      pump();
+    });
+    function finish(err) {
+      importLogSummary(logEl, err);
+      if (!err) { tr.temp = false; delete tr.gpxText; delete tr.filename; buildList(); }
+      foot.style.display = 'flex';
+      if (!err) {
+        foot.innerHTML = '<button class="btn btn-primary" id="dnd-open-cat">Ver en catálogo</button>' +
+                         '<button class="btn" id="dnd-done-btn">Cerrar</button>';
+        document.getElementById('dnd-open-cat').onclick = () => { window.open('/editor?q=' + encodeURIComponent(tr.data.name), '_blank'); modalOvl.style.display = 'none'; };
+      } else {
+        foot.innerHTML = '<button class="btn" id="dnd-done-btn">Cerrar</button>';
+      }
+      document.getElementById('dnd-done-btn').onclick = () => { modalOvl.style.display = 'none'; };
+    }
+  }).catch(e => { addLog('✗ ' + e.message); showClose(); });
 }
 
 loadTracks();
+</script>
+
+<!-- ── Drag-and-drop GPX from desktop ─────────────────────────── -->
+<div id="dnd-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.45);
+  align-items:center;justify-content:center;pointer-events:none">
+  <div style="background:var(--surface);border:2px dashed var(--accent);border-radius:16px;
+    padding:40px 60px;text-align:center;box-shadow:var(--shadow)">
+    <div style="font-size:40px;margin-bottom:8px">📂</div>
+    <div style="font-size:18px;font-weight:700;color:var(--ink)">Suelta el fichero GPX</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:4px">para verlo o añadirlo al catálogo</div>
+  </div>
+</div>
+
+<div id="dnd-modal-overlay" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-head">
+      <h2 id="dnd-modal-title">Track GPX</h2>
+      <button class="modal-close" id="dnd-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0 0 14px">Fichero: <strong id="dnd-filename"></strong></p>
+      <div id="dnd-choice" style="display:flex;gap:10px;flex-direction:column">
+        <button class="btn btn-primary" id="dnd-btn-view" style="justify-content:flex-start;gap:10px;padding:12px 16px;text-align:left">
+          <span style="font-size:18px">🗺</span>
+          <span><strong>Ver en el mapa</strong><br><span style="font-weight:400;font-size:12px;color:var(--muted)">Añade el track temporalmente al comparador, sin guardarlo</span></span>
+        </button>
+        <button class="btn" id="dnd-btn-catalog" style="justify-content:flex-start;gap:10px;padding:12px 16px;text-align:left">
+          <span style="font-size:18px">💾</span>
+          <span><strong>Añadir al catálogo</strong><br><span style="font-weight:400;font-size:12px;color:var(--muted)">Importa el track a la base de datos para guardarlo</span></span>
+        </button>
+      </div>
+      <div id="dnd-log" class="ilog" style="display:none;max-height:360px"></div>
+    </div>
+    <div class="modal-foot" id="dnd-foot" style="display:none">
+      <button class="btn" id="dnd-cancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  let pendingFile = null;
+  const overlay   = document.getElementById('dnd-overlay');
+  const modalOvl  = document.getElementById('dnd-modal-overlay');
+  const logEl     = document.getElementById('dnd-log');
+  const nameEl    = document.getElementById('dnd-filename');
+  const foot      = document.getElementById('dnd-foot');
+  const panel     = document.getElementById('cmp-panel');
+  const dropHint  = document.getElementById('cmp-drop-hint');
+  let dragCount   = 0;
+
+  function showOverlay(v) {
+    overlay.style.display = v ? 'flex' : 'none';
+    overlay.style.pointerEvents = v ? 'all' : 'none';
+    dropHint.style.borderColor = v ? 'var(--accent)' : 'var(--line)';
+    dropHint.style.color       = v ? 'var(--accent)' : 'var(--muted)';
+    panel.style.boxShadow      = v
+      ? '0 4px 24px rgba(0,0,0,.15), 0 0 0 2px var(--accent)'
+      : '0 4px 24px rgba(0,0,0,.15), 0 1px 4px rgba(0,0,0,.08)';
+  }
+  function addLog(text) { importLog(logEl, text); }
+
+  document.addEventListener('dragenter', e => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragCount++;
+    showOverlay(true);
+  });
+  document.addEventListener('dragleave', () => {
+    dragCount--;
+    if (dragCount <= 0) { dragCount = 0; showOverlay(false); }
+  });
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', e => {
+    e.preventDefault();
+    dragCount = 0; showOverlay(false);
+    const f = e.dataTransfer.files[0];
+    if (!f || !f.name.toLowerCase().endsWith('.gpx')) return;
+    pendingFile = f;
+    nameEl.textContent = f.name;
+    logEl.innerHTML = '';
+    logEl.style.display = 'none';
+    document.getElementById('dnd-choice').style.display = 'flex';
+    foot.style.display = 'none';
+    document.getElementById('dnd-btn-view').onclick    = doViewOnMap;
+    document.getElementById('dnd-btn-catalog').onclick = doImport;
+    modalOvl.style.display = 'flex';
+  });
+
+  document.getElementById('dnd-close').onclick = closeModal;
+
+  function closeModal() { modalOvl.style.display = 'none'; pendingFile = null; }
+
+  function hideChoice() {
+    document.getElementById('dnd-choice').style.display = 'none';
+    logEl.style.display = 'block';
+  }
+
+  // ── Opción 1: ver en el mapa (track temporal) ──
+  async function doViewOnMap() {
+    if (!pendingFile) return;
+    hideChoice();
+    addLog('📖 Leyendo ' + pendingFile.name + '…');
+    const text = await pendingFile.text();
+    const doc  = new DOMParser().parseFromString(text, 'text/xml');
+    const name = doc.querySelector('trk > name')?.textContent?.trim()
+               || pendingFile.name.replace(/\.gpx$/i, '');
+    const trkpts = [...doc.querySelectorAll('trkpt')];
+    if (!trkpts.length) { addLog('✗ No se encontraron puntos en el fichero'); showClose(); return; }
+    const pts = trkpts.map(p => [
+      parseFloat(p.getAttribute('lat')),
+      parseFloat(p.getAttribute('lon')),
+      parseFloat(p.querySelector('ele')?.textContent || 0)
+    ]);
+    addLog('✓ ' + pts.length + ' puntos leídos — añadiendo al mapa…');
+    const filename = pendingFile.name;
+    closeModal();
+    addTempTrack({ name, pts, gpxText: text, filename });
+  }
+
+  // ── Opción 2: importar al catálogo ──
+  async function doImport() {
+    if (!pendingFile) return;
+    hideChoice();
+    addLog('⬆ Subiendo ' + pendingFile.name + '…');
+
+    const buf = await pendingFile.arrayBuffer();
+    let uploaded;
+    try {
+      const r = await fetch('/api/import/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/gpx+xml', 'X-Filename': pendingFile.name },
+        body: buf
+      });
+      uploaded = await r.json();
+    } catch(e) {
+      addLog('✗ Error subiendo: ' + e.message);
+      showClose(); return;
+    }
+    if (!uploaded.ok) { addLog('✗ Error en servidor'); showClose(); return; }
+    addLog('✓ Fichero guardado, iniciando importación…');
+
+    let isErr = false;
+    fetch('/api/db/import-temp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: [uploaded.filename], keep: true })
+    }).then(resp => {
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf2 = '';
+      function pump() {
+        reader.read().then(({ done, value }) => {
+          if (done) { finish(isErr); return; }
+          buf2 += dec.decode(value, { stream: true });
+          const parts = buf2.split('\n\n'); buf2 = parts.pop();
+          for (const part of parts) {
+            const dl = part.split('\n').find(l => l.startsWith('data:'));
+            if (!dl) continue;
+            try {
+              const evt = JSON.parse(dl.slice(5));
+              if (evt.type === 'log' || evt.type === 'progress') addLog(evt.text);
+              if (evt.type === 'warn')  addLog('⚠ ' + evt.text);
+              if (evt.type === 'error') { addLog('✗ ' + evt.text); isErr = true; }
+              if (evt.type === 'done')  { isErr = evt.code !== 0; finish(isErr); return; }
+            } catch {}
+          }
+          pump();
+        }).catch(e => { addLog('✗ ' + e.message); finish(true); });
+      }
+      pump();
+    }).catch(e => { addLog('✗ ' + e.message); finish(true); });
+
+    async function finish(err) {
+      importLogSummary(logEl, err);
+      foot.style.display = 'flex';
+      if (!err) {
+        // find newly imported track by comparing catalog IDs with current compare list
+        const knownIds = new Set(tracks.map(t => t.id).filter(Boolean));
+        try {
+          const cat = await fetch('/api/catalog').then(r => r.json());
+          const newEntry = cat.slice().sort((a,b) => b.id - a.id).find(t => !knownIds.has(t.id));
+          if (newEntry) {
+            addLog('↻ Añadiendo al comparador…');
+            const data = await fetch('/api/tracks/' + newEntry.id).then(r => r.json());
+            const color = COLORS[tracks.length % COLORS.length];
+            const pts = (data.points || []).filter(p => p[0] && p[1]);
+            if (pts.length > 1) {
+              const idx = tracks.length;
+              const poly = L.polyline(pts.map(p => [p[0],p[1]]), { color, weight:3, opacity:0.9 }).addTo(map);
+              poly.on('click', () => { if (!profileOpen) highlightTrack(idx); else selectProfileTab(idx); });
+              let profile = null, totalDist = 0;
+              if (pts.some(p => p[2] != null)) {
+                let cum = 0;
+                const segs = pts.map((p,i) => { if (i>0) cum += hav(pts[i-1],p); return {e:p[2],cum}; });
+                totalDist = cum || 1;
+                profile = segs.map(s => ({ d: s.cum/totalDist, e: s.e }));
+              }
+              tracks.push({ id: data.id, data, color, polyline: poly, visible: true, profile, totalDist, rawPts: pts });
+              document.getElementById('cmp-title').textContent = `Comparar (${tracks.length})`;
+              buildList();
+            }
+          }
+        } catch(e) { /* non-fatal */ }
+        foot.innerHTML = '<button class="btn btn-primary" id="dnd-open-cat">Ver en catálogo</button>' +
+                         '<button class="btn" id="dnd-done-btn">Cerrar</button>';
+        document.getElementById('dnd-open-cat').onclick = () => { window.open('/editor?q=' + encodeURIComponent(newEntry.name), '_blank'); closeModal(); };
+      } else {
+        foot.innerHTML = '<button class="btn" id="dnd-done-btn">Cerrar</button>';
+      }
+      document.getElementById('dnd-done-btn').onclick = closeModal;
+    }
+  }
+
+  function showClose() {
+    foot.style.display = 'flex';
+    foot.innerHTML = '<button class="btn" id="dnd-done-btn">Cerrar</button>';
+    document.getElementById('dnd-done-btn').onclick = closeModal;
+  }
+})();
 </script>
 </body>
 </html>

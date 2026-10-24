@@ -14,6 +14,14 @@ const fs   = require('fs');
 const path = require('path');
 const { openDb, withTransaction } = require('./db');
 const { updateGpxMetadata }       = require('./gpx-utils');
+const { CACHE_DIR, slugify }      = require('./osm-strategy-batch');
+const { fetchTrackPts, filterWaysToBbox, applyWaysToTrack } = require('./osm-shared');
+
+const CACHE_TTL_MS = 365 * 24 * 3600 * 1000;
+function readOsmCache(file) {
+  try { const d = JSON.parse(fs.readFileSync(file, 'utf8')); return (d.ts && d.ways) ? d : null; }
+  catch { return null; }
+}
 
 const TRACKS_DIR = path.join(__dirname, '..', 'TracksGps');
 const TEMP_DIR   = path.join(TRACKS_DIR, '_TEMP_');
@@ -499,6 +507,31 @@ function collectTempGpx(dir) {
       importedIds.push(newId);
       imported++;
       console.log(`  ✓ Importado (id=${newId})`);
+
+      // Auto-enrich with OSM road types from batch-sierra cache if available
+      try {
+        const slug      = slugify(sierra || province || 'sin-zona');
+        const cacheFile = require('path').join(CACHE_DIR, slug + '.json');
+        const cached    = readOsmCache(cacheFile);
+        if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
+          const trackRow = db.prepare('SELECT id,sw_lat,sw_lon,ne_lat,ne_lon,cleaned FROM tracks WHERE id=?').get(newId);
+          const fWays = filterWaysToBbox(cached.ways, trackRow);
+          const pts   = fetchTrackPts(trackRow, db, 1500);
+          if (pts.length >= 2) {
+            applyWaysToTrack(trackRow, pts, fWays, db);
+            console.log(`  OSM        : ${fWays.length} vías aplicadas (caché)`);
+          } else {
+            console.log(`  OSM        : sin puntos GPS (no calculado)`);
+          }
+        } else if (cached) {
+          console.log(`  OSM        : caché obsoleta para ${sierra || province || 'zona'}`);
+        } else {
+          console.log(`  OSM        : sin caché para ${sierra || province || 'zona'}`);
+        }
+      } catch (osmErr) {
+        console.log(`  OSM        : error al aplicar caché (${osmErr.message})`);
+      }
+
       const gf = { name: track.name, activity: act };
       if (track.url) gf.url = track.url;
       updateGpxMetadata(movedFile, gf);

@@ -270,22 +270,7 @@
     #btn-import-start { padding:7px 16px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; }
     #btn-import-start:disabled { opacity:.5; cursor:not-allowed; }
     /* ── Friendly import log ─────────────────────── */
-    .ilog { background:var(--soft,#f8fafc); border:1px solid var(--line,#e2e8f0); border-radius:8px; padding:8px 10px; max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:1px; }
-    .ilog-row { display:flex; align-items:baseline; gap:7px; padding:2px 4px; border-radius:4px; font-size:12px; line-height:1.55; }
-    .ilog-row:hover { background:rgba(0,0,0,.03); }
-    .ilog-icon { width:14px; flex-shrink:0; text-align:center; font-size:11px; }
-    .ilog-text { flex:1; font-family:ui-monospace,Consolas,monospace; white-space:pre-wrap; word-break:break-word; color:var(--ink-2,#475569); }
-    .ilog-row.ok   .ilog-icon { color:#16a34a; } .ilog-row.ok   .ilog-text { color:#15803d; }
-    .ilog-row.err  .ilog-icon { color:#dc2626; } .ilog-row.err  .ilog-text { color:#b91c1c; }
-    .ilog-row.err  { background:rgba(220,38,38,.05); }
-    .ilog-row.warn .ilog-icon { color:#d97706; } .ilog-row.warn .ilog-text { color:#92400e; }
-    .ilog-row.prog .ilog-icon { color:var(--accent); } .ilog-row.prog .ilog-text { color:var(--accent); font-weight:500; }
-    .ilog-row.sub  .ilog-text { color:var(--muted,#94a3b8); padding-left:10px; }
-    .ilog-summary { display:flex; gap:6px; padding:6px 4px 2px; border-top:1px solid var(--line,#e2e8f0); margin-top:4px; flex-wrap:wrap; }
-    .ilog-badge { font-size:11px; font-weight:600; padding:2px 9px; border-radius:999px; }
-    .ilog-badge.ok   { background:#dcfce7; color:#15803d; }
-    .ilog-badge.err  { background:#fee2e2; color:#b91c1c; }
-    .ilog-badge.warn { background:#fef9c3; color:#854d0e; }
+    /* .ilog* styles are in shared.css */
     /* ── Folder browser ──────────────────────────── */
     #fb-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:3000; display:none; align-items:center; justify-content:center; }
     #fb-overlay.open { display:flex; }
@@ -526,6 +511,7 @@
     <thead>
       <tr>
         <th class="col-cb"><input type="checkbox" id="cb-all" class="cb"></th>
+        <th class="sortable" data-col="id" style="width:44px;text-align:right" title="ID de importación">#</th>
         <th class="sortable" data-col="name">Nombre</th>
         <th class="col-activ sortable" data-col="activity">Actividad</th>
         <th class="col-prov sortable" data-col="has_osm" title="Datos OSM de tipos de camino" style="text-align:center">OSM</th>
@@ -536,7 +522,6 @@
         <th class="col-gain sortable" data-col="elevation_gain" style="text-align:right">D+</th>
         <th class="col-ibp sortable" data-col="ibp_val" style="text-align:right" title="IBP Index">IBP</th>
         <th class="col-date sortable" data-col="date">Fecha</th>
-        <th class="col-notes">Notas</th>
         <th style="width:50px">URL</th>
         <th style="width:30px">Tags</th>
         <th class="col-act" style="width:90px"></th>
@@ -657,6 +642,10 @@
       </button>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;padding:4px 16px 12px;overflow-y:auto;flex:1;min-height:0">
+      <div style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:var(--soft);border:1.5px dashed var(--line);border-radius:8px;color:var(--muted);font-size:12px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Arrastra ficheros .gpx a esta ventana para importarlos
+      </div>
       <button class="import-net-btn" data-net="wikiloc">
         <span class="import-net-icon" style="background:#fff;border:1px solid #e2e8f0;padding:2px">
           <img src="/assets/wikiloc-logo.png" alt="Wikiloc" style="width:32px;height:32px;object-fit:contain;border-radius:6px">
@@ -668,6 +657,20 @@
         <label style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">URL o ID del track</label>
         <input type="text" id="wl-url-input" class="input" placeholder="https://es.wikiloc.com/rutas/… o 123456" style="margin-top:6px;width:100%">
         <button class="btn btn-primary" id="btn-wl-import" style="margin-top:10px;width:100%">Importar</button>
+      </div>
+
+      <button class="import-net-btn" data-net="komoot">
+        <span class="import-net-icon" style="background:#6fa540">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+        </span>
+        <span class="import-net-label">Komoot</span>
+        <svg class="import-net-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <div class="import-net-form" id="form-komoot" hidden>
+        <label style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">URL o ID del tour</label>
+        <input type="text" id="km-url-input" class="input" placeholder="https://www.komoot.com/tour/… o 12345678" style="margin-top:6px;width:100%">
+        <p style="font-size:11px;color:var(--muted);margin:6px 0 0">Solo tours públicos. No requiere cuenta.</p>
+        <button class="btn btn-primary" id="btn-km-import" style="margin-top:10px;width:100%">Importar</button>
       </div>
 
       <button class="import-net-btn" data-net="disco">
@@ -693,6 +696,11 @@
               <input type="checkbox" id="import-force"> --force
             </label>
           </div>
+          <div id="import-drop-zone" style="border:2px dashed var(--line);border-radius:8px;padding:14px;
+            text-align:center;color:var(--muted);font-size:12px;cursor:default;user-select:none;
+            transition:border-color .15s,color .15s">
+            📂 Arrastra ficheros .gpx aquí para añadirlos a la cola
+          </div>
           <div id="import-file-list"><span style="color:#94a3b8;font-size:12px">Introduce una carpeta y pulsa Cargar.</span></div>
           <div style="display:flex;gap:8px;align-items:center">
             <button id="btn-import-start" disabled>
@@ -708,68 +716,142 @@
   </div>
 </div>
 
+<script src="/import-ui.js"></script>
 <script>
-// ── Shared friendly log renderer ────────────────────────────────────
-function importLog(container, text) {
-  if (text === null || text === undefined) return;
-  // Split multi-line messages
-  for (const raw of String(text).split('\n')) {
-    const t = raw.trimEnd();
-    if (!t) continue;
-    const row  = document.createElement('div');
-    const icon = document.createElement('span');
-    const msg  = document.createElement('span');
-    row.className  = 'ilog-row';
-    icon.className = 'ilog-icon';
-    msg.className  = 'ilog-text';
-    msg.textContent = t.replace(/^[\s✓✗⚠]+/, '').trim() || t;
+// importLog() and importLogSummary() are loaded from /import-ui.js
 
-    const trimmed = t.trimStart();
-    if (trimmed.startsWith('✓') || (trimmed.startsWith('  ✓'))) {
-      row.classList.add('ok');   icon.textContent = '✓';
-      msg.textContent = trimmed.replace(/^✓\s*/, '');
-    } else if (trimmed.startsWith('✗') || /^error\b/i.test(trimmed)) {
-      row.classList.add('err');  icon.textContent = '✗';
-      msg.textContent = trimmed.replace(/^✗\s*/, '');
-    } else if (trimmed.startsWith('⚠')) {
-      row.classList.add('warn'); icon.textContent = '⚠';
-      msg.textContent = trimmed.replace(/^⚠\s*/, '');
-    } else if (/^Importados?:\s*\d+/i.test(trimmed)) {
-      row.classList.add('prog'); icon.textContent = '↑';
-      msg.textContent = trimmed;
-    } else if (t.startsWith('  ') || t.startsWith('\t')) {
-      row.classList.add('sub');  icon.textContent = '';
-      msg.textContent = trimmed;
-    } else {
-      icon.textContent = '·';
-      msg.textContent = trimmed;
+// (importLogSummary is in /import-ui.js)
+function _placeholder_importLogSummary() { // dead code — replaced by import-ui.js
+  const rows = []; // STUB
+
+  // ── Parse global counts from structured summary lines ─────────────
+  let imported = 0, errors = 0, existing = 0, review = 0;
+  for (const r of rows) {
+    const t = r.querySelector('.ilog-text')?.textContent || '';
+    const mI = t.match(/^Importados\s*:\s*(\d+)/i);
+    const mE = t.match(/^Errores\s*:\s*(\d+)/i);
+    const mX = t.match(/^Ya existían[^:]*:\s*(\d+)/i);
+    const mR = t.match(/^Enviados a _REVIEW_\s*:\s*(\d+)/i);
+    if (mI) imported = parseInt(mI[1]);
+    if (mE) errors   = parseInt(mE[1]);
+    if (mX) existing = parseInt(mX[1]);
+    if (mR) review   = parseInt(mR[1]);
+  }
+
+  // ── Split rows into per-track blocks by [N/M] header ─────────────
+  const trackBlocks = [];
+  let cur = null;
+  for (const row of rows) {
+    const t = (row.querySelector('.ilog-text')?.textContent || '').trim();
+    const m = t.match(/^\[(\d+)\/(\d+)\]\s+(.+)$/);
+    if (m) { if (cur) trackBlocks.push(cur); cur = { name: m[3], lines: [] }; }
+    else if (cur) cur.lines.push(t);
+  }
+  if (cur) trackBlocks.push(cur);
+
+  // ── Collapse raw log rows under toggle ────────────────────────────
+  if (rows.length) {
+    const det = document.createElement('details');
+    det.style.cssText = 'font-size:11px;margin-bottom:8px';
+    const tog = document.createElement('summary');
+    tog.style.cssText = 'color:var(--muted);cursor:pointer;user-select:none;list-style:none;display:inline-flex;align-items:center;gap:4px;padding:2px 0';
+    tog.textContent = 'Ver log completo';
+    det.appendChild(tog);
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'margin-top:4px;max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:1px';
+    rows.forEach(r => wrap.appendChild(r));
+    det.appendChild(wrap);
+    container.appendChild(det);
+  }
+
+  // ── Render per-track cards ─────────────────────────────────────────
+  if (trackBlocks.length) {
+    const MAX = 5;
+    for (const b of trackBlocks.slice(0, MAX)) {
+      const txt = b.lines.join('\n');
+
+      // Status
+      let st = 'error', stLabel = 'Error', stIcon = '✗', tId = null;
+      const mId = txt.match(/Importado \(id=(\d+)\)/);
+      if (mId)                      { st = 'ok';   stLabel = 'Importado';    stIcon = '✓'; tId = parseInt(mId[1]); }
+      else if (/Ya existe en BD/.test(txt))  { st = 'skip'; stLabel = 'Ya existía';  stIcon = '⏭'; }
+      else if (/_REVIEW_/.test(txt)) { st = 'warn'; stLabel = 'En revisión'; stIcon = '⚠'; }
+
+      // Location
+      const mLoc    = txt.match(/Ubicaci[oó]n\s*:\s*(.+)/);
+      const mSierra = txt.match(/Sierra\s*:\s*(.+)/);
+      const parts   = [];
+      if (mSierra) { const s = mSierra[1].trim(); if (s && s !== 'no detectada') parts.push(s); }
+      if (mLoc)    parts.push(mLoc[1].trim());
+      const locStr  = parts.join(' · ') || null;
+
+      // IBP
+      const mIbp = txt.match(/IBP\s*:\s*h=(\S+)\s+b=(\S+)\s+r=(\S+)/);
+
+      const SC = {
+        ok:   { fg:'#15803d', bg:'#dcfce7' },
+        skip: { fg:'#0369a1', bg:'#e0f2fe' },
+        warn: { fg:'#92400e', bg:'#fef9c3' },
+        error:{ fg:'#b91c1c', bg:'#fee2e2' },
+      }[st];
+
+      const cleanName = b.name.replace(/\.gpx$/i,'').replace(/^(wikiloc|komoot)-(\d+)$/, '$1 #$2');
+
+      const card = document.createElement('div');
+      card.style.cssText = 'background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:6px';
+
+      // Header
+      const hdr = document.createElement('div');
+      hdr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)';
+      hdr.innerHTML = `
+        <span style="width:20px;height:20px;border-radius:50%;background:${SC.bg};color:${SC.fg};display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${stIcon}</span>
+        <span style="font-size:12px;font-weight:600;color:var(--ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${cleanName.replace(/"/g,'&quot;')}">${cleanName}</span>
+        <span style="font-size:11px;font-weight:600;color:${SC.fg};white-space:nowrap">${stLabel}${tId ? ` #${tId}` : ''}</span>`;
+      card.appendChild(hdr);
+
+      // Data rows
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;grid-template-columns:auto 1fr';
+      const addRow = (label, html, last) => {
+        const bb = last ? '' : ';border-bottom:1px solid var(--line)';
+        const l = document.createElement('div');
+        l.style.cssText = `padding:5px 8px 5px 12px;color:var(--muted);font-size:11px;font-weight:600;white-space:nowrap${bb}`;
+        l.textContent = label;
+        const v = document.createElement('div');
+        v.style.cssText = `padding:5px 12px;font-size:11.5px;color:var(--ink)${bb}`;
+        v.innerHTML = html;
+        grid.appendChild(l); grid.appendChild(v);
+      };
+      const na = '<span style="color:var(--muted)">—</span>';
+      const naGray = '<span style="color:var(--muted)">no calculado</span>';
+      addRow('Ubicación', locStr || na, false);
+      addRow('OSM',       naGray,      !mIbp);
+      if (mIbp) addRow('IBP', `<span style="color:var(--muted)">H</span> <b>${mIbp[1]}</b>&ensp;<span style="color:var(--muted)">B</span> <b>${mIbp[2]}</b>&ensp;<span style="color:var(--muted)">R</span> <b>${mIbp[3]}</b>`, true);
+
+      card.appendChild(grid);
+      container.appendChild(card);
     }
-
-    row.appendChild(icon);
-    row.appendChild(msg);
-    container.appendChild(row);
-    container.scrollTop = container.scrollHeight;
-  }
-}
-
-function importLogSummary(container, isErr) {
-  const rows = container.querySelectorAll('.ilog-row');
-  let ok = 0, err = 0, warn = 0;
-  rows.forEach(r => {
-    if (r.classList.contains('ok'))   ok++;
-    if (r.classList.contains('err'))  err++;
-    if (r.classList.contains('warn')) warn++;
-  });
-  const sum = document.createElement('div');
-  sum.className = 'ilog-summary';
-  if (isErr && !err && !ok) {
-    sum.innerHTML = '<span class="ilog-badge err">Importación con errores</span>';
+    if (trackBlocks.length > MAX) {
+      const more = document.createElement('div');
+      more.style.cssText = 'font-size:11px;color:var(--muted);text-align:center;padding:2px 0 6px';
+      more.textContent = `… y ${trackBlocks.length - MAX} más`;
+      container.appendChild(more);
+    }
   } else {
-    if (ok)   sum.innerHTML += `<span class="ilog-badge ok">✓ ${ok} importado${ok>1?'s':''}</span>`;
-    if (warn) sum.innerHTML += `<span class="ilog-badge warn">⚠ ${warn} aviso${warn>1?'s':''}</span>`;
-    if (err)  sum.innerHTML += `<span class="ilog-badge err">✗ ${err} error${err>1?'es':''}</span>`;
+    // Fallback: badge summary when no per-track blocks found
+    const sum = document.createElement('div');
+    sum.className = 'ilog-summary';
+    if (imported) sum.innerHTML += `<span class="ilog-badge ok">✓ ${imported} importado${imported>1?'s':''}</span>`;
+    if (existing) sum.innerHTML += `<span class="ilog-badge warn">⏭ ${existing} ya existía${existing>1?'n':''}</span>`;
+    if (review)   sum.innerHTML += `<span class="ilog-badge warn">⚠ ${review} en revisión</span>`;
+    if (errors)   sum.innerHTML += `<span class="ilog-badge err">✗ ${errors} error${errors>1?'es':''}</span>`;
+    if (!sum.innerHTML) sum.innerHTML = isErr
+      ? '<span class="ilog-badge err">Error en la importación</span>'
+      : '<span class="ilog-badge ok">✓ Completado</span>';
+    container.appendChild(sum);
   }
-  if (sum.innerHTML) { container.appendChild(sum); container.scrollTop = container.scrollHeight; }
+
+  container.scrollTop = container.scrollHeight;
 }
 
 (function(){
@@ -894,6 +976,14 @@ async function loadTracks() {
     if (hasRecent && new URLSearchParams(location.search).get('last-import') === '1') {
       lastImportFilter = true;
       document.getElementById('btn-last-import').classList.add('active');
+      history.replaceState(null, '', '/editor');
+    }
+
+    const qParam = new URLSearchParams(location.search).get('q');
+    if (qParam) {
+      const si = document.getElementById('search-input');
+      si.value = qParam;
+      document.getElementById('search-clear').hidden = false;
       history.replaceState(null, '', '/editor');
     }
 
@@ -1142,6 +1232,7 @@ function renderTable() {
       : '';
     return `<tr class="${selCls} ${edCls}" data-id="${t.id}">
       <td class="col-cb"><input type="checkbox" class="cb row-cb" data-id="${t.id}" ${ch}></td>
+      <td style="text-align:right;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums">${t.id}</td>
       <td class="col-name" title="${escHtml(t.file||t.name)}">
         <a href="/track?id=${t.id}" target="_blank" class="track-detail-link" style="color:inherit;text-decoration:none;font-weight:500">${escHtml(t.name)}</a>
         <span style="display:block;font-size:9px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px" title="${escHtml(t.file||'')}">${escHtml((t.file||'').replace('TracksGps/',''))}</span>
@@ -1155,7 +1246,6 @@ function renderTable() {
       <td class="col-gain">${t.elevation_gain ? `<strong>${Math.round(t.elevation_gain)}</strong><span style="font-size:10px;color:var(--muted)"> m</span>` : '—'}</td>
       <td class="col-ibp" style="text-align:right">${ibpBadge(ibpForTrack(t))}</td>
       <td style="font-size:11px;color:var(--muted)">${t.date ? t.date.substring(0,10) : '—'}</td>
-      <td class="col-notes" title="${escHtml(t.notes||'')}">${escHtml(t.notes||'')}</td>
       <td>${t.url ? `<a href="${escHtml(t.url)}" target="_blank" class="url-link" title="${escHtml(t.url)}">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         URL</a>` : ''}</td>
@@ -1977,17 +2067,28 @@ loadTracks();
   document.getElementById('btn-wl-import').addEventListener('click', () => {
     const url = document.getElementById('wl-url-input').value.trim();
     if (!url) return;
-    log.hidden = false; log.innerHTML = '';
+    log.hidden = true; log.innerHTML = '';
     document.getElementById('btn-wl-import').disabled = true;
     runImportSSE('/api/import/wikiloc', { url });
   });
 
+  document.getElementById('btn-km-import').addEventListener('click', () => {
+    const url = document.getElementById('km-url-input').value.trim();
+    if (!url) return;
+    log.hidden = true; log.innerHTML = '';
+    document.getElementById('btn-km-import').disabled = true;
+    runImportSSE('/api/import/komoot', { url });
+  });
+
+  let _netImportedIds = [];
   function runImportSSE(endpoint, body) {
+    _netImportedIds = [];
     fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then(resp => {
+      if (!resp.ok) { addLog(`✗ Error del servidor: ${resp.status}`); done_(true); return; }
       const reader = resp.body.getReader();
       const dec = new TextDecoder();
       let buf = '';
@@ -2001,7 +2102,10 @@ loadTracks();
             if (!dl) continue;
             try {
               const evt = JSON.parse(dl.slice(5));
-              if (evt.type === 'log' || evt.type === 'progress') addLog(evt.text);
+              if (evt.type === 'log' || evt.type === 'progress') {
+                if (evt.text?.startsWith('IMPORTED_IDS:')) _netImportedIds = evt.text.split(':')[1].split(',').map(Number).filter(Boolean);
+                addLog(evt.text);
+              }
               if (evt.type === 'warn')  addLog('⚠ ' + evt.text);
               if (evt.type === 'done')  { done_(evt.code !== 0); return; }
               if (evt.type === 'error') { addLog('✗ ' + evt.text); }
@@ -2018,14 +2122,30 @@ loadTracks();
 
   function done_(isErr) {
     document.getElementById('btn-wl-import').disabled = false;
+    document.getElementById('btn-km-import').disabled = false;
     importLogSummary(log, isErr);
-    if (!isErr) { importLog(log, '↻ Recargando lista…'); setTimeout(() => loadTracks(), 1200); }
+    log.hidden = false;
+    if (!isErr) {
+      setTimeout(() => loadTracks(), 800);
+      if (_netImportedIds.length === 1) {
+        const a = document.createElement('a');
+        a.className = 'btn btn-primary'; a.style.cssText = 'margin-top:6px;display:inline-block';
+        a.href = `/track?id=${_netImportedIds[0]}`; a.target = '_blank'; a.textContent = 'Ver detalle →';
+        log.appendChild(a);
+      } else if (_netImportedIds.length > 1) {
+        const a = document.createElement('a');
+        a.className = 'btn btn-primary'; a.style.cssText = 'margin-top:6px;display:inline-block';
+        a.href = `/?ids=${_netImportedIds.join(',')}`; a.textContent = `Ir al catálogo (${_netImportedIds.length} rutas) →`;
+        log.appendChild(a);
+      }
+    }
   }
 })();
 
 // ── Import from disk ───────────────────────────────────────────────
 (function () {
   let fbCurrentPath = null;
+  let _diskImportedIds = [];
 
   async function loadTempFiles() {
     const list  = document.getElementById('import-file-list');
@@ -2131,8 +2251,9 @@ loadTracks();
       if (!confirm(`Se importarán ${sel.length} archivo(s) desde _TEMP_ y se eliminarán tras importar. ¿Continuar?`)) return;
     }
     const log = document.getElementById('import-disk-log');
-    log.hidden = false; log.innerHTML = '';
+    log.hidden = true; log.innerHTML = '';
     document.getElementById('btn-import-start').disabled = true;
+    _diskImportedIds = [];
     fetch('/api/db/import-temp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2154,7 +2275,10 @@ loadTracks();
             if (!dl) continue;
             try {
               const evt = JSON.parse(dl.slice(5));
-              if (evt.type === 'log' || evt.type === 'progress') diskLog(evt.text);
+              if (evt.type === 'log' || evt.type === 'progress') {
+                if (evt.text?.startsWith('IMPORTED_IDS:')) _diskImportedIds = evt.text.split(':')[1].split(',').map(Number).filter(Boolean);
+                diskLog(evt.text);
+              }
               else if (evt.type === 'warn') diskLog('⚠ ' + evt.text);
               else if (evt.type === 'error') diskLog('✗ ' + evt.text);
               else if (evt.type === 'done') { doneImport(evt.code !== 0); return; }
@@ -2175,10 +2299,216 @@ loadTracks();
     document.getElementById('btn-import-start').disabled = false;
     const log = document.getElementById('import-disk-log');
     importLogSummary(log, isErr);
-    if (!isErr) { importLog(log, '↻ Recargando lista…'); setTimeout(() => loadTracks(), 800); }
+    log.hidden = false;
+    if (!isErr) {
+      setTimeout(() => loadTracks(), 800);
+      if (_diskImportedIds.length === 1) {
+        const a = document.createElement('a');
+        a.className = 'btn btn-primary'; a.style.cssText = 'margin-top:6px;display:inline-block';
+        a.href = `/track?id=${_diskImportedIds[0]}`; a.target = '_blank'; a.textContent = 'Ver detalle →';
+        log.appendChild(a);
+      } else if (_diskImportedIds.length > 1) {
+        const a = document.createElement('a');
+        a.className = 'btn btn-primary'; a.style.cssText = 'margin-top:6px;display:inline-block';
+        a.href = `/?ids=${_diskImportedIds.join(',')}`; a.textContent = `Ir al catálogo (${_diskImportedIds.length} rutas) →`;
+        log.appendChild(a);
+      }
+    }
   }
+
+  // ── Drop zone inside import modal ──
+  const dropZone = document.getElementById('import-drop-zone');
+  let dzCount = 0;
+  dropZone.addEventListener('dragenter', e => { e.preventDefault(); dzCount++;
+    dropZone.style.borderColor = 'var(--accent)'; dropZone.style.color = 'var(--accent)'; });
+  dropZone.addEventListener('dragleave', () => { dzCount--;
+    if (dzCount <= 0) { dzCount = 0; dropZone.style.borderColor = 'var(--line)'; dropZone.style.color = 'var(--muted)'; } });
+  dropZone.addEventListener('dragover', e => e.preventDefault());
+  dropZone.addEventListener('drop', async e => {
+    e.preventDefault(); dzCount = 0;
+    dropZone.style.borderColor = 'var(--line)'; dropZone.style.color = 'var(--muted)';
+    const files = [...e.dataTransfer.files].filter(f => f.name.toLowerCase().endsWith('.gpx'));
+    if (!files.length) return;
+    dropZone.textContent = `⬆ Subiendo ${files.length} fichero${files.length > 1 ? 's' : ''}…`;
+    let ok = 0;
+    for (const f of files) {
+      try {
+        const buf = await f.arrayBuffer();
+        const r = await fetch('/api/import/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/gpx+xml', 'X-Filename': f.name },
+          body: buf
+        });
+        const res = await r.json();
+        if (res.ok) ok++;
+      } catch {}
+    }
+    dropZone.textContent = `✓ ${ok} fichero${ok !== 1 ? 's' : ''} añadido${ok !== 1 ? 's' : ''} a _TEMP_ — pulsa Cargar para verlos`;
+    dropZone.style.color = 'var(--success, green)';
+    setTimeout(() => {
+      dropZone.textContent = '📂 Arrastra ficheros .gpx aquí para añadirlos a la cola';
+      dropZone.style.color = 'var(--muted)';
+    }, 3000);
+    document.getElementById('import-src-path').value = 'TracksGps/_TEMP_';
+    loadTempFiles();
+  });
 })();
 
+})();
+</script>
+
+<!-- ── Drag-and-drop GPX from desktop ─────────────────────────── -->
+<div id="dnd-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.45);
+  display:none;align-items:center;justify-content:center;pointer-events:none">
+  <div style="background:var(--surface);border:2px dashed var(--accent);border-radius:16px;
+    padding:40px 60px;text-align:center;box-shadow:var(--shadow)">
+    <div style="font-size:40px;margin-bottom:8px">📂</div>
+    <div style="font-size:18px;font-weight:700;color:var(--ink)">Suelta el fichero GPX</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:4px">para añadirlo al catálogo</div>
+  </div>
+</div>
+
+<div id="dnd-modal-overlay" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-head">
+      <h2>Añadir track al catálogo</h2>
+      <button class="modal-close" id="dnd-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0 0 12px">Fichero: <strong id="dnd-filename"></strong></p>
+      <div id="dnd-log" class="ilog" style="display:none;max-height:360px;overflow-y:auto"></div>
+    </div>
+    <div class="modal-foot" id="dnd-foot">
+      <button class="btn btn-primary" id="dnd-confirm">Añadir al catálogo</button>
+      <button class="btn" id="dnd-cancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  let pendingFile = null;
+  const overlay    = document.getElementById('dnd-overlay');
+  const modalOvl  = document.getElementById('dnd-modal-overlay');
+  const logEl     = document.getElementById('dnd-log');
+  const nameEl    = document.getElementById('dnd-filename');
+  const foot      = document.getElementById('dnd-foot');
+  let dragCount   = 0;
+
+  function showOverlay(v) {
+    overlay.style.display = v ? 'flex' : 'none';
+    overlay.style.pointerEvents = v ? 'all' : 'none';
+  }
+
+  document.addEventListener('dragenter', e => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragCount++;
+    showOverlay(true);
+  });
+  document.addEventListener('dragleave', e => {
+    dragCount--;
+    if (dragCount <= 0) { dragCount = 0; showOverlay(false); }
+  });
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', e => {
+    e.preventDefault();
+    dragCount = 0; showOverlay(false);
+    const f = e.dataTransfer.files[0];
+    if (!f || !f.name.toLowerCase().endsWith('.gpx')) return;
+    pendingFile = f;
+    nameEl.textContent = f.name;
+    logEl.innerHTML = '';
+    logEl.style.display = 'none';
+    foot.innerHTML = '<button class="btn btn-primary" id="dnd-confirm">Añadir al catálogo</button>' +
+                     '<button class="btn" id="dnd-cancel">Cancelar</button>';
+    document.getElementById('dnd-confirm').onclick = doImport;
+    document.getElementById('dnd-cancel').onclick  = closeModal;
+    modalOvl.style.display = 'flex';
+  });
+
+  document.getElementById('dnd-close').onclick = closeModal;
+
+  function closeModal() { modalOvl.style.display = 'none'; pendingFile = null; }
+
+  async function doImport() {
+    if (!pendingFile) return;
+    foot.innerHTML = '<span style="font-size:12px;color:var(--muted)">Importando…</span>';
+    logEl.style.display = 'none';
+    logEl.innerHTML = '';
+    importLog(logEl, '⬆ Subiendo ' + pendingFile.name + '…');
+
+    const buf = await pendingFile.arrayBuffer();
+    let uploaded;
+    try {
+      const r = await fetch('/api/import/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/gpx+xml', 'X-Filename': pendingFile.name },
+        body: buf
+      });
+      uploaded = await r.json();
+    } catch(e) {
+      importLog(logEl, '✗ Error subiendo: ' + e.message);
+      importLogSummary(logEl, true);
+      logEl.style.display = 'block';
+      foot.innerHTML = '<button class="btn" onclick="document.getElementById(\'dnd-modal-overlay\').style.display=\'none\'">Cerrar</button>';
+      return;
+    }
+    if (!uploaded.ok) {
+      importLog(logEl, '✗ Error en servidor');
+      importLogSummary(logEl, true);
+      logEl.style.display = 'block';
+      foot.innerHTML = '<button class="btn" onclick="document.getElementById(\'dnd-modal-overlay\').style.display=\'none\'">Cerrar</button>';
+      return;
+    }
+    importLog(logEl, '✓ Fichero guardado en _TEMP_, iniciando importación…');
+
+    let isErr = false, importedIds = [];
+    fetch('/api/db/import-temp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: [uploaded.filename], keep: true })
+    }).then(resp => {
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      function pump() {
+        reader.read().then(({ done, value }) => {
+          if (done) { finish(isErr); return; }
+          buf += dec.decode(value, { stream: true });
+          const parts = buf.split('\n\n'); buf = parts.pop();
+          for (const part of parts) {
+            const dl = part.split('\n').find(l => l.startsWith('data:'));
+            if (!dl) continue;
+            try {
+              const evt = JSON.parse(dl.slice(5));
+              if (evt.type === 'log' || evt.type === 'progress') {
+                if (evt.text?.startsWith('IMPORTED_IDS:')) importedIds = evt.text.split(':')[1].split(',').map(Number).filter(Boolean);
+                importLog(logEl, evt.text);
+              }
+              if (evt.type === 'warn')  importLog(logEl, '⚠ ' + evt.text);
+              if (evt.type === 'error') { importLog(logEl, '✗ ' + evt.text); isErr = true; }
+              if (evt.type === 'done')  { isErr = evt.code !== 0; finish(isErr); return; }
+            } catch {}
+          }
+          pump();
+        }).catch(e => { importLog(logEl, '✗ ' + e.message); finish(true); });
+      }
+      pump();
+    }).catch(e => { importLog(logEl, '✗ ' + e.message); finish(true); });
+
+    function finish(err) {
+      importLogSummary(logEl, err);
+      logEl.style.display = 'block';
+      if (!err) setTimeout(() => { if(typeof loadTracks==='function') loadTracks(); }, 800);
+      let btns = '<button class="btn" id="dnd-done-btn">Cerrar</button>';
+      if (!err && importedIds.length === 1)
+        btns = `<a class="btn btn-primary" href="/track?id=${importedIds[0]}" target="_blank">Ver detalle →</a> ` + btns;
+      else if (!err && importedIds.length > 1)
+        btns = `<a class="btn btn-primary" href="/?ids=${importedIds.join(',')}">Ir al catálogo (${importedIds.length} rutas) →</a> ` + btns;
+      foot.innerHTML = btns;
+      document.getElementById('dnd-done-btn').onclick = closeModal;
+    }
+  }
 })();
 </script>
 </body>

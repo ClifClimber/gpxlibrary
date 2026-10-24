@@ -835,8 +835,8 @@ async function loadGeo() {
 }
 
 // ── PARÁMETROS ───────────────────────────────────────────────────────
-const PARAMS_KEY = 'gpx-climb-params';
-const PARAMS_DEF = { minGain: 80, minGrad: 4, minDist: 0.2 };
+const PARAMS_KEY = 'gpx-climb-params-v2';
+const PARAMS_DEF = { minGain: 70, minGrad: 3.5, minDist: 0.2 };
 
 function loadParams() {
   try { return Object.assign({}, PARAMS_DEF, JSON.parse(localStorage.getItem(PARAMS_KEY) || '{}')); } catch { return { ...PARAMS_DEF }; }

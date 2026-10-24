@@ -191,6 +191,7 @@ let sliders = {};
 let geoFilter = null;   // {lat, lon, radius, name}
 let geoCircle = null;
 let vpFilterActive = false;
+let idSet = new Set();   // filter to specific IDs (from ?ids= URL param)
 let sortMode = 'name';
 try { sortMode = localStorage.getItem('visor-sort') || 'name'; } catch {}
 
@@ -659,7 +660,8 @@ function applyFilters() {
   let totalDist = 0, totalEle = 0, visCount = 0;
   items.forEach((it, i) => {
     const t = it.track;
-    const ok = baseMatch(t, f) && actOk(t, f) && sierraOk(t, f) && tagsOk(t, f) &&
+    const ok = (idSet.size === 0 || idSet.has(t.id)) &&
+      baseMatch(t, f) && actOk(t, f) && sierraOk(t, f) && tagsOk(t, f) &&
       (!vb || vb.intersects(L.latLngBounds(t.bounds[0], t.bounds[1])));
     it.visible = ok;
     if (ok) {
@@ -685,6 +687,7 @@ function applyFilters() {
 const SORTERS = {
   'name':      (a, b) => a.name.localeCompare(b.name, 'es'),
   'date':      (a, b) => (b.date || '').localeCompare(a.date || ''),
+  'id-desc':   (a, b) => (b.id || 0) - (a.id || 0),
   'dist-asc':  (a, b) => a.distance - b.distance,
   'dist-desc': (a, b) => b.distance - a.distance,
   'ele-desc':  (a, b) => b.elevationGain - a.elevationGain,
@@ -712,6 +715,7 @@ function trackItemHtml(track, ri) {
     </div>
     <div class="ti-side">
       ${track.date ? `<span class="ti-date">${escHtml(track.date.substring(0,7))}</span>` : ''}
+      ${track.id ? `<span class="ti-id" title="ID de importación">#${track.id}</span>` : ''}
       ${track.id ? `<a class="track-detail-link" href="/track?id=${track.id}" target="_blank" title="Abrir página de detalle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></a>` : ''}
     </div>
   </div>`;
@@ -1098,6 +1102,19 @@ const _openFile = new URLSearchParams(location.search).get('file');
 if (_openFile) {
   const _idx = items.findIndex(it => it.track.file === _openFile);
   if (_idx >= 0) setTimeout(() => activateTrack(_idx, true), 400);
+}
+const _openId = new URLSearchParams(location.search).get('id');
+if (_openId) {
+  const _idx2 = items.findIndex(it => it.track.id === +_openId);
+  if (_idx2 >= 0) setTimeout(() => activateTrack(_idx2, true), 600);
+}
+
+const _openIds = new URLSearchParams(location.search).get('ids');
+if (_openIds) {
+  _openIds.split(',').map(Number).filter(Boolean).forEach(id => idSet.add(id));
+  applyFilters();
+  const idBounds = items.filter(it => idSet.has(it.track.id)).flatMap(it => it.track.bounds);
+  if (idBounds.length) fitTo(L.latLngBounds(idBounds), 12);
 }
 
 })();

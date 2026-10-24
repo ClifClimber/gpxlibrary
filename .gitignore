@@ -9,3 +9,4 @@ catalog-data.js
 *.db
 *.db-wal
 *.db-shm
+osm-settings.json

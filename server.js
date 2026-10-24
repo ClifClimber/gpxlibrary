@@ -23,21 +23,17 @@ const ROOT = __dirname;
 let _oauthState = null; // { state, ts } — CSRF token para el flujo OAuth
 
 // ── Operations log ─────────────────────────────────────────────────
-const LOG_FILE = path.join(ROOT, 'data', 'operations.log');
-const LOG_MAX_LINES = 3000;
+const LOGS_DIR = path.join(ROOT, 'data', 'logs');
+try { fs.mkdirSync(LOGS_DIR, { recursive: true }); } catch {}
+
+function logFilePath(date) {
+  return path.join(LOGS_DIR, `${date || new Date().toISOString().slice(0, 10)}.log`);
+}
 
 function appendLog(level, op, msg, extra = {}) {
-  const entry = JSON.stringify({ ts: new Date().toISOString(), level, op, msg, ...extra });
-  try { fs.appendFileSync(LOG_FILE, entry + '\n'); } catch {}
-  // Rotate: if file > 256 KB, keep last LOG_MAX_LINES lines
-  try {
-    if (fs.statSync(LOG_FILE).size > 262144) {
-      const lines = fs.readFileSync(LOG_FILE, 'utf8').trim().split('\n');
-      if (lines.length > LOG_MAX_LINES) {
-        fs.writeFileSync(LOG_FILE, lines.slice(-LOG_MAX_LINES).join('\n') + '\n');
-      }
-    }
-  } catch {}
+  const ts  = new Date().toISOString();
+  const entry = JSON.stringify({ ts, level, op, msg, ...extra });
+  try { fs.appendFileSync(logFilePath(), entry + '\n'); } catch {}
 }
 
 const MIME = {
@@ -128,7 +124,7 @@ function apiRunScript(res, scriptPath, args = []) {
     cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  let buf = '', lastImported = -1;
+  let buf = '', lastImported = -1, allLines = [];
 
   function flush(chunk) {
     buf += chunk.toString().replace(/\r(?!\n)/g, '\n');
@@ -137,6 +133,7 @@ function apiRunScript(res, scriptPath, args = []) {
     for (const raw of lines) {
       const text = raw.trim();
       if (!text) continue;
+      allLines.push(text);
       // Throttle repeated counter lines ("Importados: N") to every 10
       const m = text.match(/Importados:\s*(\d+)/);
       if (m) {
@@ -155,13 +152,34 @@ function apiRunScript(res, scriptPath, args = []) {
   child.stdout.on('data', flush);
   child.stderr.on('data', chunk => {
     const text = chunk.toString().trim();
-    if (text) send({ type: 'error', text });
+    if (text) { allLines.push(text); send({ type: 'error', text }); }
   });
   child.on('close', code => {
-    if (buf.trim()) send({ type: 'log', text: buf.trim() });
+    if (buf.trim()) { allLines.push(buf.trim()); send({ type: 'log', text: buf.trim() }); }
     send({ type: 'done', code });
-    appendLog(code === 0 ? 'info' : 'error', opName, `${opName} ${code === 0 ? 'completado' : 'fallido'}`, { code });
-    if (code === 0) invalidateCatalogCache(); // import/clean/enrich changed the data
+    // Build compact summary for the admin log
+    const extra = { code };
+    const mImp = allLines.join('\n').match(/Importados\s*:\s*(\d+)/);
+    const mEx  = allLines.join('\n').match(/Ya exist[^:]*:\s*(\d+)/);
+    const mRev = allLines.join('\n').match(/Enviados a _REVIEW_\s*:\s*(\d+)/);
+    const mErr = allLines.join('\n').match(/Errores\s*:\s*(\d+)/);
+    if (mImp || mEx || mRev || mErr) {
+      extra.importados = mImp ? +mImp[1] : 0;
+      extra.existian   = mEx  ? +mEx[1]  : 0;
+      extra.review     = mRev ? +mRev[1] : 0;
+      extra.errores    = mErr ? +mErr[1] : 0;
+    }
+    const errorLines = allLines.filter(l => l.startsWith('✗') || /^Error/.test(l));
+    if (errorLines.length) extra.detalleErrores = errorLines.slice(0, 5);
+    const osmApplied = allLines.filter(l => /OSM\s*:.*v[ií]as aplicadas/.test(l)).length;
+    const osmNoCache = allLines.filter(l => /OSM\s*:.*sin cach/i.test(l)).length;
+    const osmObs     = allLines.filter(l => /OSM\s*:.*obsoleta/i.test(l)).length;
+    if (osmApplied || osmNoCache || osmObs) {
+      extra.osm_aplicado  = osmApplied;
+      extra.osm_sin_cache = osmNoCache + osmObs;
+    }
+    appendLog(code === 0 ? 'info' : 'error', opName, `${opName} ${code === 0 ? 'completado' : 'fallido'}`, extra);
+    if (code === 0) invalidateCatalogCache();
     res.end();
   });
   child.on('error', err => {
@@ -596,7 +614,7 @@ function apiCatalog(res) {
       _catalogCacheSize = Buffer.byteLength(_catalogCache);
       console.log(`[catalog] built: ${Math.round(_catalogCacheSize/1024)}KB`);
     }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     res.end(_catalogCache);
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -1130,10 +1148,9 @@ function apiAdminStats(res) {
     `).all();
     const dbSize  = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
     const walSize = fs.existsSync(DB_PATH + '-wal') ? fs.statSync(DB_PATH + '-wal').size : 0;
-    const gpxCount = countGpx(path.join(ROOT, 'TracksGps'));
     const backups = listBackupFiles();
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ...summary, cats, dbSize, walSize, gpxCount, backups }));
+    res.end(JSON.stringify({ ...summary, cats, dbSize, walSize, gpxCount: summary.tracks, backups }));
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
@@ -1236,10 +1253,13 @@ function apiAdminIntegrity(res) {
 const server = http.createServer(async (req, res) => {
   const { pathname, searchParams } = new URL(req.url, `http://localhost:${PORT}`);
   const method = req.method;
+  const _t0 = Date.now();
+  const _origEnd = res.end.bind(res);
+  res.end = function(...a) { const ms = Date.now() - _t0; if (ms > 80) console.log(`[slow] ${ms}ms  ${method} ${pathname}`); return _origEnd(...a); };
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Filename');
   if (method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   if (pathname === '/api/db/stats' && method === 'GET')
@@ -1335,11 +1355,31 @@ const server = http.createServer(async (req, res) => {
     return apiTempFiles(res, srcDir);
   }
 
+  if (pathname === '/api/import/upload' && method === 'POST') {
+    const rawName = (req.headers['x-filename'] || 'track.gpx').replace(/[^\w\s\-.()\[\]áéíóúÁÉÍÓÚñÑüÜ]/g, '_');
+    const filename = rawName.toLowerCase().endsWith('.gpx') ? rawName : rawName + '.gpx';
+    const tempDir  = path.join(ROOT, 'TracksGps', '_TEMP_');
+    fs.mkdirSync(tempDir, { recursive: true });
+    const dest = path.join(tempDir, filename);
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    fs.writeFileSync(dest, Buffer.concat(chunks));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true, filename }));
+  }
+
   if (pathname === '/api/import/wikiloc' && method === 'POST') {
     const body = await parseBody(req).catch(() => ({}));
     const url  = (body.url || '').trim();
-    if (!url) return json(res, 400, { error: 'Missing url' });
+    if (!url) { res.writeHead(400, {'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'Missing url'})); }
     return apiRunScript(res, path.join(ROOT, 'scripts', 'wikiloc-import.js'), [url]);
+  }
+
+  if (pathname === '/api/import/komoot' && method === 'POST') {
+    const body = await parseBody(req).catch(() => ({}));
+    const url  = (body.url || '').trim();
+    if (!url) { res.writeHead(400, {'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'Missing url'})); }
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'komoot-import.js'), [url]);
   }
 
   if (pathname === '/api/db/import-temp' && method === 'POST') {
@@ -1533,8 +1573,7 @@ const server = http.createServer(async (req, res) => {
         const fp   = path.join(cacheDir, slug + '.json');
         if (!fs.existsSync(fp)) return { name: slug, label: g.group_key, trackCount: g.track_count, cached: false };
         const stat = fs.statSync(fp);
-        let ts = 0;
-        try { ts = JSON.parse(fs.readFileSync(fp, 'utf8')).ts || 0; } catch {}
+        const ts = stat.mtimeMs;
         return { name: slug, label: g.group_key, trackCount: g.track_count, cached: true,
                  size: stat.size, ts, ageHours: Math.round((Date.now() - ts) / 3600000) };
       });
@@ -1628,9 +1667,23 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ── Log routes ───────────────────────────────────────────────────
+  if (pathname === '/api/admin/logs/list' && method === 'GET') {
+    try {
+      const files = fs.readdirSync(LOGS_DIR)
+        .filter(f => /^\d{4}-\d{2}-\d{2}\.log$/.test(f))
+        .sort().reverse()
+        .map(f => f.replace(/\.log$/, ''));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(files));
+    } catch { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('[]'); }
+    return;
+  }
+
   if (pathname === '/api/admin/logs' && method === 'GET') {
     try {
-      const content = fs.existsSync(LOG_FILE) ? fs.readFileSync(LOG_FILE, 'utf8') : '';
+      const date = searchParams.get('date') || new Date().toISOString().slice(0, 10);
+      const file = logFilePath(date);
+      const content = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
       const lines = content.trim().split('\n').filter(Boolean);
       const parsed = lines.map(l => { try { return JSON.parse(l); } catch { return { ts: null, level: 'raw', op: '', msg: l }; } });
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1641,8 +1694,9 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/admin/logs/download' && method === 'GET') {
     try {
-      const content = fs.existsSync(LOG_FILE) ? fs.readFileSync(LOG_FILE) : Buffer.alloc(0);
-      const date = new Date().toISOString().slice(0, 10);
+      const date = searchParams.get('date') || new Date().toISOString().slice(0, 10);
+      const file = logFilePath(date);
+      const content = fs.existsSync(file) ? fs.readFileSync(file) : Buffer.alloc(0);
       res.writeHead(200, {
         'Content-Type': 'text/plain; charset=utf-8',
         'Content-Disposition': `attachment; filename="operations-${date}.log"`,
@@ -1654,7 +1708,8 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/admin/logs/clear' && method === 'POST') {
     try {
-      fs.writeFileSync(LOG_FILE, '');
+      const date = new Date().toISOString().slice(0, 10);
+      fs.writeFileSync(logFilePath(date), '');
       appendLog('info', 'server', 'Log limpiado manualmente');
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true }));

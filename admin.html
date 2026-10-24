@@ -360,8 +360,9 @@
     <div class="card">
       <div class="card-head">
         <h2>Log de operaciones</h2>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-ghost btn-sm" id="btn-log-refresh">↻ Actualizar</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select class="select" id="log-date-sel" style="font-size:12px;padding:4px 8px;height:auto"></select>
+          <button class="btn btn-ghost btn-sm" id="btn-log-refresh">↻</button>
           <a class="btn btn-ghost btn-sm" id="btn-log-download" href="/api/admin/logs/download" download>⬇ Descargar</a>
           <button class="btn btn-danger btn-sm" id="btn-log-clear">Limpiar</button>
         </div>
@@ -398,7 +399,7 @@
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.6.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.7.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">23 octubre 2026</div>
         </div>
       </div>
@@ -417,8 +418,29 @@
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v1.6.0</span>
+            <span class="cl-version">v1.7.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">23 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Detección de cuestas recalibrada</b> — el algoritmo se ajustó contra los puntos que devuelve <code>/api/tracks/:id</code> (simplificados, ~594 en vez de 1780), no contra <code>raw_points</code>. Con la resolución real el perfil se suaviza y las distancias se desplazan ~1 km, lo que invalidaba los umbrales anteriores</li>
+            <li>Recorte de inicio y final de cada cuesta: desde el fondo del valle se avanza mientras la pendiente media de los próximos <code>LOOK</code> km no llegue al 2,5%, evitando que una aproximación llana larga se cuente como parte de la subida</li>
+            <li>La cuesta se <i>califica</i> con su núcleo empinado pero se <i>muestra</i> desde el valle si el tramo recortado es menor de <code>MIN_TRIM</code>; así una rampa corta de acceso no diluye la pendiente por debajo del umbral</li>
+            <li>Métricas calculadas sobre elevación bruta en lugar de suavizada — el suavizado infraestimaba las cuestas cortas</li>
+            <li>Nuevos valores por defecto: <code>minGain</code> 80 → 70 m, <code>minGrad</code> 4 → 3,5%, <code>NOISE</code> 12 → 10 m, <code>LOOK</code> 0,5 km, <code>MIN_TRIM</code> 2 km</li>
+            <li>Clave de parámetros versionada a <code>gpx-climb-params-v2</code>: los valores guardados en <code>localStorage</code> con los defaults antiguos ya no pisan a los nuevos</li>
+            <li><b>Importar desde Komoot</b> — nueva fuente en el modal de importar (<code>scripts/komoot-import.js</code>, endpoint SSE <code>/api/import/komoot</code>). Solo tours públicos, sin autenticación</li>
+            <li><b>Arrastrar y soltar GPX</b> desde el escritorio al comparador o al catálogo. En Comparar se elige entre verlo solo en el mapa (track temporal con stats calculadas en cliente) o catalogarlo</li>
+            <li><b>Comparar — panel de altimetría flotante</b> con sincronización cursor ↔ mapa, zoom por arrastre con stats del tramo, y botones para quitar un track o todos</li>
+            <li><b>Comparar — pestaña "∥ Todos"</b>: superpone los perfiles de todos los tracks visibles tomando como referencia del eje X el de mayor recorrido. Se puede cerrar y recuperar</li>
+            <li>Resumen de importación: cuenta real leída del resumen del script (antes contaba las líneas con ✓ del log) y detalle colapsado bajo "Ver detalles"</li>
+            <li>Fix: <code>/api/import/wikiloc</code> fallaba con <code>ReferenceError: json is not defined</code> al faltar la URL</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v1.6.0</span>
             <span class="cl-date">23 oct 2026</span>
           </div>
           <ul class="cl-list">
@@ -995,13 +1017,28 @@ loadOsmStrategy();
 // ── Logs tab ──────────────────────────────────────────────────────
 let allLogEntries = [];
 let lvFilter = 'all';
-let lvSearch = '';
+let lvSearch  = '';
+let logCurrentDate = new Date().toISOString().slice(0, 10);
 
 function fmtLogTs(ts) {
   if (!ts) return '—';
   const d = new Date(ts);
-  return d.toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit' })
-       + ' ' + d.toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  return d.toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+function fmtExtra(e) {
+  const badges = [];
+  const badge = (txt, color) => `<span style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600;background:${color};margin-left:3px">${txt}</span>`;
+  if (e.importados != null) {
+    if (e.importados > 0)  badges.push(badge(`✓ ${e.importados} importado${e.importados>1?'s':''}`, 'color-mix(in srgb,#15803d 15%,transparent)'));
+    if (e.existian)        badges.push(badge(`⏭ ${e.existian} ya existía${e.existian>1?'n':''}`, 'color-mix(in srgb,#0369a1 15%,transparent)'));
+    if (e.review)          badges.push(badge(`⚠ ${e.review} revisión`, 'color-mix(in srgb,#92400e 15%,transparent)'));
+    if (e.errores)         badges.push(badge(`✗ ${e.errores} error${e.errores>1?'es':''}`, 'color-mix(in srgb,#b91c1c 15%,transparent)'));
+  }
+  if (e.osm_aplicado  > 0) badges.push(badge(`OSM ✓ ${e.osm_aplicado}`, 'color-mix(in srgb,#0369a1 15%,transparent)'));
+  if (e.osm_sin_cache > 0) badges.push(badge(`OSM — ${e.osm_sin_cache}`, 'color-mix(in srgb,#888 12%,transparent)'));
+  if (!badges.length && e.args?.length) return `<span style="color:var(--muted);font-size:10px;margin-left:6px">${e.args.join(' ')}</span>`;
+  return badges.join('');
 }
 
 function renderLogs() {
@@ -1025,27 +1062,51 @@ function renderLogs() {
       <span class="lv-ts">${fmtLogTs(e.ts)}</span>
       <span class="lv-lvl ${lvl}">${lvl}</span>
       <span class="lv-op" title="${e.op||''}">${e.op||''}</span>
-      <span class="lv-msg">${(e.msg||'').replace(/</g,'&lt;')}</span>
+      <span class="lv-msg">${(e.msg||'').replace(/</g,'&lt;')}${fmtExtra(e)}</span>
     </div>`;
   }).join('');
   viewer.scrollTop = viewer.scrollHeight;
 }
 
-async function loadLogs() {
+async function loadLogDates() {
+  try {
+    const dates = await fetch('/api/admin/logs/list').then(r => r.json());
+    const sel = document.getElementById('log-date-sel');
+    const today = new Date().toISOString().slice(0, 10);
+    if (!dates.includes(today)) dates.unshift(today);
+    sel.innerHTML = dates.map(d => {
+      const label = d === today ? `Hoy (${d})` : d;
+      return `<option value="${d}" ${d === logCurrentDate ? 'selected' : ''}>${label}</option>`;
+    }).join('');
+    // Update download link
+    document.getElementById('btn-log-download').href = `/api/admin/logs/download?date=${logCurrentDate}`;
+  } catch {}
+}
+
+async function loadLogs(date) {
+  if (date) logCurrentDate = date;
   const viewer = document.getElementById('log-viewer');
   viewer.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">Cargando…</div>';
   try {
-    allLogEntries = await fetch('/api/admin/logs').then(r => r.json());
+    allLogEntries = await fetch(`/api/admin/logs?date=${logCurrentDate}`).then(r => r.json());
+    document.getElementById('btn-log-download').href = `/api/admin/logs/download?date=${logCurrentDate}`;
     renderLogs();
   } catch (e) {
     viewer.innerHTML = `<div style="color:var(--danger,#b91c1c);font-size:13px;padding:8px">Error: ${e.message}</div>`;
   }
 }
 
-document.getElementById('btn-log-refresh').addEventListener('click', loadLogs);
+document.getElementById('log-date-sel').addEventListener('change', function() {
+  loadLogs(this.value);
+});
+
+document.getElementById('btn-log-refresh').addEventListener('click', () => {
+  loadLogDates();
+  loadLogs();
+});
 
 document.getElementById('btn-log-clear').addEventListener('click', async () => {
-  if (!confirm('¿Limpiar el log de operaciones?')) return;
+  if (!confirm(`¿Limpiar el log de hoy (${logCurrentDate})?`)) return;
   const r = await fetch('/api/admin/logs/clear', { method: 'POST' });
   if (r.ok) { allLogEntries = []; renderLogs(); toast('Log limpiado'); }
   else toast('Error al limpiar', true);
@@ -1065,10 +1126,13 @@ document.getElementById('log-search').addEventListener('input', function() {
   renderLogs();
 });
 
-// Load logs when the Logs tab is activated
+// Load logs + date list when the Logs tab is activated
 document.querySelectorAll('#admin-tabs .seg-tab').forEach(btn => {
   if (btn.dataset.tab === 'logs') {
-    btn.addEventListener('click', () => { if (!allLogEntries.length) loadLogs(); });
+    btn.addEventListener('click', () => {
+      loadLogDates();
+      if (!allLogEntries.length) loadLogs();
+    });
   }
 });
 </script>

@@ -785,7 +785,7 @@ function detectClimbs(pts) {
   });
 
   // Zigzag peak/valley detection
-  const NOISE = 12;
+  const NOISE = 10;
   const events = [];
   let refI = 0, refE = sm[0], mode = null;
   for (let i = 1; i < sm.length; i++) {
@@ -804,19 +804,55 @@ function detectClimbs(pts) {
   else              events.push({ type: 'v', i: refI });
 
   const all = [{ type: 'v', i: 0 }, ...events];
-  let _p = { minGain: 80, minGrad: 4, minDist: 0.2 };
-  try { Object.assign(_p, JSON.parse(localStorage.getItem('gpx-climb-params') || '{}')); } catch {}
+  let _p = { minGain: 70, minGrad: 3.5, minDist: 0.2 };
+  try { Object.assign(_p, JSON.parse(localStorage.getItem('gpx-climb-params-v2') || '{}')); } catch {}
   const MIN_DIST = _p.minDist, MIN_GAIN = _p.minGain, MIN_GRAD = _p.minGrad;
+
+  // Average gradient (%) over a forward window of LOOK km from index k
+  const LOOK = 0.5, TRIM = 2.5, MIN_TRIM = 2;
+  const fwdGrad = (k, limit) => {
+    let f = k + 1;
+    while (f < limit && ep[f].d - ep[k].d < LOOK) f++;
+    const d = ep[f].d - ep[k].d;
+    return d > 0 ? (ep[f].ele - ep[k].ele) / d / 10 : 0;
+  };
+
   const climbs = [];
   for (let j = 0; j + 1 < all.length; j++) {
     const a = all[j], b = all[j + 1];
     if (a.type !== 'v' || b.type !== 'p') continue;
-    const gain = sm[b.i] - sm[a.i];
-    const dist = ep[b.i].d - ep[a.i].d;
-    const grad = gain / dist / 10;
-    if (dist < MIN_DIST || (gain < MIN_GAIN && grad < MIN_GRAD)) continue;
+
+    // Lowest point in the valley→peak window
+    let lo = a.i;
+    for (let k = a.i + 1; k < b.i; k++) if (ep[k].ele < ep[lo].ele) lo = k;
+
+    // Trim start: skip flat run-in until sustained uphill begins
+    let s = lo;
+    while (s < b.i - 1 && fwdGrad(s, b.i) < TRIM) s++;
+
+    // Trim end: last point still climbing, then extend to the nearby local max
+    let e = s;
+    for (let k = s; k < b.i; k++) if (fwdGrad(k, b.i) >= TRIM) e = k;
+    let peakI = e;
+    for (let k = e; k <= b.i; k++) {
+      if (ep[k].ele > ep[peakI].ele) peakI = k;
+      if (ep[k].d - ep[e].d > LOOK * 2) break;
+    }
+
+    // Qualify the climb on its steep core, so a flat approach can't dilute it
+    const coreGain = ep[peakI].ele - ep[s].ele;
+    const coreDist = ep[peakI].d - ep[s].d;
+    const coreGrad = coreDist > 0 ? coreGain / coreDist / 10 : 0;
+    if (coreDist < MIN_DIST || (coreGain < MIN_GAIN && coreGrad < MIN_GRAD)) continue;
+
+    // A short run-in reads as part of the climb; only a long flat drag stays cut
+    if (ep[s].d - ep[lo].d < MIN_TRIM) s = lo;
+
+    const gain = ep[peakI].ele - ep[s].ele;
+    const dist = ep[peakI].d - ep[s].d;
+    const grad = dist > 0 ? gain / dist / 10 : 0;
     climbs.push({
-      i1:   a.i, i2: b.i,
+      i1:   s, i2: peakI,
       gain: Math.round(gain),
       km:   Math.round(dist * 100) / 100,
       grad: Math.round(grad * 10) / 10,
