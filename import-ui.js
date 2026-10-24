@@ -52,7 +52,7 @@ function importLogSummary(container, isErr) {
     const mI = t.match(/^Importados\s*:\s*(\d+)/i);
     const mE = t.match(/^Errores\s*:\s*(\d+)/i);
     const mX = t.match(/^Ya existían[^:]*:\s*(\d+)/i);
-    const mR = t.match(/^Enviados a _REVIEW_\s*:\s*(\d+)/i);
+    const mR = t.match(/^(?:Enviados a _REVIEW_|Por revisar)\s*:\s*(\d+)/i);
     if (mI) imported = parseInt(mI[1]);
     if (mE) errors   = parseInt(mE[1]);
     if (mX) existing = parseInt(mX[1]);
@@ -83,7 +83,7 @@ function importLogSummary(container, isErr) {
       const mId = txt.match(/Importado \(id=(\d+)\)/);
       if (mId)                             { st = 'ok';   stLabel = 'Importado';    stIcon = '✓'; tId = parseInt(mId[1]); }
       else if (/Ya existe en BD/.test(txt)){ st = 'skip'; stLabel = 'Ya existía';  stIcon = '⏭'; }
-      else if (/_REVIEW_/.test(txt))       { st = 'warn'; stLabel = 'En revisión'; stIcon = '⚠'; }
+      else if (/_REVIEW_|Por revisar/.test(txt))       { st = 'warn'; stLabel = 'En revisión'; stIcon = '⚠'; }
 
       const mLoc    = txt.match(/Ubicaci[oó]n\s*:\s*(.+)/);
       const mSierra = txt.match(/Sierra\s*:\s*(.+)/);

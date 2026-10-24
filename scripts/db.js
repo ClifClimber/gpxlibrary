@@ -92,6 +92,8 @@ function _migrate(db) {
     ['road_type_seq',     'TEXT'],
     ['waypoints_json',    'TEXT'],
     ['catalog_pts',       'TEXT'],
+    ['uid',               'TEXT'],   // stable storage key: TracksGps/store/{uid}.gpx
+    ['sha256',            'TEXT'],   // hash of the original GPX bytes, for de-duplication
   ];
   for (const [col, type] of newCols) {
     try { db.exec(`ALTER TABLE tracks ADD COLUMN ${col} ${type}`); } catch {}
@@ -99,6 +101,8 @@ function _migrate(db) {
   ['activity','province','ccaa','sierra'].forEach(c => {
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_tracks_${c} ON tracks(${c})`); } catch {}
   });
+  try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_uid ON tracks(uid) WHERE uid IS NOT NULL'); } catch {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_tracks_sha256 ON tracks(sha256)'); } catch {}
 
   // One-time: compute circular from first/last raw point for all tracks
   // Uses flat-earth approximation: cos(40°)^2 ≈ 0.41, 0.5km ≈ 0.0045 deg

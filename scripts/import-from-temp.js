@@ -5,7 +5,7 @@
 // 1. Reverse-geocode con Nominatim para obtener provincia/CCAA y nombre de zona
 // 2. Clasifica actividad (palabras clave + métricas)
 // 3. Mueve el archivo a TracksGps/<Actividad>/<Sierra>/
-// 4. Los que no se pueden clasificar van a _TEMP_/_REVIEW_
+// 4. Se guardan en TracksGps/store/{uid}.gpx (inmutable); los dudosos llevan la etiqueta «revisar»
 // 5. Importa a la BD
 //
 // Uso: node scripts/import-from-temp.js [--force]
@@ -13,7 +13,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { openDb, withTransaction } = require('./db');
-const { updateGpxMetadata }       = require('./gpx-utils');
+const { newUid, sha256, putFile }  = require('./store');
 const { CACHE_DIR, slugify }      = require('./osm-strategy-batch');
 const { fetchTrackPts, filterWaysToBbox, applyWaysToTrack } = require('./osm-shared');
 
@@ -25,7 +25,6 @@ function readOsmCache(file) {
 
 const TRACKS_DIR = path.join(__dirname, '..', 'TracksGps');
 const TEMP_DIR   = path.join(TRACKS_DIR, '_TEMP_');
-const REVIEW_DIR = path.join(TEMP_DIR, '_REVIEW_');
 
 const FORCE      = process.argv.includes('--force');
 const KEEP_SRC   = process.argv.includes('--keep');   // copy only, don't delete source
@@ -303,26 +302,6 @@ function parseGpx(content, filePath) {
 }
 
 // ── Mover (o copiar) archivo con manejo de colisiones ─────────────────
-function moveFile(src, destDir) {
-  fs.mkdirSync(destDir, { recursive: true });
-  const base = path.basename(src);
-  let dest = path.join(destDir, base);
-  if (fs.existsSync(dest) && dest !== src) {
-    const ext  = path.extname(base);
-    const stem = path.basename(base, ext);
-    let n = 2;
-    while (fs.existsSync(path.join(destDir, `${stem}_${n}${ext}`))) n++;
-    dest = path.join(destDir, `${stem}_${n}${ext}`);
-  }
-  if (KEEP_SRC) {
-    fs.copyFileSync(src, dest);
-  } else {
-    try { fs.renameSync(src, dest); }
-    catch { fs.copyFileSync(src, dest); fs.unlinkSync(src); }
-  }
-  return dest;
-}
-
 // ── Recoger GPX de _TEMP_ (excluye _REVIEW_) ─────────────────────────
 function collectTempGpx(dir) {
   const out = [];
@@ -359,9 +338,9 @@ function collectTempGpx(dir) {
   console.log(`\nImportando ${files.length} archivo(s) GPX...\n`);
 
   const db = openDb();
-  const existingFiles = new Set(
-    db.prepare('SELECT file FROM tracks').all().map(r => r.file)
-  );
+  const findByHash = db.prepare('SELECT id, name FROM tracks WHERE sha256=? LIMIT 1');
+  const setStoreCols = db.prepare('UPDATE tracks SET uid=?, sha256=?, zone=COALESCE(zone, sierra) WHERE id=?');
+  const tagForReview = db.prepare(`UPDATE tracks SET tags=? WHERE id=?`);
 
   // Limpiar el flag de importación reciente antes de marcar los nuevos
   db.prepare('UPDATE tracks SET is_recent_import=0 WHERE is_recent_import=1').run();
@@ -436,11 +415,21 @@ function collectTempGpx(dir) {
     console.log(`[${i+1}/${files.length}] ${baseName}`);
 
     // Leer GPX
-    let content;
+    let content, hash;
     try {
-      try { content = fs.readFileSync(filePath, 'utf8'); }
-      catch { content = fs.readFileSync(filePath, 'latin1'); }
+      const buf = fs.readFileSync(filePath);
+      hash = sha256(buf);
+      content = buf.toString('utf8');
+      if (content.includes('�')) content = buf.toString('latin1');
     } catch (e) { console.log(`  ✗ No se puede leer: ${e.message}`); errors++; continue; }
+
+    const dup = !FORCE && findByHash.get(hash);
+    if (dup) {
+      // Byte-identical to a stored original, so the temp copy is redundant.
+      if (!KEEP_SRC) { try { fs.unlinkSync(filePath); } catch {} }
+      console.log(`  ↩ Ya existe en BD (mismo contenido que id=${dup.id} «${dup.name}»)${KEEP_SRC ? '' : ' · copia descartada'}`);
+      skipped++; continue;
+    }
 
     let track;
     try {
@@ -473,37 +462,21 @@ function collectTempGpx(dir) {
     const { act, conf } = inferActivity(track.name, track.distance, track.elevationGain);
     console.log(`  Actividad  : ${act} (${conf})`);
 
-    // ── Paso 4: Decidir destino ──────────────────────────────────────
-    let destDir;
-    if (conf === 'low' && !sierra) {
-      destDir = REVIEW_DIR;
-      console.log(`  → ⚠ _REVIEW_ (baja confianza, sin zona geográfica)`);
-      reviewed++;
-    } else {
-      const actFolder    = safeFolderName(act);
-      const sierraFolder = safeFolderName(sierra || 'General');
-      destDir = path.join(TRACKS_DIR, actFolder, sierraFolder);
-      console.log(`  → ${actFolder}/${sierraFolder}/`);
-    }
-
-    // ── Paso 5: Mover archivo ────────────────────────────────────────
-    let movedFile;
-    try { movedFile = moveFile(filePath, destDir); }
-    catch (e) { console.log(`  ✗ Error moviendo: ${e.message}`); errors++; continue; }
-
-    const relFile = path.relative(path.join(__dirname,'..'), movedFile).replace(/\\/g,'/');
-
-    if (!FORCE && existingFiles.has(relFile)) {
-      console.log(`  ↩ Ya existe en BD`);
-      skipped++;
-      continue;
-    }
+    // ── Paso 4: Guardar en el almacén inmutable ─────────────────────
+    const needsReview = conf === 'low' && !sierra;
+    if (needsReview) { console.log(`  → ⚠ Por revisar (baja confianza, sin zona geográfica)`); reviewed++; }
+    const uid = newUid();
+    let relFile;
+    try { relFile = putFile(filePath, uid, { keep: KEEP_SRC }); }
+    catch (e) { console.log(`  ✗ Error guardando: ${e.message}`); errors++; continue; }
 
     // ── Paso 6: Importar a BD y escribir atributos al GPX ───────────
     const ibp = computeIBP(track.distance, track.elevationGain);
     console.log(`  IBP        : h=${ibp.ibp_hiking}  b=${ibp.ibp_bicycle}  r=${ibp.ibp_running}`);
     try {
       const newId = importTrack(track, relFile, act, sierra, province, ccaa, ibp);
+      setStoreCols.run(uid, hash, newId);
+      if (needsReview) tagForReview.run(JSON.stringify(['revisar']), newId);
       importedIds.push(newId);
       imported++;
       console.log(`  ✓ Importado (id=${newId})`);
@@ -532,9 +505,6 @@ function collectTempGpx(dir) {
         console.log(`  OSM        : error al aplicar caché (${osmErr.message})`);
       }
 
-      const gf = { name: track.name, activity: act };
-      if (track.url) gf.url = track.url;
-      updateGpxMetadata(movedFile, gf);
     } catch (e) {
       console.log(`  ✗ Error en BD: ${e.message}`);
       errors++;
@@ -545,7 +515,7 @@ function collectTempGpx(dir) {
   console.log(`✓ Importación completada:`);
   console.log(`  Importados          : ${imported}`);
   console.log(`  Ya existían (BD)    : ${skipped}`);
-  console.log(`  Enviados a _REVIEW_ : ${reviewed}`);
+  console.log(`  Por revisar         : ${reviewed}`);
   console.log(`  Errores             : ${errors}`);
   if (reviewed > 0) {
     console.log(`\n⚠  ${reviewed} tracks en _TEMP_/_REVIEW_ necesitan clasificación manual.`);

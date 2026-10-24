@@ -15,7 +15,8 @@ const zlib   = require('zlib');
 const { pipeline } = require('stream/promises');
 const { spawn } = require('child_process');
 const { openDb, closeDb, withTransaction, DB_PATH } = require('./scripts/db');
-const { escXml, updateGpxMetadata } = require('./scripts/gpx-utils');
+const { escXml, applyGpxMetadata } = require('./scripts/gpx-utils');
+const { downloadName } = require('./scripts/store');
 
 const PORT = parseInt(process.env.PORT || '8080');
 const ROOT = __dirname;
@@ -168,7 +169,7 @@ function apiRunScript(res, scriptPath, args = []) {
     const extra = { code };
     const mImp = allLines.join('\n').match(/Importados\s*:\s*(\d+)/);
     const mEx  = allLines.join('\n').match(/Ya exist[^:]*:\s*(\d+)/);
-    const mRev = allLines.join('\n').match(/Enviados a _REVIEW_\s*:\s*(\d+)/);
+    const mRev = allLines.join('\n').match(/(?:Enviados a _REVIEW_|Por revisar)\s*:\s*(\d+)/);
     const mErr = allLines.join('\n').match(/Errores\s*:\s*(\d+)/);
     if (mImp || mEx || mRev || mErr) {
       extra.importados = mImp ? +mImp[1] : 0;
@@ -416,11 +417,11 @@ function getTracksForExport(db, ids, mode, maxPts) {
   const fetchClean = db.prepare('SELECT lat,lon,ele FROM clean_points WHERE track_id=? ORDER BY seq');
   const result = [];
   for (const id of ids) {
-    const t = db.prepare('SELECT id,name,date,file,cleaned FROM tracks WHERE id=?').get(id);
+    const t = db.prepare('SELECT id,name,date,file,cleaned,activity,sierra,zone FROM tracks WHERE id=?').get(id);
     if (!t) continue;
     let pts = t.cleaned ? fetchClean.all(t.id) : fetchRaw.all(t.id);
     if (mode === 'simplified') pts = simplifyPts(pts, maxPts);
-    result.push({ id: t.id, name: t.name, date: t.date, file: t.file, pts });
+    result.push({ id: t.id, name: t.name, date: t.date, file: t.file, activity: t.activity, sierra: t.sierra || t.zone, pts });
   }
   return result;
 }
@@ -443,14 +444,11 @@ async function apiExportGpx(req, res) {
       const entries = data.map(t => {
         const gpx = buildGpx([t]);
         let zipName;
-        if (layout === 'tree' && t.file) {
-          zipName = t.file.replace(/\\/g, '/');
-        } else {
-          let base = safeName(t.name) + '.gpx';
-          if (usedNames.has(base)) base = safeName(t.name) + '_' + t.id + '.gpx';
-          usedNames.add(base);
-          zipName = base;
-        }
+        const dir = layout === 'tree' ? `${safeName(t.activity || 'Sin actividad')}/${safeName(t.sierra || 'General')}/` : '';
+        let base = dir + safeName(t.name) + '.gpx';
+        if (usedNames.has(base)) base = dir + safeName(t.name) + '_' + t.id + '.gpx';
+        usedNames.add(base);
+        zipName = base;
         return { name: zipName, data: Buffer.from(gpx, 'utf8') };
       });
       const zipBuf  = buildZip(entries);
@@ -480,24 +478,34 @@ function apiExportGpxSingle(res, id, searchParams) {
   } catch(e) { res.writeHead(500); res.end(e.message); }
 }
 
+// Original GPX bytes with the current DB metadata applied (the stored file is never rewritten).
+function originalGpxWithMeta(track) {
+  const buf = fs.readFileSync(path.join(ROOT, track.file));
+  let text = buf.toString('utf8');
+  if (text.includes('�')) text = buf.toString('latin1');
+  const meta = { name: track.name };
+  if (track.activity) meta.activity = track.activity;
+  if (track.notes) meta.notes = track.notes;
+  if (track.url) meta.url = track.url;
+  return applyGpxMetadata(text, meta);
+}
+
 // GET /api/tracks/:id/gpx           → original GPX file from disk
 // GET /api/tracks/:id/gpx?pts=300   → generated GPX with N simplified points
 function apiDownloadGpx(res, id, searchParams) {
   try {
     const db = openDb();
-    const track = db.prepare('SELECT id,name,file,date,cleaned FROM tracks WHERE id=?').get(id);
+    const track = db.prepare('SELECT id,name,file,date,cleaned,activity,notes,url FROM tracks WHERE id=?').get(id);
     if (!track) { res.writeHead(404); res.end('Not found'); return; }
 
     const ptsParam = searchParams.get('pts');
     if (!ptsParam || ptsParam === 'all') {
-      const filePath = path.join(ROOT, track.file);
-      if (!fs.existsSync(filePath)) { res.writeHead(404); res.end('GPX file not found on disk'); return; }
-      const safe = path.basename(track.file).replace(/[^\w\s\-áéíóúñÁÉÍÓÚÑ.]/g, '_');
+      if (!fs.existsSync(path.join(ROOT, track.file))) { res.writeHead(404); res.end('GPX file not found on disk'); return; }
       res.writeHead(200, {
         'Content-Type': 'application/gpx+xml; charset=utf-8',
-        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(safe)}`,
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(downloadName(track.name))}`,
       });
-      fs.createReadStream(filePath).pipe(res);
+      res.end(originalGpxWithMeta(track));
     } else {
       const maxPts = Math.max(2, parseInt(ptsParam) || 300);
       const data = getTracksForExport(db, [id], 'simplified', maxPts);
@@ -706,54 +714,17 @@ async function apiBulkDelete(req, res) {
   }
 }
 
+// Files live in the immutable store, so "moving" a track only changes its metadata.
 async function apiMoveTrack(req, res, id) {
   try {
     const { category: actParam, zone } = await parseBody(req);
     if (!actParam) { res.writeHead(400); res.end('category required'); return; }
     const db = openDb();
-    const track = db.prepare('SELECT file FROM tracks WHERE id=?').get(id);
-    if (!track) { res.writeHead(404); res.end('Not found'); return; }
-
-    const safe = s => (s || '').replace(/[<>:"/\\|?*]/g,'_').trim();
-    const actFolder    = safe(actParam);
-    const sierraFolder = zone ? safe(zone) : null;
-    const destDir = sierraFolder
-      ? path.join(ROOT, 'TracksGps', actFolder, sierraFolder)
-      : path.join(ROOT, 'TracksGps', actFolder);
-
-    const oldAbs = path.join(ROOT, track.file.replace(/\//g, path.sep));
-    if (!fs.existsSync(oldAbs)) { res.writeHead(404); res.end('GPX file not found on disk'); return; }
-
-    fs.mkdirSync(destDir, { recursive: true });
-    const filename = path.basename(oldAbs);
-    let newAbs = path.join(destDir, filename);
-    if (fs.existsSync(newAbs) && newAbs !== oldAbs) {
-      const ext = path.extname(filename), stem = path.basename(filename, ext);
-      let n = 2;
-      while (fs.existsSync(path.join(destDir, `${stem}_${n}${ext}`))) n++;
-      newAbs = path.join(destDir, `${stem}_${n}${ext}`);
-    }
-
-    try { fs.renameSync(oldAbs, newAbs); }
-    catch { fs.copyFileSync(oldAbs, newAbs); fs.unlinkSync(oldAbs); }
-
-    const newRel = path.relative(ROOT, newAbs).replace(/\\/g, '/');
-    const parts  = newRel.split('/');
-    const newZone = parts.length > 3 ? parts[2] : null;
-    db.prepare('UPDATE tracks SET file=?, activity=?, zone=? WHERE id=?')
-      .run(newRel, actParam, newZone ?? null, id);
-
-    // Write activity (and any existing name/notes/url) back to the moved GPX
-    const tData = db.prepare('SELECT name, activity, notes, url FROM tracks WHERE id=?').get(id);
-    if (tData) {
-      const gf = { name: tData.name, activity: tData.activity };
-      if (tData.notes != null) gf.notes = tData.notes;
-      if (tData.url   != null) gf.url   = tData.url;
-      updateGpxMetadata(newAbs, gf);
-    }
-
+    const r = db.prepare('UPDATE tracks SET activity=?, zone=COALESCE(?, zone) WHERE id=?').run(actParam, zone || null, id);
+    if (!r.changes) { res.writeHead(404); res.end('Not found'); return; }
+    invalidateCatalogCache();
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, file: newRel }));
+    res.end(JSON.stringify({ ok: true }));
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
@@ -769,56 +740,12 @@ async function apiPatchTrack(req, res, id) {
     const sets = fields.map(f => `${f}=?`).join(',');
     db.prepare(`UPDATE tracks SET ${sets} WHERE id=?`).run(...fields.map(f => body[f] ?? null), id);
 
-    // Write name/activity/notes back to GPX file
-    const track = db.prepare('SELECT file, activity, sierra FROM tracks WHERE id=?').get(id);
-    const gpxFields = Object.fromEntries(
-      fields.filter(f => ['name','activity','notes','url'].includes(f)).map(f => [f, body[f]])
-    );
-    let movedFile = null;
-    if (track && (fields.includes('activity') || fields.includes('sierra'))) {
-      const safe = s => (s || '').replace(/[<>:"/\\|?*]/g,'_').trim();
-      // Re-read after update to get new values; also fetch zone for folder fallback
-      const updated = db.prepare('SELECT file, activity, sierra, zone FROM tracks WHERE id=?').get(id);
-      if (updated) {
-        const act  = safe(updated.activity || 'General');
-        const sier = safe(updated.sierra || updated.zone || 'General');
-        const filename = path.basename(updated.file);
-        const expectedRel = `TracksGps/${act}/${sier}/${filename}`;
-        if (updated.file !== expectedRel) {
-          const oldAbs = path.join(ROOT, updated.file.replace(/\//g, path.sep));
-          const expectedAbs = path.join(ROOT, expectedRel.replace(/\//g, path.sep));
-          if (!fs.existsSync(oldAbs) && fs.existsSync(expectedAbs)) {
-            // File already at destination (e.g. moved outside app); just fix DB pointer
-            db.prepare('UPDATE tracks SET file=? WHERE id=?').run(expectedRel, id);
-            movedFile = { from: updated.file, to: expectedRel };
-          } else if (fs.existsSync(oldAbs)) {
-            const destDir = path.join(ROOT, 'TracksGps', act, sier);
-            fs.mkdirSync(destDir, { recursive: true });
-            let newAbs = path.join(destDir, filename);
-            if (fs.existsSync(newAbs) && newAbs !== oldAbs) {
-              const ext = path.extname(filename), stem = path.basename(filename, ext);
-              let n = 2;
-              while (fs.existsSync(path.join(destDir, `${stem}_${n}${ext}`))) n++;
-              newAbs = path.join(destDir, `${stem}_${n}${ext}`);
-            }
-            if (newAbs !== oldAbs) {
-              try { fs.renameSync(oldAbs, newAbs); } catch { fs.copyFileSync(oldAbs, newAbs); fs.unlinkSync(oldAbs); }
-              const newRel = path.relative(ROOT, newAbs).replace(/\\/g, '/');
-              db.prepare('UPDATE tracks SET file=? WHERE id=?').run(newRel, id);
-              movedFile = { from: updated.file, to: newRel };
-            }
-          }
-        }
-      }
-    }
-    if (track && Object.keys(gpxFields).length) {
-      const currentFile = movedFile ? movedFile.to : track.file;
-      updateGpxMetadata(path.join(ROOT, currentFile), gpxFields);
-    }
+    // The GPX is immutable: metadata lives only in the DB (it is applied on download).
+    if (fields.includes('sierra')) db.prepare('UPDATE tracks SET zone=sierra WHERE id=? AND sierra IS NOT NULL').run(id);
 
     invalidateCatalogCache();
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, ...(movedFile && { movedFile }) }));
+    res.end(JSON.stringify({ ok: true }));
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
@@ -851,47 +778,14 @@ async function apiBulkUpdate(req, res) {
       }
     });
 
-    // Move files if activity or sierra changed
-    let movedCount = 0;
-    if (editFields.includes('activity') || editFields.includes('sierra')) {
-      const safe = s => (s || '').replace(/[<>:"/\\|?*]/g,'_').trim();
-      for (const id of ids) {
-        const t = db.prepare('SELECT file, activity, sierra, zone FROM tracks WHERE id=?').get(id);
-        if (!t) continue;
-        const act  = safe(t.activity || 'General');
-        const sier = safe(t.sierra || t.zone || 'General');
-        const filename = path.basename(t.file);
-        const expectedRel = `TracksGps/${act}/${sier}/${filename}`;
-        if (t.file === expectedRel) continue;
-        const oldAbs = path.join(ROOT, t.file.replace(/\//g, path.sep));
-        const expectedAbs = path.join(ROOT, expectedRel.replace(/\//g, path.sep));
-        if (!fs.existsSync(oldAbs)) {
-          if (fs.existsSync(expectedAbs)) {
-            db.prepare('UPDATE tracks SET file=? WHERE id=?').run(expectedRel, id);
-            movedCount++;
-          }
-          continue;
-        }
-        const destDir = path.join(ROOT, 'TracksGps', act, sier);
-        fs.mkdirSync(destDir, { recursive: true });
-        let newAbs = path.join(destDir, filename);
-        if (fs.existsSync(newAbs) && newAbs !== oldAbs) {
-          const ext = path.extname(filename), stem = path.basename(filename, ext);
-          let n = 2;
-          while (fs.existsSync(path.join(destDir, `${stem}_${n}${ext}`))) n++;
-          newAbs = path.join(destDir, `${stem}_${n}${ext}`);
-        }
-        if (newAbs === oldAbs) continue;
-        try { fs.renameSync(oldAbs, newAbs); } catch { try { fs.copyFileSync(oldAbs, newAbs); fs.unlinkSync(oldAbs); } catch { continue; } }
-        const newRel = path.relative(ROOT, newAbs).replace(/\\/g, '/');
-        db.prepare('UPDATE tracks SET file=? WHERE id=?').run(newRel, id);
-        movedCount++;
-      }
+    if (editFields.includes('sierra')) {
+      const z = db.prepare('UPDATE tracks SET zone=sierra WHERE id=? AND sierra IS NOT NULL');
+      for (const id of ids) z.run(id);
     }
 
     invalidateCatalogCache();
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, updated: ids.length, moved: movedCount }));
+    res.end(JSON.stringify({ ok: true, updated: ids.length }));
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
@@ -992,78 +886,6 @@ function apiConfigProvinces(res) {
 }
 
 // ── API: reorganizar archivos según actividad/sierra en BD ─────────
-function apiOrganizeFiles(res) {
-  res.writeHead(200, {
-    'Content-Type':  'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection':    'keep-alive',
-  });
-  const send = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const safe = s => (s || 'General').replace(/[<>:"/\\|?*]/g,'_').trim() || 'General';
-
-  try {
-    send({ type: 'start' });
-    const db = openDb();
-    const tracks = db.prepare('SELECT id, file, activity, sierra, zone FROM tracks').all();
-    send({ type: 'log', text: `Revisando ${tracks.length} tracks...` });
-
-    let moved = 0, already = 0, missing = 0, errors = 0;
-
-    for (const track of tracks) {
-      const actFolder    = safe(track.activity || 'General');
-      const sierraFolder = safe(track.sierra   || track.zone || 'General');
-      const filename     = path.basename(track.file);
-      const expectedRel  = `TracksGps/${actFolder}/${sierraFolder}/${filename}`;
-
-      if (track.file === expectedRel) { already++; continue; }
-
-      const oldAbs = path.join(ROOT, track.file.replace(/\//g, path.sep));
-      if (!fs.existsSync(oldAbs)) {
-        send({ type: 'warn', text: `⚠ No encontrado: ${track.file}` });
-        missing++;
-        continue;
-      }
-
-      const destDir = path.join(ROOT, 'TracksGps', actFolder, sierraFolder);
-      fs.mkdirSync(destDir, { recursive: true });
-      let newAbs = path.join(destDir, filename);
-      if (fs.existsSync(newAbs) && newAbs !== oldAbs) {
-        const ext = path.extname(filename), stem = path.basename(filename, ext);
-        let n = 2;
-        while (fs.existsSync(path.join(destDir, `${stem}_${n}${ext}`))) n++;
-        newAbs = path.join(destDir, `${stem}_${n}${ext}`);
-      }
-
-      try {
-        try { fs.renameSync(oldAbs, newAbs); } catch { fs.copyFileSync(oldAbs, newAbs); fs.unlinkSync(oldAbs); }
-        const newRel = path.relative(ROOT, newAbs).replace(/\\/g, '/');
-        db.prepare('UPDATE tracks SET file=?, zone=? WHERE id=?')
-          .run(newRel, sierraFolder, track.id);
-        // Write attrs to GPX at new location
-        const tData = db.prepare('SELECT name, activity, notes, url FROM tracks WHERE id=?').get(track.id);
-        if (tData) {
-          const gf = { name: tData.name, activity: tData.activity };
-          if (tData.notes != null) gf.notes = tData.notes;
-          if (tData.url   != null) gf.url   = tData.url;
-          updateGpxMetadata(newAbs, gf);
-        }
-        moved++;
-        send({ type: 'log', text: `→ ${filename}  ➜  ${actFolder}/${sierraFolder}/` });
-      } catch (e) {
-        send({ type: 'error', text: `✗ ${filename}: ${e.message}` });
-        errors++;
-      }
-    }
-
-    send({ type: 'log', text: `\n✓ ${moved} movidos · ${already} ya en su sitio · ${missing} no encontrados · ${errors} errores` });
-    send({ type: 'done', code: 0 });
-  } catch (e) {
-    send({ type: 'error', text: e.message });
-    send({ type: 'done', code: 1 });
-  }
-  res.end();
-}
-
 // ── API: borrar todos los tracks y archivos GPX ────────────────────
 function apiDeleteAll(res) {
   res.writeHead(200, {
@@ -1364,8 +1186,6 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/tracks/bulk-delete' && method === 'POST')
     return apiBulkDelete(req, res);
 
-  if (pathname === '/api/db/organize-files' && method === 'POST')
-    return apiOrganizeFiles(res);
 
   if (pathname === '/api/db/temp-files' && method === 'GET') {
     const srcParam = searchParams.get('src');
@@ -1794,10 +1614,16 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/compare' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'compare.html'), req);
 
-  if (pathname === '/api/db/write-gpx-attrs' && method === 'POST') {
-    const ids = searchParams.get('ids');
-    const args = ids ? ['--ids', ids] : [];
-    return apiRunScript(res, path.join(ROOT,'scripts','write-gpx-attrs.js'), args);
+  if (pathname === '/api/export/folders' && method === 'POST') {
+    const body = await parseBody(req).catch(() => ({}));
+    const dest = typeof body.dest === 'string' ? body.dest.trim() : '';
+    if (!dest) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Falta el destino' })); }
+    const args = ['--dest', dest];
+    if (Array.isArray(body.ids) && body.ids.length) args.push('--ids', body.ids.map(Number).filter(Boolean).join(','));
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'export-folders.js'), args);
+  }
+  if (pathname === '/api/db/migrate-store' && method === 'POST') {
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'migrate-store.js'), searchParams.get('dry') === '1' ? ['--dry-run'] : []);
   }
 
   if (pathname === '/api/db/extract-urls' && method === 'POST') {

@@ -37,7 +37,7 @@ Key tables: `tracks`, `raw_points`, `clean_points`, `config_activities`, `config
 
 Important `tracks` columns: `activity`, `sierra`, `province`, `ccaa`, `tags` (JSON array), `road_types` (JSON obj), `surface_types` (JSON obj), `road_type_seq` (JSON array of `{t,f0,f1}` fraction segments), `waypoints_json` (JSON array of `{lat,lon,ele,name,sym,desc}`), `ibp_bicycle/hiking/running`, `circular`, `is_recent_import`.
 
-**`track.file`** always includes the `TracksGps/` prefix. Use `path.join(ROOT, track.file)` — never `path.join(ROOT, 'TracksGps', track.file)`.
+**`track.file`** always includes the `TracksGps/` prefix. Use `path.join(ROOT, track.file)` — never `path.join(ROOT, 'TracksGps', track.file)`. Since the store migration it is `TracksGps/store/{uid}.gpx` (see `scripts/store.js`); `uid` and `sha256` columns identify the stored original.
 
 ### Server — `server.js`
 Pure Node.js HTTP server. No framework. Routes:
@@ -48,7 +48,7 @@ Pure Node.js HTTP server. No framework. Routes:
 - `GET /api/catalog` — visor catalog (simplified points, stats, bounds, center, tags parsed, ibp rounded; same shape as the old catalog-data.js)
 - `GET /api/tracks` — full track list for the editor (no points)
 - `GET /api/tracks/:id` — full track (parses `tags`/`waypoints_json`, attaches `points` array from DB, downsampled to 800 unless `?full=1`)
-- `PATCH /api/tracks/:id` — update metadata; calls `updateGpxMetadata()` for name/activity/notes
+- `PATCH /api/tracks/:id` — update metadata in the DB only (files are never moved or rewritten)
 - `DELETE /api/tracks/:id`
 - `GET /api/geo` — returns `{provinces, ccaa, zones}` distinct values from DB
 - `GET /api/config/activities` — activity list with colors
@@ -94,8 +94,8 @@ Edit modal: `<datalist>` autocomplete for activity/sierra/province/ccaa; custom 
 1. Parse GPX (track points + `<wpt>` waypoints)
 2. Nominatim reverse-geocode for province/CCAA
 3. Infer activity from name keywords + metrics
-4. Move file to `TracksGps/<Activity>/<Sierra>/`
-5. Upsert to DB; store `waypoints_json`; write metadata back to GPX
+4. Skip if the SHA-256 of the file already exists in the DB (byte-identical duplicate); otherwise store it as `TracksGps/store/{uid}.gpx`. Low-confidence tracks get the tag `revisar`
+5. Upsert to DB; store `waypoints_json`, `uid`, `sha256`
 
 ### Wikiloc import (`scripts/wikiloc-import.js`)
 Takes a Wikiloc URL or numeric trail ID. Reads `wikiloc_token` from `osm-settings.json`. Calls Wikiloc REST API v2 (`/api/v2/trails/{id}` and `/api/v2/trails/{id}/gpx`) with Bearer auth. Saves GPX to `TracksGps/_TEMP_/wikiloc-{id}.gpx`, then spawns `import-from-temp.js` to complete the import. Token configured in `Admin → Parámetros → Wikiloc`.
@@ -114,7 +114,9 @@ Key component classes: `.btn` (+ modifiers), `.input`/`.select`, `.chip` (+ `.ac
 New pages start from `docs/page-template.html` and must be added to the `<nav>` in every page.
 
 ## GPX conventions
-- Source tracks live in `TracksGps/<Activity>/<Zone>/file.gpx`. Never modify them programmatically except via `updateGpxMetadata()`.
+- Originals live in the immutable store `TracksGps/store/{uid}.gpx`. Never rename, move or rewrite them; name/activity/zone/notes/url live only in the DB and are applied on the fly when downloading (`applyGpxMetadata()` in `scripts/gpx-utils.js`).
+- A browsable `Actividad/Sierra/Nombre.gpx` copy is produced on demand: Admin → Gestión de Tracks → «Exportar en carpetas» (`scripts/export-folders.js`, refuses destinations inside `TracksGps`) or the ZIP «tree» layout.
+- `scripts/migrate-store.js [--dry-run] [--revert <manifest>]` moves legacy folder files into the store and writes a revert manifest to `data/migrations/`.
 - Files with `YYYY-MM-DD` filename prefix get that date if no `<time>` tag is present.
 - Files with only `<wpt>` (no `<trkpt>`) are skipped by the import scripts.
 - `<wpt>` waypoints are parsed (lat/lon/ele/name/sym/desc) and stored as `waypoints_json`.
