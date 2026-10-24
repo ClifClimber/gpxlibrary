@@ -93,6 +93,9 @@
           </a>
           <span id="track-act"></span>
           <div id="ph-actions">
+            <a class="ph-btn ph-icon" id="source-btn" target="_blank" rel="noopener" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
             <button class="ph-btn" id="edit-btn" onclick="openEditModal()" hidden>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Editar
@@ -394,6 +397,11 @@ function updateHeader(t) {
   document.getElementById('track-act').textContent = t.activity ? `${icon} ${t.activity}` : '';
   const date = t.date ? new Date(t.date + 'T00:00:00').toLocaleDateString('es-ES', { year:'numeric', month:'short', day:'numeric' }) : '';
   document.getElementById('track-sub').textContent = [t.sierra, t.province, date].filter(Boolean).join(' · ');
+  const srcBtn = document.getElementById('source-btn');
+  if (t.url && /^https?:\/\//i.test(t.url)) {
+    let host = t.url; try { host = new URL(t.url).hostname.replace(/^www\./, ''); } catch {}
+    srcBtn.href = t.url; srcBtn.title = `Ver en ${host}`; srcBtn.hidden = false;
+  } else srcBtn.hidden = true;
 }
 
 // Keep fitted bounds clear of the floating panel and the profile sheet
@@ -940,19 +948,17 @@ function buildContent(t, color, icon) {
   gClimbs = climbs;
 
   const fmtDur = s => { if (!s) return '—'; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h?`${h}h ${String(m).padStart(2,'0')}min`:`${m}min`; };
-  const circular = t.circular != null ? (t.circular ? '🔄 Circular' : '↔ Lineal') : null;
+  const LOOP_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>';
+  const LINE_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="4" cy="12" r="2"/><circle cx="20" cy="12" r="2"/><line x1="6.5" y1="12" x2="17.5" y2="12"/></svg>';
+  const routeType = t.circular != null ? (t.circular ? `${LOOP_SVG}Circular` : `${LINE_SVG}Lineal`) : '—';
+  const totalTime = t.moving_time ? t.moving_time + (t.stopped_time > 0 ? t.stopped_time : 0) : null;
 
+  const kv = (lbl, val) => `<div class="kv"><span class="kv-lbl">${lbl}</span><span class="kv-val">${val}</span></div>`;
   const details = [
-    circular   ? `<div><div class="d-lbl">Tipo de recorrido</div><div class="d-val">${circular}</div></div>` : '',
-    t.sierra   ? `<div><div class="d-lbl">Sierra / Parque</div><div class="d-val">${esc(t.sierra)}</div></div>` : '',
-    t.zone     ? `<div><div class="d-lbl">Zona</div><div class="d-val">${esc(t.zone)}</div></div>` : '',
-    t.ccaa     ? `<div><div class="d-lbl">Comunidad</div><div class="d-val">${esc(t.ccaa)}</div></div>` : '',
-    t.province ? `<div><div class="d-lbl">Provincia</div><div class="d-val">${esc(t.province)}</div></div>` : '',
-    t.date     ? `<div><div class="d-lbl">Fecha</div><div class="d-val">${date}</div></div>` : '',
-    t.moving_time ? `<div><div class="d-lbl">Tiempo en marcha</div><div class="d-val">${fmtDur(t.moving_time)}</div></div>` : '',
-    (t.moving_time && t.stopped_time > 0) ? `<div><div class="d-lbl">Tiempo total</div><div class="d-val">${fmtDur(t.moving_time + t.stopped_time)}</div></div>` : '',
-    t.stopped_time > 0 ? `<div><div class="d-lbl">Tiempo parado</div><div class="d-val">${fmtDur(t.stopped_time)}</div></div>` : '',
-    t.raw_count ? `<div><div class="d-lbl">Puntos GPS</div><div class="d-val">${fmt(t.raw_count)}</div></div>` : '',
+    t.ccaa ? kv('Comunidad', esc(t.ccaa)) : '',
+    t.zone && t.zone !== t.sierra ? kv('Zona', esc(t.zone)) : '',
+    totalTime && t.stopped_time > 0 ? kv('Tiempo total', fmtDur(totalTime)) : '',
+    t.stopped_time > 0 ? kv('Tiempo parado', fmtDur(t.stopped_time)) : '',
   ].filter(Boolean).join('');
 
   let sourceHost = '';
@@ -991,41 +997,43 @@ function buildContent(t, color, icon) {
   })() : '';
 
   // ── Tab: Resumen ──────────────────────────────────────────────
+  const tagChips = (t.tags||[]).map(tag=>`<span class="track-tag" data-tag="${esc(tag)}">${esc(tag)}<button class="tag-del" onclick="removeTag(this.parentElement.dataset.tag)" title="Quitar">×</button></span>`).join('');
   const tabResumen = `
-    <div class="stats-row">
-      <div class="stat-card accent"><div class="stat-val">${dist}</div><div class="stat-unit">km</div><div class="stat-lbl">Distancia</div></div>
-      <div class="stat-card"><div class="stat-val">${gain}</div><div class="stat-unit">m</div><div class="stat-lbl">Desnivel +</div></div>
-      <div class="stat-card"><div class="stat-val">${loss}</div><div class="stat-unit">m</div><div class="stat-lbl">Desnivel −</div></div>
+    <div class="stats-hero">
+      <div class="hero-stat accent"><div class="hero-val">${dist}<small>km</small></div><div class="hero-lbl">Distancia</div></div>
+      <div class="hero-stat"><div class="hero-val">${gain}<small>m</small></div><div class="hero-lbl">Desnivel +</div></div>
+      <div class="hero-stat"><div class="hero-val">${loss}<small>m</small></div><div class="hero-lbl">Desnivel −</div></div>
     </div>
-    <div class="stats-row row2">
-      <div class="stat-card"><div class="stat-val">${minA}</div><div class="stat-unit">m</div><div class="stat-lbl">Cota mín.</div></div>
-      <div class="stat-card"><div class="stat-val">${maxA}</div><div class="stat-unit">m</div><div class="stat-lbl">Cota máx.</div></div>
-      <div class="stat-card"><div class="stat-val" style="font-size:16px;padding-top:3px"><span class="act-badge" style="font-size:12px">${icon} ${esc(t.activity||'—')}</span></div><div class="stat-lbl" style="margin-top:4px">Actividad</div></div>
+    <div class="stats-strip">
+      <div><span class="ss-lbl">Cota mín.</span><span class="ss-val">${minA} m</span></div>
+      <div><span class="ss-lbl">Cota máx.</span><span class="ss-val">${maxA} m</span></div>
+      <div><span class="ss-lbl">${t.moving_time ? 'En marcha' : 'Tiempo'}</span><span class="ss-val">${fmtDur(t.moving_time)}</span></div>
+      <div><span class="ss-lbl">Recorrido</span><span class="ss-val ss-icon">${routeType}</span></div>
     </div>
     ${ibpSection}
-    ${details ? `<div class="section"><div class="section-head">Detalles</div><div id="details-grid">${details}</div></div>` : ''}
-    ${t.notes ? `<div class="section"><div class="section-head">Notas</div><div id="notes-body">${esc(t.notes)}</div></div>` : ''}
-    <div class="section" id="file-section">
-      <div class="section-head">Archivo</div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <code style="font-size:11px;background:var(--soft);padding:4px 8px;border-radius:4px;color:var(--ink-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.file||'')}</code>
-        <a href="#" id="file-folder-link" style="font-size:12px;color:#3b82f6;white-space:nowrap;text-decoration:none" title="Abrir carpeta en explorador">📂 Carpeta</a>
-      </div>
-    </div>
     <div class="section" id="tags-section">
       <div class="section-head">Etiquetas</div>
       <div id="tags-wrap">
-        <div id="tags-list">${(t.tags||[]).map(tag=>`<span class="track-tag" data-tag="${esc(tag)}">${esc(tag)}<button class="tag-del" onclick="removeTag('${esc(tag)}')" title="Quitar">×</button></span>`).join('')}</div>
-        <div id="tag-input-row">
+        <div id="tags-list">${tagChips}</div>
+        <button type="button" id="tag-open-btn" class="tag-open-btn" onclick="openTagInput()">+ Añadir</button>
+        <div id="tag-input-row" hidden>
           <input id="tag-input" type="text" placeholder="Nueva etiqueta…" maxlength="40" autocomplete="off">
           <div id="tag-suggestions"></div>
           <button id="tag-add-btn" onclick="addTag()">Añadir</button>
         </div>
       </div>
     </div>
-    ${t.url ? `<div class="section"><a id="source-link" href="${esc(t.url)}" target="_blank" rel="noopener">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-      Ver en fuente original<span id="source-host">${esc(sourceHost)}</span></a></div>` : ''}
+    ${t.notes ? `<div class="section"><div class="section-head">Notas</div><div id="notes-body">${esc(t.notes)}</div></div>` : ''}
+    ${details ? `<div class="section"><div class="section-head">Detalles</div><div class="kv-list">${details}</div></div>` : ''}
+    <details class="section tech-section" id="file-section">
+      <summary class="section-head">Archivo</summary>
+      <div class="kv-list">
+        ${kv('Fichero', `<code title="${esc(t.file||'')}">${esc((t.file||'').replace(/^TracksGps\//,''))}</code>`)}
+        ${t.raw_count ? kv('Puntos GPS', fmt(t.raw_count)) : ''}
+        ${t.url ? kv('Fuente', `<a href="${esc(t.url)}" target="_blank" rel="noopener">${esc(sourceHost || t.url)}</a>`) : ''}
+        <a href="#" id="file-folder-link" class="tech-link" title="Abrir carpeta en explorador">Abrir carpeta</a>
+      </div>
+    </details>
   `;
 
   // ── Tab: Puntos de paso ───────────────────────────────────────
@@ -1099,10 +1107,10 @@ function buildContent(t, color, icon) {
 
   const tabs = [
     ['resumen',   'Resumen'],
-    ['puntos',    'Puntos de paso'],
-    ['caminos',   'Tipos de camino'],
-    ...(climbs.length ? [['subidas', `Subidas (${climbs.length})`]] : []),
-    ['tiempo',    'Tiempo hoy'],
+    ['puntos',    'Puntos'],
+    ['caminos',   'Caminos'],
+    ...(climbs.length ? [['subidas', `Subidas ${climbs.length}`]] : []),
+    ['tiempo',    'Tiempo'],
   ];
 
   const TAB_ICONS = {
@@ -1445,8 +1453,19 @@ function getTags() {
 }
 function renderTags(tags) {
   document.getElementById('tags-list').innerHTML = tags.map(tag =>
-    `<span class="track-tag" data-tag="${tag}">${tag}<button class="tag-del" onclick="removeTag('${tag.replace(/'/g,"\\'")}')">×</button></span>`
+    `<span class="track-tag" data-tag="${esc(tag)}">${esc(tag)}<button class="tag-del" onclick="removeTag(this.parentElement.dataset.tag)" title="Quitar">×</button></span>`
   ).join('');
+}
+function openTagInput() {
+  document.getElementById('tag-open-btn').hidden = true;
+  document.getElementById('tag-input-row').hidden = false;
+  document.getElementById('tag-input').focus();
+}
+function closeTagInput() {
+  const inp = document.getElementById('tag-input');
+  if (inp.value.trim()) return;
+  document.getElementById('tag-input-row').hidden = true;
+  document.getElementById('tag-open-btn').hidden = false;
 }
 async function saveTags(tags) {
   if (!gTrack) return;
@@ -1474,7 +1493,12 @@ function removeTag(tag) {
   saveTags(tags);
 }
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && document.activeElement?.id === 'tag-input') addTag();
+  if (document.activeElement?.id !== 'tag-input') return;
+  if (e.key === 'Enter') addTag();
+  if (e.key === 'Escape') { e.target.value = ''; closeTagInput(); }
+});
+document.addEventListener('focusout', e => {
+  if (e.target.id === 'tag-input') setTimeout(closeTagInput, 200);
 });
 
 // ── Climb click ──────────────────────────────────────────────────
