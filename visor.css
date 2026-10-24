@@ -240,3 +240,19 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   .leaflet-top.leaflet-right { top: calc(var(--bar-h) + 38px + var(--gap) * 2 + 8px); }
   .popover, .popover.pop-wide { width: calc(100vw - 24px); }
 }
+
+/* ── Marker clusters ─────────────────────────────────────────────── */
+.track-cluster {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 88%, transparent);
+  color: #fff; font-weight: 700; font-size: 12px; font-variant-numeric: tabular-nums;
+  border: 3px solid var(--surface);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent), var(--shadow);
+  transition: transform .15s ease;
+}
+.track-cluster:hover { transform: scale(1.08); }
+.leaflet-cluster-anim .leaflet-marker-icon, .leaflet-cluster-anim .leaflet-marker-shadow {
+  transition: transform .3s ease-out, opacity .3s ease-in;
+}
+.ti-rtype { display:inline-flex; align-items:center; color: var(--muted); }

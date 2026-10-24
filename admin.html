@@ -599,7 +599,7 @@ async function loadStats() {
   const d = await r.json();
   const raw   = d.rawPoints   || 0;
   const clean = d.cleanPoints || 0;
-  const pct   = raw ? ((1 - clean / raw) * 100).toFixed(1) + '%' : '—';
+  const pct   = raw && clean ? ((1 - clean / raw) * 100).toFixed(1) + '%' : '—';
   statsTrackCount = d.tracks || 0;
   updateSizeEstimates();
   document.getElementById('s-tracks').textContent    = fmtN(d.tracks);
@@ -616,7 +616,7 @@ async function loadStats() {
   if (cats.length) {
     catsEl.style.display = '';
     document.getElementById('stats-cats-body').innerHTML = cats.map(c => {
-      const red = c.rawPoints ? ((1 - (c.cleanPoints||0) / c.rawPoints) * 100).toFixed(0) + '%' : '—';
+      const red = c.rawPoints && c.cleanPoints ? ((1 - c.cleanPoints / c.rawPoints) * 100).toFixed(0) + '%' : '—';
       return `<tr>
         <td>${c.category || 'Sin clasificar'}</td>
         <td class="num">${c.count}</td>

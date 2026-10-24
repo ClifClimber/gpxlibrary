@@ -132,6 +132,7 @@ CATALOG.forEach(t => { t._q = norm([t.name, t.sierra, t.zone, ...(t.tags || [])]
 const map = L.map('map', { center:[40.4,-3.7], zoom:7, zoomControl:false, renderer:L.canvas({ tolerance:4 }) });
 
 const tileLayers = {
+  'Claro (CARTO)':   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains:'abcd', attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>', maxZoom:20 }),
   'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19 }),
   'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',   { attribution:'© OpenTopoMap', maxZoom:17 }),
   'IGN Topográfico': L.tileLayer('https://www.ign.es/wmts/mapa-raster?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=MTN&STYLE=default&FORMAT=image/jpeg&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', { attribution:'© <a href="https://www.ign.es">IGN España</a>', maxZoom:20 }),
@@ -139,7 +140,7 @@ const tileLayers = {
   'Google Satélite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
   'Google Híbrido':  L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
 };
-let baseName = 'OpenStreetMap';
+let baseName = 'Claro (CARTO)';
 try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}
 tileLayers[baseName].addTo(map);
 map.on('baselayerchange', e => { try { localStorage.setItem('visor-base-layer', e.name); } catch {} });
@@ -209,7 +210,7 @@ const items = CATALOG.map((track, i) => {
   layer.on('mouseout', () => { if (activeIdx === i) hideCursor(); });
 
   const sp = track.points[0];
-  const marker = sp ? L.marker([sp[0], sp[1]], { icon: makeActivityIcon(track.activity || 'Otro', color), title: track.name }).addTo(map) : null;
+  const marker = sp ? L.marker([sp[0], sp[1]], { icon: makeActivityIcon(track.activity || 'Otro', color), title: track.name }) : null;
   if (marker) {
     marker.on('mouseover', () => previewTrack(i, true));
     marker.on('mouseout',  () => previewTrack(i, false));
@@ -217,6 +218,25 @@ const items = CATALOG.map((track, i) => {
   }
   return { track, layer, marker, visible:true };
 });
+
+const cluster = L.markerClusterGroup({
+  showCoverageOnHover: false, maxClusterRadius: 44, spiderfyOnMaxZoom: true, chunkedLoading: true,
+  iconCreateFunction: c => {
+    const n = c.getChildCount();
+    const sz = n < 10 ? 34 : n < 50 ? 40 : 46;
+    return L.divIcon({ html: `<span>${n}</span>`, className: 'track-cluster', iconSize: [sz, sz] });
+  },
+}).addTo(map);
+cluster.addLayers(items.map(it => it.marker).filter(Boolean));
+let _clusterKey = '';
+function syncClusterMarkers() {
+  const vis = items.filter(it => it.visible && it.marker);
+  const key = vis.map(it => it.track.id).join(',');
+  if (key === _clusterKey) return;
+  _clusterKey = key;
+  cluster.clearLayers();
+  cluster.addLayers(vis.map(it => it.marker));
+}
 
 function previewTrack(i, on) {
   if (activeIdx === i) return;
@@ -249,7 +269,7 @@ function setActivityColor(act, color, save) {
   $$('.cat-pill[data-activity]').forEach(p => {
     if (p.dataset.activity === act) { const dot = p.querySelector('.cat-dot'); if (dot) dot.style.background = color; }
   });
-  renderList();
+  renderList(true);
   if (activeIdx !== null) {
     const tr = items[activeIdx].track;
     if ((tr.activity||'Otro') === act && !trackColors[tr.file]) fillDetailHeader(tr, color);
@@ -264,7 +284,7 @@ function setTrackColor(track, color, save) {
     item.layer.setStyle({ color });
     if (item.marker) item.marker.setIcon(makeActivityIcon(track.activity || 'Otro', color));
   }
-  renderList();
+  renderList(true);
   if (activeIdx !== null && items[activeIdx].track === track) fillDetailHeader(track, color);
 }
 
@@ -293,7 +313,7 @@ window.addEventListener('storage', e => {
     try {
       actIconsCustom = JSON.parse(e.newValue);
       items.forEach(({ track, marker }) => { if (marker) marker.setIcon(makeActivityIcon(track.activity || 'Otro', getTrackColor(track))); });
-      renderList();
+      renderList(true);
     } catch {}
   }
 });
@@ -665,13 +685,10 @@ function applyFilters() {
       (!vb || vb.intersects(L.latLngBounds(t.bounds[0], t.bounds[1])));
     it.visible = ok;
     if (ok) {
-      if (it.marker && !map.hasLayer(it.marker)) it.marker.addTo(map);
       visCount++; totalDist += t.distance || 0; totalEle += t.elevationGain || 0;
-    } else {
-      if (it.marker) it.marker.remove();
-      if (activeIdx === i) it.layer.remove();
-    }
+    } else if (activeIdx === i) it.layer.remove();
   });
+  syncClusterMarkers();
   $('list-count').innerHTML = visCount === CATALOG.length
     ? `${visCount} rutas`
     : `${visCount} rutas <small>de ${CATALOG.length}</small>`;
@@ -710,7 +727,7 @@ function trackItemHtml(track, ri) {
       <div class="ti-stats">
         <span><b>${nf1.format(track.distance)}</b> km</span>
         <span>↑ <b>${nf0.format(track.elevationGain)}</b> m</span>
-        <span title="${track.circular ? 'Circular' : 'Lineal'}">${track.circular ? '🔄' : '↔'}</span>
+        <span class="ti-rtype" title="${track.circular ? 'Circular' : 'Lineal'}">${track.circular ? ROUTE_ICON.loop : ROUTE_ICON.line}</span>
       </div>
     </div>
     <div class="ti-side">
@@ -721,9 +738,17 @@ function trackItemHtml(track, ri) {
   </div>`;
 }
 
-function renderList() {
+const ROUTE_ICON = {
+  loop: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>',
+  line: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="4" cy="12" r="2"/><circle cx="20" cy="12" r="2"/><line x1="6.5" y1="12" x2="17.5" y2="12"/></svg>',
+};
+let _listKey = '';
+function renderList(force) {
   const list = $('tracklist');
   const visible = items.map((it, ri) => ({ it, ri })).filter(x => x.it.visible);
+  const key = sortMode + '|' + activeIdx + '|' + visible.map(x => x.ri).join(',');
+  if (!force && key === _listKey) return;
+  _listKey = key;
   if (!visible.length) {
     list.innerHTML = '<div class="empty-state">Ninguna ruta coincide<p>Prueba a quitar algún filtro.</p></div>';
     return;

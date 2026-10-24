@@ -49,13 +49,20 @@ const MIME = {
 };
 
 // ── Archivos estáticos ─────────────────────────────────────────────
-function serveStatic(res, filePath) {
+function serveStatic(res, filePath, req) {
   const ext  = path.extname(filePath).toLowerCase();
   const mime = MIME[ext] || 'application/octet-stream';
-  fs.readFile(filePath, (err, data) => {
-    if (err) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' });
-    res.end(data);
+  fs.stat(filePath, (err, st) => {
+    if (err || !st.isFile()) { res.writeHead(404); res.end('Not found'); return; }
+    const etag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+    if (req && req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); res.end(); return;
+    }
+    fs.readFile(filePath, (err2, data) => {
+      if (err2) { res.writeHead(404); res.end('Not found'); return; }
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache', ETag: etag });
+      res.end(data);
+    });
   });
 }
 
@@ -180,6 +187,7 @@ function apiRunScript(res, scriptPath, args = []) {
     }
     appendLog(code === 0 ? 'info' : 'error', opName, `${opName} ${code === 0 ? 'completado' : 'fallido'}`, extra);
     if (code === 0) invalidateCatalogCache();
+    checkpointWal();
     res.end();
   });
   child.on('error', err => {
@@ -528,8 +536,13 @@ const MAX_CATALOG_PTS = 300;
 
 let _catalogCache = null;      // JSON string
 let _catalogCacheSize = 0;
+let _catalogEtag = '';
 
 function invalidateCatalogCache() { _catalogCache = null; }
+
+function checkpointWal() {
+  try { openDb().exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch (e) { console.error('[wal] checkpoint:', e.message); }
+}
 
 function simplifyCatalog(pts, maxN) {
   if(pts.length<=maxN) return pts;
@@ -555,7 +568,7 @@ function buildCatalog() {
     'ibp_bicycle,ibp_hiking,ibp_running,' +
     'distance,elevation_gain,elevation_loss,min_elevation,max_elevation,' +
     'sw_lat,sw_lon,ne_lat,ne_lon,center_lat,center_lon,catalog_pts,road_types,' +
-    'moving_time,stopped_time ' +
+    'moving_time,stopped_time,circular ' +
     'FROM tracks ORDER BY date DESC,name ASC'
   ).all();
   const fetchRaw   = db.prepare('SELECT lat,lon,ele FROM raw_points   WHERE track_id=? ORDER BY seq');
@@ -601,20 +614,25 @@ function buildCatalog() {
       hasOsm:        !!(t.road_types && t.road_types !== '{}'),
       movingTime:    t.moving_time  || null,
       stoppedTime:   t.stopped_time || null,
+      circular:      !!t.circular,
       points,
     });
   }
   return JSON.stringify(catalog);
 }
 
-function apiCatalog(res) {
+function apiCatalog(req, res) {
   try {
     if (!_catalogCache) {
       _catalogCache = buildCatalog();
       _catalogCacheSize = Buffer.byteLength(_catalogCache);
+      _catalogEtag = `"cat-${Date.now().toString(36)}"`;
       console.log(`[catalog] built: ${Math.round(_catalogCacheSize/1024)}KB`);
     }
-    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    if (req.headers['if-none-match'] === _catalogEtag) {
+      res.writeHead(304, { ETag: _catalogEtag, 'Cache-Control': 'no-cache' }); return res.end();
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', ETag: _catalogEtag });
     res.end(_catalogCache);
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -1255,7 +1273,7 @@ const server = http.createServer(async (req, res) => {
   const method = req.method;
   const _t0 = Date.now();
   const _origEnd = res.end.bind(res);
-  res.end = function(...a) { const ms = Date.now() - _t0; if (ms > 80) console.log(`[slow] ${ms}ms  ${method} ${pathname}`); return _origEnd(...a); };
+  res.end = function(...a) { const ms = Date.now() - _t0; if (ms > 80 && !String(res.getHeader('Content-Type')).includes('event-stream')) console.log(`[slow] ${ms}ms  ${method} ${pathname}`); return _origEnd(...a); };
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
@@ -1313,7 +1331,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === '/api/catalog' && method === 'GET')
-    return apiCatalog(res);
+    return apiCatalog(req, res);
 
   if (pathname === '/api/tracks/recent-ids' && method === 'GET') {
     try {
@@ -1719,7 +1737,7 @@ const server = http.createServer(async (req, res) => {
 
   // ── Admin routes ─────────────────────────────────────────────────
   if (pathname === '/admin' && method === 'GET')
-    return serveStatic(res, path.join(ROOT, 'admin.html'));
+    return serveStatic(res, path.join(ROOT, 'admin.html'), req);
 
   if (pathname === '/api/admin/version' && method === 'GET') {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
@@ -1760,16 +1778,16 @@ const server = http.createServer(async (req, res) => {
     return apiAdminDeleteBackup(res, decodeURIComponent(delBackupMatch[1]));
 
   if (pathname === '/editor' && method === 'GET')
-    return serveStatic(res, path.join(ROOT, 'editor.html'));
+    return serveStatic(res, path.join(ROOT, 'editor.html'), req);
 
   if (pathname === '/config' && method === 'GET')
-    return serveStatic(res, path.join(ROOT, 'config.html'));
+    return serveStatic(res, path.join(ROOT, 'config.html'), req);
 
   if (pathname === '/track' && method === 'GET')
-    return serveStatic(res, path.join(ROOT, 'track.html'));
+    return serveStatic(res, path.join(ROOT, 'track.html'), req);
 
   if (pathname === '/compare' && method === 'GET')
-    return serveStatic(res, path.join(ROOT, 'compare.html'));
+    return serveStatic(res, path.join(ROOT, 'compare.html'), req);
 
   if (pathname === '/api/db/write-gpx-attrs' && method === 'POST') {
     const ids = searchParams.get('ids');
@@ -1825,8 +1843,13 @@ const server = http.createServer(async (req, res) => {
   if (!filePath.startsWith(ROOT + path.sep) && filePath !== ROOT) {
     res.writeHead(403); res.end('Forbidden'); return;
   }
-  serveStatic(res, filePath);
+  serveStatic(res, filePath, req);
 });
+
+// Browsers resolve "localhost" to ::1 first; without an IPv6 listener every connection waits for the fallback.
+const server6 = http.createServer((req, res) => server.emit('request', req, res));
+server6.on('error', () => {});
+server6.listen(PORT, '::1');
 
 server.listen(PORT, '127.0.0.1', () => {
   const url = `http://localhost:${PORT}`;
@@ -1837,6 +1860,7 @@ server.listen(PORT, '127.0.0.1', () => {
   exec(open);
   // Daily auto-backup on startup if none exists for today
   setImmediate(async () => {
+    checkpointWal();
     try {
       const today = new Date().toISOString().slice(0, 10);
       fs.mkdirSync(BACKUPS_DIR, { recursive: true });
