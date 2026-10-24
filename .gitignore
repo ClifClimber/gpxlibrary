@@ -10,3 +10,6 @@ catalog-data.js
 *.db-wal
 *.db-shm
 osm-settings.json
+
+# GPX originales (almacén inmutable) e importaciones pendientes: datos personales, no van a git
+TracksGps/
