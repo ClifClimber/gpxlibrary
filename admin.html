@@ -588,8 +588,8 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.7.0</div>
-          <div style="font-size:11px;color:var(--muted)" id="about-date">23 octubre 2026</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v1.8.0</div>
+          <div style="font-size:11px;color:var(--muted)" id="about-date">24 octubre 2026</div>
         </div>
       </div>
       <div style="border-top:1px solid var(--line);padding:14px 24px;display:flex;gap:24px;flex-wrap:wrap">
@@ -607,8 +607,27 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v1.7.0</span>
+            <span class="cl-version">v1.8.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">24 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Nueva página Trazar</b> — dibujar rutas en línea recta o siguiendo caminos (BRouter), editar puntos (arrastrar, insertar, borrar), recortar, invertir, cerrar en circular, simplificar y deshacer/rehacer</li>
+            <li><b>Trazar — puntos de paso</b> (se guardan como <code>&lt;wpt&gt;</code>) y <b>unir rutas</b> con buscador o desde Comparar → «Unir»</li>
+            <li><b>Trazar — altitudes</b> con Open-Meteo y botón «Recalcular altitudes» para corregir saltos del GPS. Editar un track existente crea una copia; el GPX original no se toca</li>
+            <li><b>Modo oscuro</b> con botón ☀/☾ en la barra (sigue al sistema por defecto) y capas de mapa Claro / Oscuro</li>
+            <li><b>Config unido en Admin</b>: Actividades, Sierras, Provincias y Parámetros son pestañas de esta página, con enlace propio (<code>/admin#params</code>)</li>
+            <li><b>Rendimiento</b>: el servidor escucha también en IPv6 (≈200 ms menos por petición), ETag/304 en estáticos y catálogo, checkpoint del WAL, caché OSM de Admin 11 s → ms</li>
+            <li><b>Importación</b>: aplica OSM desde la caché por sierra y al terminar abre el detalle (1 track) o el visor filtrado (varios)</li>
+            <li><b>Visor</b>: marcadores agrupados en clústeres, encuadre en la zona principal, ID de importación y orden «Última importación»</li>
+            <li><b>Detalle</b> reorganizado (cifras principales, etiquetas como chips, archivo plegable, botón de fuente) y <b>Comparar</b> rediseñado con barras comparativas y buscador para añadir rutas</li>
+            <li>Fixes: filtro Circular/Lineal del visor, resaltado equivocado y colores repetidos en Comparar, «Reducción pts» al 100% sin limpiar, nombres y etiquetas con comillas</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v1.7.0</span>
             <span class="cl-date">23 oct 2026</span>
           </div>
           <ul class="cl-list">
