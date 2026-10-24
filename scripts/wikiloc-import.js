@@ -125,7 +125,7 @@ async function main() {
       console.log('  (Wikiloc exige login incluso para tracks públicos al descargar GPX)');
       console.log('  Opciones:');
       console.log('  · Descarga el GPX manualmente desde wikiloc.com e impórtalo desde disco');
-      console.log('  · O configura un token de API en Config → Wikiloc');
+      console.log('  · O configura un token de API en Admin → Parámetros → Wikiloc');
       process.exit(1);
     }
     console.log('  Usando API oficial con token…');

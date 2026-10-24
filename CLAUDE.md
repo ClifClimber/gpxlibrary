@@ -44,7 +44,7 @@ Pure Node.js HTTP server. No framework. Routes:
 - `GET /` → `index.html` (visor)
 - `GET /track?id=N` → `track.html`
 - `GET /trazar[?id=N]` → `trazar.html` (draw a new route or edit a copy of track N)
-- `GET /editor`, `/config`, `/admin` → static HTML pages
+- `GET /editor`, `/admin` → static HTML pages (`/config` redirects to `/admin#activities`)
 - `GET /api/catalog` — visor catalog (simplified points, stats, bounds, center, tags parsed, ibp rounded; same shape as the old catalog-data.js)
 - `GET /api/tracks` — full track list for the editor (no points)
 - `GET /api/tracks/:id` — full track (parses `tags`/`waypoints_json`, attaches `points` array from DB, downsampled to 800 unless `?full=1`)
@@ -64,8 +64,7 @@ Pure Node.js HTTP server. No framework. Routes:
 - `/` → `index.html` + `visor.js` + `visor.css` — Leaflet map, track list, filters, elevation profile
 - `/track?id=N` → `track.html` + `track.css` — detail view with tabs (Resumen, Puntos de paso, Tipos de camino, Subidas, Tiempo hoy)
 - `/editor` → `editor.html` — CRUD list, import from `_TEMP_`, tag editing
-- `/config` → `config.html` — activity/sierra config, Parámetros (climb thresholds + Wikiloc token)
-- `/admin` → `admin.html` — backup/restore/vacuum, IBP calc, stats
+- `/admin` → `admin.html` — tabs: Base de datos (backup/restore/vacuum, stats), Gestión de Tracks, Actividades, Sierras / Zonas, Provincias & CCAA, Parámetros (climb thresholds + Wikiloc token), Logs, Acerca de. Tabs are deep-linkable via `#tab` (e.g. `/admin#params`).
 - `/trazar` → `trazar.html` — route drawing/editing (draw, drag/insert/delete vertices, trim, waypoints, join other tracks, undo). `?join=1,2` opens several tracks joined in order (used by Comparar → Unir). Optional trail snapping via BRouter (brouter.de) and elevation via Open-Meteo. Saving builds a GPX client-side, uploads it with `/api/import/upload`, runs `/api/db/import-temp`, then PATCHes activity/notes. Editing an existing track always saves a new copy — source GPX files are never rewritten.
 
 ### Visor (`visor.js`)
@@ -99,7 +98,7 @@ Edit modal: `<datalist>` autocomplete for activity/sierra/province/ccaa; custom 
 5. Upsert to DB; store `waypoints_json`; write metadata back to GPX
 
 ### Wikiloc import (`scripts/wikiloc-import.js`)
-Takes a Wikiloc URL or numeric trail ID. Reads `wikiloc_token` from `osm-settings.json`. Calls Wikiloc REST API v2 (`/api/v2/trails/{id}` and `/api/v2/trails/{id}/gpx`) with Bearer auth. Saves GPX to `TracksGps/_TEMP_/wikiloc-{id}.gpx`, then spawns `import-from-temp.js` to complete the import. Token configured in `Config → Parámetros → Wikiloc`.
+Takes a Wikiloc URL or numeric trail ID. Reads `wikiloc_token` from `osm-settings.json`. Calls Wikiloc REST API v2 (`/api/v2/trails/{id}` and `/api/v2/trails/{id}/gpx`) with Bearer auth. Saves GPX to `TracksGps/_TEMP_/wikiloc-{id}.gpx`, then spawns `import-from-temp.js` to complete the import. Token configured in `Admin → Parámetros → Wikiloc`.
 
 The visor has a globe icon button in `#panel-head` that opens an import modal. Currently lists Wikiloc; designed to add more sources (Komoot, Strava…) as new `.import-net-btn` cards.
 

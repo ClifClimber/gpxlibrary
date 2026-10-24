@@ -1461,7 +1461,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/auth/wikiloc' && method === 'GET') {
     const s = readOsmSettings();
     const clientId = s.wikiloc_client_id;
-    if (!clientId) { res.writeHead(302, { Location: '/config?wl-error=no-client-id' }); return res.end(); }
+    if (!clientId) { res.writeHead(302, { Location: '/admin?wl-error=no-client-id#params' }); return res.end(); }
     const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     _oauthState = { state, ts: Date.now() };
     const qs = new URLSearchParams({
@@ -1479,9 +1479,9 @@ const server = http.createServer(async (req, res) => {
     const code  = searchParams.get('code');
     const state = searchParams.get('state');
     const error = searchParams.get('error');
-    if (error) { res.writeHead(302, { Location: `/config?wl-error=${encodeURIComponent(error)}` }); return res.end(); }
+    if (error) { res.writeHead(302, { Location: `/admin?wl-error=${encodeURIComponent(error)}#params` }); return res.end(); }
     if (!_oauthState || _oauthState.state !== state || Date.now() - _oauthState.ts > 300000) {
-      res.writeHead(302, { Location: '/config?wl-error=state-mismatch' }); return res.end();
+      res.writeHead(302, { Location: '/admin?wl-error=state-mismatch#params' }); return res.end();
     }
     _oauthState = null;
     const s = readOsmSettings();
@@ -1501,14 +1501,14 @@ const server = http.createServer(async (req, res) => {
         if (data.refresh_token) next.wikiloc_refresh_token = data.refresh_token;
         fs.writeFileSync(OSM_SETTINGS, JSON.stringify(next, null, 2));
         appendLog('info', 'oauth', 'Wikiloc OAuth: token obtenido');
-        res.writeHead(302, { Location: '/config?wl-ok=1' });
+        res.writeHead(302, { Location: '/admin?wl-ok=1#params' });
       } else {
         appendLog('warn', 'oauth', `Wikiloc OAuth sin token: ${JSON.stringify(data)}`);
-        res.writeHead(302, { Location: `/config?wl-error=${encodeURIComponent(data.error || 'no-token')}` });
+        res.writeHead(302, { Location: `/admin?wl-error=${encodeURIComponent(data.error || 'no-token')}#params` });
       }
     } catch (e) {
       appendLog('error', 'oauth', `Wikiloc OAuth callback error: ${e.message}`);
-      res.writeHead(302, { Location: `/config?wl-error=${encodeURIComponent(e.message)}` });
+      res.writeHead(302, { Location: `/admin?wl-error=${encodeURIComponent(e.message)}#params` });
     }
     return res.end();
   }
@@ -1780,8 +1780,11 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/editor' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'editor.html'), req);
 
-  if (pathname === '/config' && method === 'GET')
-    return serveStatic(res, path.join(ROOT, 'config.html'), req);
+  if (pathname === '/config' && method === 'GET') {
+    const qs = new URL(req.url, 'http://x').search;
+    res.writeHead(302, { Location: `/admin${qs}#${/wl-/.test(qs) ? 'params' : 'activities'}` });
+    return res.end();
+  }
 
   if (pathname === '/track' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'track.html'), req);
