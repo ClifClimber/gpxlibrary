@@ -191,6 +191,18 @@ tr.inactive td { opacity: .4; }
         <p class="section-desc" style="margin-top:12px">Al cambiar de motor se copian los datos del motor actual al nuevo, se comprueba que los dos coinciden consulta a consulta y solo entonces se activa; si algo no cuadra se mantiene el actual. Antes de sustituir SQLite se hace una copia de seguridad. Todas las operaciones funcionan con los dos motores; las copias de seguridad son siempre un fichero SQLite comprimido, que se puede restaurar en cualquiera de ellos.</p>
       </div>
     </div>
+    <div class="card" id="storage-card" style="margin-bottom:16px">
+      <div class="card-head">
+        <h2>Almacén de GPX</h2>
+        <button class="btn btn-primary btn-sm" id="btn-storage-switch" disabled>Cambiar…</button>
+      </div>
+      <div class="card-body">
+        <div id="storage-status" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="section-desc">Cargando…</div>
+        </div>
+        <p class="section-desc" style="margin-top:12px">Los GPX originales se guardan una sola vez y nunca se modifican. Pueden estar en la carpeta local <code>TracksGps/store</code> o en un almacén S3 (Garage en Docker; en la nube, Cloudflare R2 o AWS S3). Al cambiar se copian los ficheros que falten, se comprueba cada uno con su huella SHA-256 y solo entonces se activa; el almacén anterior se conserva intacto. Las copias de seguridad de la base de datos no incluyen los GPX.</p>
+      </div>
+    </div>
     <div class="card">
       <div class="card-head">
         <h2>Estado de la base de datos</h2>
@@ -1214,20 +1226,20 @@ document.querySelectorAll('#admin-tabs .seg-tab').forEach(btn => {
 loadStats();
 loadBackups();
 loadBackupConfig();
-// ── Motor de base de datos ──────────────────────────────────────────
+// ── Motor de base de datos y almacén de GPX ─────────────────────────
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+function statusTile(active, title, info) {
+  return `<div style="border:1px solid ${active ? 'var(--accent)' : 'var(--line)'};border-radius:var(--radius-md);padding:10px 12px;background:${active ? 'var(--accent-soft)' : 'transparent'}">
+    <div style="display:flex;align-items:center;gap:8px;font-weight:600">${esc(title)}${active ? '<span class="badge badge-blue">En uso</span>' : ''}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px">${info}</div></div>`;
+}
 let engineState = null;
 async function loadEngine() {
   const box = document.getElementById('engine-status'), btn = document.getElementById('btn-engine-switch');
   try {
     const d = engineState = await fetch('/api/admin/db-engine').then(r => r.json());
     if (d.error) throw new Error(d.error);
-    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-    const tile = (key, title, info) => {
-      const active = d.driver === key;
-      return `<div style="border:1px solid ${active ? 'var(--accent)' : 'var(--line)'};border-radius:var(--radius-md);padding:10px 12px;background:${active ? 'var(--accent-soft)' : 'transparent'}">
-        <div style="display:flex;align-items:center;gap:8px;font-weight:600">${esc(title)}${active ? '<span class="badge badge-blue">En uso</span>' : ''}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px">${info}</div></div>`;
-    };
+    const tile = (key, title, info) => statusTile(d.driver === key, title, info);
     const sq = d.sqlite.error ? `⚠ ${esc(d.sqlite.error)}` : d.sqlite.busy ? 'Ocupado' : `${d.sqlite.tracks} rutas · ${esc(d.sqlite.file)}`;
     const pg = !d.postgres.configured ? 'Sin configurar (DATABASE_URL en .env)'
       : d.postgres.reachable ? `${d.postgres.tracks} rutas · Docker (127.0.0.1)` : `⚠ ${esc(d.postgres.error || 'no responde')} · se intentará arrancar al cambiar`;
@@ -1254,12 +1266,43 @@ document.getElementById('btn-engine-switch').addEventListener('click', function 
 });
 loadEngine();
 
+let storageState = null;
+async function loadStorage() {
+  const box = document.getElementById('storage-status'), btn = document.getElementById('btn-storage-switch');
+  try {
+    const d = storageState = await fetch('/api/admin/storage').then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    const info = (s, offline) => !s.configured ? 'Sin configurar (node scripts/storage-setup.js)'
+      : s.reachable ? `${s.files} ficheros · ${esc(s.where)}` : `⚠ ${esc(s.error || 'no responde')}${offline}`;
+    box.innerHTML = statusTile(d.driver === 'local', 'Carpeta local', info(d.local, ''))
+      + statusTile(d.driver === 's3', 'S3 (Garage)', info(d.s3, ' · se intentará arrancar al cambiar'));
+    const to = d.driver === 'local' ? 's3' : 'local';
+    btn.textContent = `Cambiar a ${to === 's3' ? 'S3' : 'carpeta local'}`;
+    btn.dataset.to = to;
+    btn.disabled = d.busy || !d.s3.configured;
+    btn.title = d.busy ? 'Hay un proceso en marcha' : '';
+  } catch (e) {
+    box.innerHTML = `<div class="section-desc">No se pudo consultar el almacén: ${esc(e.message)}</div>`;
+  }
+}
+document.getElementById('btn-storage-switch').addEventListener('click', function () {
+  const to = this.dataset.to;
+  const name = { local: 'la carpeta local', s3: 'S3' };
+  if (!confirm(`¿Usar ${name[to]} para los GPX?
+
+Se copiarán los ficheros que falten y se comprobará cada uno con su huella antes de cambiar. El almacén actual no se modifica.`)) return;
+  this.disabled = true;
+  streamScript('/api/admin/storage/switch', `Cambiar el almacén a ${name[to]}`, { to }, () => setTimeout(() => location.reload(), 1200))
+    .finally(() => loadStorage());
+});
+loadStorage();
+
 // Load version info for About tab
 fetch('/api/admin/version').then(r => r.json()).then(d => {
   const el = document.getElementById('about-version');
   if (el) el.textContent = 'v' + d.version;
   const dbEl = document.getElementById('about-db');
-  if (dbEl) dbEl.textContent = '⚙ Node.js + ' + (d.db === 'postgres' ? 'PostgreSQL + PostGIS' : 'SQLite');
+  if (dbEl) dbEl.textContent = '⚙ Node.js + ' + (d.db === 'postgres' ? 'PostgreSQL + PostGIS' : 'SQLite') + (d.storage === 's3' ? ' · GPX en S3' : '');
 }).catch(() => {});
 
 // ── OSM strategy section ────────────────────────────────────────────

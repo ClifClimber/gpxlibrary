@@ -8,12 +8,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Import new files from TracksGps/_TEMP_/ into the store (classifies, geocodes, skips duplicates)
 node scripts/import-from-temp.js [--force]
 
-# Tests: pure domain logic + repository contract tests against SQLite and Postgres
+# Tests: pure domain logic + repository and store contract tests (SQLite/Postgres, local/S3)
 # (Postgres tests use a separate gpxlibrary_test database and are skipped if it is unreachable)
 npm test
 
 # Local PostgreSQL + PostGIS (Docker Desktop); credentials in .env
 docker compose up -d
+
+# Local S3 store (Garage): first-time setup, copy GPX files local ↔ S3 with sha256 check
+node scripts/storage-setup.js
+node scripts/blob-copy.js --to s3|local
+node scripts/blob-copy.js --verify [--on s3|local]
 
 # Copy all data between engines, then compare them query by query
 node scripts/db-copy.js --to postgres [--replace]
@@ -42,6 +47,9 @@ Pure functions with no database, filesystem or network access (phase 1 of the cl
 
 ### Data access — `repo/` (two interchangeable engines)
 `config.js` loads `.env` (no dependency) and exposes `DB_DRIVER` (`sqlite` default | `postgres`), `DATABASE_URL` and `SQLITE_PATH`. `repo/index.js#getRepo()` returns the engine-specific implementation (`repo/sqlite.js`, `repo/postgres.js`) with the same async API (`listTracks`, `getTrack`, `getPoints`, `catalogTracks`, `updateTrack`, `bulkUpdate`, `moveTrack`, `deleteTrack`, `tags`, `geo`, `recentIds`, config CRUD…). Both must return rows with identical keys, values and order: column lists live in `repo/columns.js`, Postgres orders names with `COLLATE "C"` and dates with `NULLS LAST`, and every ordering ends with `id`. New queries go into **both** implementations plus `repo/repo.test.js`. Postgres schema: `repo/pg/NNN_*.sql`, applied by `repo/pg-migrate.js`; points are a PostGIS `LineString` (`geom`/`geom_clean`) plus `ele`/`ele_clean` arrays. Scripts and admin maintenance use `repo/sql.js#openSql()` instead: engine-neutral async `all/get/run/exec/tx` with `?` placeholders, `db.NOW`/`db.NOW_TEXT` for timestamps, `db.BIN` after text ORDER BY terms (byte order on both engines; use the expression, not an alias), `CAST(COUNT(*) AS INTEGER)` for counts, and `getPoints`/`setPoints` for GPS points — never `scripts/db.js` directly. The server gets one bound to the live engine with `sqlDb()`. Backups are always a gzipped SQLite file (under Postgres, dumped and restored through `db-copy.js`), so they restore into either engine; vacuum/integrity have Postgres variants. Only the legacy `/api/db/export` (catalog-data.js) remains in `SQLITE_ONLY` (501 under Postgres). The engine can be switched live from Admin → Base de datos → «Motor de base de datos» (`GET /api/admin/db-engine`, `POST /api/admin/db-engine/switch` SSE): it starts the Docker container if needed, copies current → target with `scripts/db-copy.js` (SQLite target is written to a temp file and swapped in only after verification, with a backup first), then swaps `repo` in-process and rewrites `DB_DRIVER` in `.env`. Refused while a script is running. Only npm dependency: `pg`, loaded only with `DB_DRIVER=postgres`.
+
+### GPX store — `blob/` (local folder or S3)
+`STORAGE_DRIVER` (`local` default | `s3`) selects where the original GPX bytes live: `blob/local.js` (`TracksGps/store`, `STORE_DIR`) or `blob/s3.js` (minimal S3 client, AWS SigV4 on `node:http`, path-style, no dependencies; works with Garage, R2, AWS; `S3_*` vars). Same async API: `put` (never overwrites), `get` (null if missing), `exists`, `del`, `list`, `ping`. Keys are `{uid}.gpx`; the DB `file` column keeps `TracksGps/store/{uid}.gpx` and `scripts/store.js#keyOfFile()` derives the key. Code must go through `scripts/store.js` (`putFile`, `readTrackFile`, `deleteTrackFile`, `gpxText`) — never read `path.join(ROOT, track.file)` directly. The server holds `let blob` (swappable like `repo`). Local Garage: `docker compose` service `storage` (`dxflrs/garage`, config `db/garage.toml`, secrets in `.env`); `node scripts/storage-setup.js` generates the secrets/keys and creates the layout and the `gpxlibrary` + `gpxlibrary-test` buckets (idempotent). `scripts/blob-copy.js --to s3|local` copies missing files and verifies every one against the DB `sha256` (`--verify [--on …]` only checks). Switch live from Admin → Base de datos → «Almacén de GPX» (`GET /api/admin/storage`, `POST /api/admin/storage/switch` SSE): copy + verify, swap `blob`, rewrite `STORAGE_DRIVER`; the previous store is kept. `blob/blob.test.js` runs the same contract on both (S3 skipped if unreachable). DB backups do not include the GPX files.
 
 Node.js HTTP server (`server.js`); SQLite at `data/tracks.db` (auto-created, `node:sqlite` requires Node v22+) or PostgreSQL via `repo/`.
 
@@ -130,7 +138,7 @@ Key component classes: `.btn` (+ modifiers), `.input`/`.select`, `.chip` (+ `.ac
 New pages start from `docs/page-template.html` and must be added to the `<nav>` in every page.
 
 ## GPX conventions
-- Originals live in the immutable store `TracksGps/store/{uid}.gpx`. Never rename, move or rewrite them; name/activity/zone/notes/url live only in the DB and are applied on the fly when downloading (`applyGpxMetadata()` in `domain/gpx-export.js`).
+- Originals live in the immutable store (key `{uid}.gpx` in `blob/`: local `TracksGps/store/` or S3). Never rename, move or rewrite them; name/activity/zone/notes/url live only in the DB and are applied on the fly when downloading (`applyGpxMetadata()` in `domain/gpx-export.js`).
 - A browsable `Actividad/Sierra/Nombre.gpx` copy is produced on demand: Admin → Gestión de Tracks → «Exportar en carpetas» (`scripts/export-folders.js`, refuses destinations inside `TracksGps`) or the ZIP «tree» layout.
 - `scripts/migrate-store.js [--dry-run] [--revert <manifest>]` moves legacy folder files into the store and writes a revert manifest to `data/migrations/`.
 - Files with `YYYY-MM-DD` filename prefix get that date if no `<time>` tag is present.

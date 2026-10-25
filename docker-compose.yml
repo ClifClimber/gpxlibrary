@@ -1,7 +1,9 @@
-# Entorno local de la fase 1: PostgreSQL + PostGIS.
-#   docker compose up -d      → arranca (la primera vez crea la BD y activa PostGIS)
-#   docker compose down       → para (los datos se conservan en el volumen pgdata)
-#   docker compose down -v    → para y BORRA los datos
+# Entorno local de la fase 1: PostgreSQL + PostGIS (db) y almacén S3 Garage para los GPX (storage).
+#   docker compose up -d        → arranca todo (la primera vez crea la BD y activa PostGIS)
+#   docker compose up -d db     → solo PostgreSQL
+#   node scripts/storage-setup.js → primera configuración de Garage (secretos en .env, buckets, clave)
+#   docker compose down         → para (los datos se conservan en los volúmenes)
+#   docker compose down -v      → para y BORRA los datos
 # Credenciales en .env (ver .env.example). Solo escucha en 127.0.0.1.
 services:
   db:
@@ -23,5 +25,21 @@ services:
       timeout: 3s
       retries: 20
 
+  storage:
+    image: dxflrs/garage:v2.4.1
+    container_name: gpxlibrary-storage
+    restart: unless-stopped
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
+    ports:
+      - "127.0.0.1:${S3_PORT:-3900}:3900"
+    volumes:
+      - ./db/garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+
 volumes:
   pgdata:
+  garage-meta:
+  garage-data:

@@ -13,7 +13,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { openSql } = require('../repo/sql');
-const { newUid, sha256, putFile }  = require('./store');
+const { newUid, sha256, putFile, deleteTrackFile } = require('./store');
 const { parseGpx, computeMetrics, computeTimes, inferActivity, sierraFromBbox,
         extractSierraFromNominatim, locationFromNominatim, computeIBP } = require('../domain');
 const { CACHE_DIR, slugify }      = require('./osm-strategy-batch');
@@ -224,7 +224,7 @@ function collectTempGpx(dir) {
     if (needsReview) { console.log(`  → ⚠ Por revisar (baja confianza, sin zona geográfica)`); reviewed++; }
     const uid = newUid();
     let relFile;
-    try { relFile = putFile(filePath, uid, { keep: KEEP_SRC }); }
+    try { relFile = await putFile(filePath, uid, { keep: true }); }
     catch (e) { console.log(`  ✗ Error guardando: ${e.message}`); errors++; continue; }
 
     // ── Paso 6: Importar a BD y escribir atributos al GPX ───────────
@@ -237,6 +237,7 @@ function collectTempGpx(dir) {
       if (needsReview) await db.run('UPDATE tracks SET tags=? WHERE id=?', [JSON.stringify(['revisar']), newId]);
       importedIds.push(newId);
       imported++;
+      if (!KEEP_SRC) { try { fs.unlinkSync(filePath); } catch {} }
       console.log(`  ✓ Importado (id=${newId})`);
 
       // Auto-enrich with OSM road types from batch-sierra cache if available
@@ -266,6 +267,7 @@ function collectTempGpx(dir) {
     } catch (e) {
       console.log(`  ✗ Error en BD: ${e.message}`);
       errors++;
+      await deleteTrackFile(relFile).catch(() => {});   // the source stays in _TEMP_ for a retry
     }
   }
 

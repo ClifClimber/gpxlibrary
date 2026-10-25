@@ -73,6 +73,18 @@ node scripts/db-copy.js --to sqlite --replace     # PostgreSQL → SQLite
 node scripts/db-copy.js --verify                  # compara los dos motores
 ```
 
+### Almacén de los GPX: carpeta local o S3
+
+Los GPX originales se guardan una vez y nunca se modifican. Pueden estar en `TracksGps/store/` (por defecto) o en un almacén compatible con S3: **Garage** en el `docker-compose` para desarrollo, y Cloudflare R2 o AWS S3 en la nube.
+
+```bash
+node scripts/storage-setup.js          # primera vez: secretos en .env, arranca Garage, crea buckets y clave
+node scripts/blob-copy.js --to s3      # copia los GPX y comprueba cada uno con su huella SHA-256
+node scripts/blob-copy.js --verify     # comprueba el almacén activo
+```
+
+Se cambia en Admin → Base de datos → «Almacén de GPX» (copia, comprueba y cambia sin reiniciar; el almacén anterior se conserva) o con `STORAGE_DRIVER=local|s3` en `.env`. Las copias de seguridad de la base de datos no incluyen los GPX.
+
 `data/`, `.env` y `osm-settings.json` **no se suben a git** (datos, contraseña de PostgreSQL y token de Wikiloc).
 
 ---
@@ -123,8 +135,9 @@ Ver [CLAUDE.md](CLAUDE.md) y [CODEMAP.md](CODEMAP.md) para la referencia técnic
 server.js     Servidor HTTP + API REST (sin framework)
 domain/       Lógica pura: parseo GPX, métricas, clasificación, IBP, simplificación, exportación
 repo/         Acceso a datos: SQLite y PostgreSQL con la misma API (sql.js para scripts)
+blob/         Almacén de los GPX: carpeta local o S3 (Garage, R2, AWS) con la misma API
 scripts/      Importación, limpieza, enriquecimiento, copias entre motores…
 shared.css    Sistema de diseño común (tema claro/oscuro) + theme.js
-TracksGps/    store/ con los GPX originales (no en git) y _TEMP_/ de entrada
+TracksGps/    store/ con los GPX originales si el almacén es local (no en git) y _TEMP_/ de entrada
 data/         Base SQLite, copias y cachés (no en git)
 ```

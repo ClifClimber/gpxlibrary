@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { openSql } = require('../repo/sql');
-const { ROOT } = require('./store');
+const { ROOT, readTrackFile, gpxText } = require('./store');
 const { applyGpxMetadata, metaFromTrack } = require('../domain');
 
 const arg = k => { const i = process.argv.indexOf(k); return i >= 0 ? process.argv[i + 1] : null; };
@@ -35,25 +35,22 @@ fs.mkdirSync(dest, { recursive: true });
 
 let written = 0, missing = 0, errors = 0, renamed = 0;
 const used = new Set();
-rows.forEach((t, i) => {
+for (const [i, t] of rows.entries()) {
   try {
-    const src = path.join(ROOT, t.file);
-    if (!fs.existsSync(src)) { console.log(`  ⚠ Sin fichero: «${t.name}» (id=${t.id})`); missing++; return; }
+    const buf = await readTrackFile(t.file);
+    if (!buf) { console.log(`  ⚠ Sin fichero: «${t.name}» (id=${t.id})`); missing++; return; }
     const dir = path.join(dest, safe(t.activity) || 'Sin actividad', safe(t.sierra || t.zone) || 'General');
     const stem = safe(t.name) || `track-${t.id}`;
     let file = path.join(dir, stem + '.gpx');
     if (used.has(file.toLowerCase()) || fs.existsSync(file)) { file = path.join(dir, `${stem} (${t.id}).gpx`); renamed++; }
     used.add(file.toLowerCase());
 
-    const buf = fs.readFileSync(src);
-    let text = buf.toString('utf8');
-    if (text.includes('\uFFFD')) text = buf.toString('latin1');
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(file, applyGpxMetadata(text, metaFromTrack(t)), 'utf8');
+    fs.writeFileSync(file, applyGpxMetadata(gpxText(buf), metaFromTrack(t)), 'utf8');
     written++;
     if ((i + 1) % 25 === 0) console.log(`Exportados: ${i + 1} de ${rows.length}`);
   } catch (e) { console.log(`  ✗ «${t.name}» (id=${t.id}): ${e.message}`); errors++; }
-});
+}
 
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`✓ Exportación completada en ${dest}`);

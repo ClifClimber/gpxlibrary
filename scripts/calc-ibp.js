@@ -16,6 +16,7 @@ const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
 const { openSql } = require('../repo/sql');
+const { readTrackFile } = require('./store');
 
 const ROOT     = path.join(__dirname, '..');
 const KEY_FILE = path.join(ROOT, 'ibp.key');
@@ -26,10 +27,8 @@ function getApiKey() {
   return null;
 }
 
-function callIBPApi(apiKey, gpxFilePath) {
+function callIBPApi(apiKey, gpxContent, filename) {
   return new Promise((resolve, reject) => {
-    const gpxContent = fs.readFileSync(gpxFilePath);
-    const filename   = path.basename(gpxFilePath);
     const boundary   = '----IBPBoundary' + Date.now().toString(16);
 
     const body = Buffer.concat([
@@ -104,8 +103,8 @@ if (!tracks.length) {
 console.log(`\nCalculando IBP para ${tracks.length} track(s)...\n`);
 
   for (const t of tracks) {
-    const gpxPath = path.join(ROOT, t.file);
-    if (!fs.existsSync(gpxPath)) {
+    const gpxContent = await readTrackFile(t.file);
+    if (!gpxContent) {
       console.log(`⚠ [${t.id}] Fichero no encontrado: ${t.file}`);
       errCount++;
       continue;
@@ -113,7 +112,7 @@ console.log(`\nCalculando IBP para ${tracks.length} track(s)...\n`);
 
     try {
       process.stdout.write(`  [${t.id}] ${t.name}... `);
-      const result = await callIBPApi(apiKey, gpxPath);
+      const result = await callIBPApi(apiKey, gpxContent, path.basename(t.file));
 
       if (result.error) {
         const msg = String(result.error).toLowerCase();

@@ -19,7 +19,7 @@
     "db:enrich-all": "node scripts/enrich-tracks.js --all",
     "db:extract-urls": "node scripts/extract-urls.js",
     "db:extract-urls-force": "node scripts/extract-urls.js --force",
-    "test": "node --test \"domain/**/*.test.js\" \"repo/**/*.test.js\""
+    "test": "node --test \"domain/**/*.test.js\" \"repo/**/*.test.js\" \"blob/**/*.test.js\""
   },
   "engines": {
     "node": ">=22.5.0"

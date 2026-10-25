@@ -22,7 +22,10 @@ const { openSql } = require('./repo/sql');
 // Engine-neutral SQL on the active engine (shares the repository's Postgres pool; never closed here).
 const sqlDb = () => openSql({ driver: repo.driver, pool: repo.pool });
 let repo = getRepo();   // reassigned when the engine is switched from Admin
-const { downloadName } = require('./scripts/store');
+const { downloadName, readTrackFile, deleteTrackFile, gpxText } = require('./scripts/store');
+const { createBlob } = require('./blob');
+// Store of the original GPX files (local folder or S3), swappable like `repo`.
+let blob = createBlob();
 
 const PORT = parseInt(process.env.PORT || '8080');
 const ROOT = __dirname;
@@ -225,8 +228,8 @@ function parseBody(req) {
 }
 
 // ── GPX moving/stopped time ───────────────────────────────────────
-function computeGpxTimes(filePath) {
-  try { return computeTimes(parseGpx(fs.readFileSync(filePath, 'utf8')).points); } catch { return null; }
+async function computeGpxTimes(file) {
+  try { const buf = await readTrackFile(file, blob); return buf ? computeTimes(parseGpx(gpxText(buf)).points) : null; } catch { return null; }
 }
 
 // ── API /tracks/:id ───────────────────────────────────────────────
@@ -248,7 +251,7 @@ async function apiGetTrackById(res, id, full = false) {
 
     // Compute moving/stopped time from GPX if not cached
     if (track.moving_time == null) {
-      const times = computeGpxTimes(path.join(ROOT, track.file));
+      const times = await computeGpxTimes(track.file);
       if (times) {
         track.moving_time  = times.moving;
         track.stopped_time = times.stopped;
@@ -421,12 +424,10 @@ async function apiExportGpxSingle(res, id, searchParams) {
   } catch(e) { res.writeHead(500); res.end(e.message); }
 }
 
-// Original GPX bytes with the current DB metadata applied (the stored file is never rewritten).
-function originalGpxWithMeta(track) {
-  const buf = fs.readFileSync(path.join(ROOT, track.file));
-  let text = buf.toString('utf8');
-  if (text.includes('�')) text = buf.toString('latin1');
-  return applyGpxMetadata(text, metaFromTrack(track));
+// Original GPX with the current DB metadata applied (the stored file is never rewritten); null if missing.
+async function originalGpxWithMeta(track) {
+  const buf = await readTrackFile(track.file, blob);
+  return buf ? applyGpxMetadata(gpxText(buf), metaFromTrack(track)) : null;
 }
 
 // GET /api/tracks/:id/gpx           → original GPX file from disk
@@ -438,12 +439,13 @@ async function apiDownloadGpx(res, id, searchParams) {
 
     const ptsParam = searchParams.get('pts');
     if (!ptsParam || ptsParam === 'all') {
-      if (!fs.existsSync(path.join(ROOT, track.file))) { res.writeHead(404); res.end('GPX file not found on disk'); return; }
+      const gpx = await originalGpxWithMeta(track);
+      if (gpx == null) { res.writeHead(404); res.end('GPX file not found in the store'); return; }
       res.writeHead(200, {
         'Content-Type': 'application/gpx+xml; charset=utf-8',
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(downloadName(track.name))}`,
       });
-      res.end(originalGpxWithMeta(track));
+      res.end(gpx);
     } else {
       const maxPts = Math.max(2, parseInt(ptsParam) || 300);
       const data = await getTracksForExport([id], 'simplified', maxPts);
@@ -579,10 +581,8 @@ async function deleteTrackById(id) {
   if (!file) return { ok: false, error: 'Not found' };
   invalidateCatalogCache();
   let fileDeleted = false;
-  try {
-    const fp = path.join(ROOT, file);
-    if (fs.existsSync(fp)) { fs.unlinkSync(fp); fileDeleted = true; }
-  } catch (e) { /* file delete failed: the DB row is already gone */ }
+  try { fileDeleted = await deleteTrackFile(file, blob); }
+  catch (e) { console.error(`[store] no se pudo borrar ${file}: ${e.message}`); }   // the DB row is already gone
   return { ok: true, fileDeleted };
 }
 
@@ -966,17 +966,16 @@ function runStreaming(cmd, args, onLine, opts = {}) {
   });
 }
 
-function dockerCommand() {
-  const win = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe';
-  return process.platform === 'win32' && fs.existsSync(win) ? win : 'docker';
-}
+const { dockerBin, dockerEnv } = require('./scripts/docker');
 
-function setEnvDriver(driver) {
+// Persists a setting in .env and in this process's environment (inherited by the scripts it runs).
+function setEnvVar(name, value) {
   const file = path.join(ROOT, '.env');
   let text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-  text = /^DB_DRIVER=.*$/m.test(text) ? text.replace(/^DB_DRIVER=.*$/m, `DB_DRIVER=${driver}`) : `DB_DRIVER=${driver}\n` + text;
+  const re = new RegExp(`^${name}=.*$`, 'm');
+  text = re.test(text) ? text.replace(re, `${name}=${value}`) : `${name}=${value}\n` + text;
   fs.writeFileSync(file, text);
-  process.env.DB_DRIVER = driver;
+  process.env[name] = value;
 }
 
 async function apiEngineSwitch(req, res) {
@@ -989,7 +988,7 @@ async function apiEngineSwitch(req, res) {
 
   if (!['sqlite', 'postgres'].includes(to)) { log('✗ Motor de destino no válido'); return finish(1); }
   if (to === repo.driver) { log(`✗ ${ENGINE_LABEL[to]} ya es el motor en uso`); return finish(1); }
-  if (switchingEngine) { log('✗ Ya hay un cambio de motor en curso'); return finish(1); }
+  if (switchingEngine || switchingStorage) { log('✗ Ya hay un cambio en curso'); return finish(1); }
   if (runningScripts > 0) { log('✗ Hay una importación u otro proceso en marcha: espera a que termine'); return finish(1); }
   if (!require('./config').DATABASE_URL) { log('✗ Falta DATABASE_URL en .env'); return finish(1); }
 
@@ -1001,7 +1000,7 @@ async function apiEngineSwitch(req, res) {
     let pg = await postgresStatus();
     if (!pg.reachable) {
       log(`⚠ PostgreSQL ${pg.error || 'no responde'}; intentando arrancarlo con docker compose…`);
-      const code = await runStreaming(dockerCommand(), ['compose', 'up', '-d'], l => log('   ' + l));
+      const code = await runStreaming(dockerBin(), ['compose', 'up', '-d', 'db'], l => log('   ' + l), { env: dockerEnv() });
       if (code !== 0) throw new Error('No se pudo arrancar Docker. Abre Docker Desktop y vuelve a intentarlo.');
       for (let i = 0; i < 30 && !pg.reachable; i++) { await new Promise(r => setTimeout(r, 2000)); pg = await postgresStatus(); }
       if (!pg.reachable) throw new Error('PostgreSQL no responde tras arrancar el contenedor');
@@ -1030,7 +1029,7 @@ async function apiEngineSwitch(req, res) {
     if (to === 'postgres') await next.pool.query('SELECT 1');
     const old = repo;
     repo = next;
-    setEnvDriver(to);
+    setEnvVar('DB_DRIVER', to);
     invalidateCatalogCache();
     await old.close().catch(() => {});
     appendLog('info', 'db-engine', `Motor cambiado a ${to}`);
@@ -1042,6 +1041,85 @@ async function apiEngineSwitch(req, res) {
     log(`Se mantiene ${ENGINE_LABEL[from]}`);
     finish(1);
   } finally { switchingEngine = false; }
+}
+
+// ── GPX store: status and live switch (Admin → Base de datos → Almacén de GPX) ─────
+let switchingStorage = false;
+const STORAGE_LABEL = { local: 'Carpeta local', s3: 'S3 (Garage)' };
+
+async function storeStatus(driver) {
+  if (driver === 's3' && !require('./config').S3.endpoint) return { configured: false, reachable: false };
+  let store;
+  try {
+    store = driver === blob.driver ? blob : createBlob({ driver });
+    await store.ping();
+    return { configured: true, reachable: true, files: (await store.list()).length, where: store.where };
+  } catch (e) {
+    return { configured: true, reachable: false, where: store?.where, error: e.message };
+  } finally { if (store && store !== blob) await store.close().catch(() => {}); }
+}
+
+async function apiStorageStatus(res) {
+  try {
+    const body = { driver: blob.driver, label: STORAGE_LABEL[blob.driver], busy: switchingStorage || runningScripts > 0,
+      local: await storeStatus('local'), s3: await storeStatus('s3') };
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+async function apiStorageSwitch(req, res) {
+  const { to } = await parseBody(req).catch(() => ({}));
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+  const send = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+  const log = text => send({ type: text.startsWith('✗') ? 'error' : text.startsWith('⚠') ? 'warn' : 'log', text });
+  const finish = code => { send({ type: 'done', code }); res.end(); };
+  send({ type: 'start' });
+
+  if (!['local', 's3'].includes(to)) { log('✗ Almacén de destino no válido'); return finish(1); }
+  if (to === blob.driver) { log(`✗ ${STORAGE_LABEL[to]} ya es el almacén en uso`); return finish(1); }
+  if (switchingStorage || switchingEngine) { log('✗ Ya hay un cambio en curso'); return finish(1); }
+  if (runningScripts > 0) { log('✗ Hay una importación u otro proceso en marcha: espera a que termine'); return finish(1); }
+  if (!require('./config').S3.endpoint) { log('✗ Falta la configuración S3 en .env: ejecuta node scripts/storage-setup.js'); return finish(1); }
+
+  switchingStorage = true;
+  const from = blob.driver;
+  appendLog('info', 'storage', `Cambio de almacén ${from} → ${to} iniciado`);
+  try {
+    log('1/3 Comprobando el almacén S3…');
+    let s3 = await storeStatus('s3');
+    if (!s3.reachable) {
+      log(`⚠ S3 ${s3.error || 'no responde'}; intentando arrancarlo con docker compose…`);
+      const code = await runStreaming(dockerBin(), ['compose', 'up', '-d', 'storage'], l => log('   ' + l), { env: dockerEnv() });
+      if (code !== 0) throw new Error('No se pudo arrancar Docker. Abre Docker Desktop y vuelve a intentarlo.');
+      for (let i = 0; i < 20 && !s3.reachable; i++) { await new Promise(r => setTimeout(r, 1500)); s3 = await storeStatus('s3'); }
+      if (!s3.reachable) throw new Error('S3 no responde tras arrancar el contenedor');
+    }
+    log(`✓ S3 disponible (${s3.files} ficheros ahora)`);
+
+    log(`2/3 Copiando ${STORAGE_LABEL[from]} → ${STORAGE_LABEL[to]} y comprobando cada fichero…`);
+    const code = await runStreaming(process.execPath, [path.join(ROOT, 'scripts', 'blob-copy.js'), '--to', to], l => { if (!l.startsWith('…')) log('   ' + l); });
+    if (code !== 0) throw new Error(code === 2 ? 'Faltan ficheros o no coinciden en el destino; se cancela el cambio' : 'La copia ha fallado; se cancela el cambio');
+
+    log('3/3 Activando el nuevo almacén…');
+    const next = createBlob({ driver: to });
+    await next.ping();
+    const old = blob;
+    blob = next;
+    setEnvVar('STORAGE_DRIVER', to);
+    await old.close().catch(() => {});
+    appendLog('info', 'storage', `Almacén cambiado a ${to}`);
+    log(`✓ La aplicación usa ahora ${STORAGE_LABEL[to]}. Los ficheros de ${STORAGE_LABEL[from]} se conservan.`);
+    finish(0);
+  } catch (e) {
+    appendLog('error', 'storage', `Cambio de almacén ${from} → ${to} fallido: ${e.message}`);
+    log('✗ ' + e.message);
+    log(`Se mantiene ${STORAGE_LABEL[from]}`);
+    finish(1);
+  } finally { switchingStorage = false; }
 }
 
 // Operations still tied to the SQLite file (legacy catalog-data.js export).
@@ -1513,11 +1591,13 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/admin/db-engine' && method === 'GET') return apiEngineStatus(res);
   if (pathname === '/api/admin/db-engine/switch' && method === 'POST') return apiEngineSwitch(req, res);
+  if (pathname === '/api/admin/storage' && method === 'GET') return apiStorageStatus(res);
+  if (pathname === '/api/admin/storage/switch' && method === 'POST') return apiStorageSwitch(req, res);
 
   if (pathname === '/api/admin/version' && method === 'GET') {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ version: pkg.version, name: pkg.name, db: repo.driver }));
+    res.end(JSON.stringify({ version: pkg.version, name: pkg.name, db: repo.driver, storage: blob.driver }));
     return;
   }
 

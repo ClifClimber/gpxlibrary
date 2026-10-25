@@ -6,7 +6,8 @@
 const fs = require('fs');
 const path = require('path');
 const { openSql } = require('../repo/sql');
-const { ROOT, STORE_DIR, newUid, storeAbs, sha256, isStored, putFile } = require('./store');
+const { ROOT, newUid, storeKey, sha256, isStored, putFile, readTrackFile } = require('./store');
+const { getBlob } = require('../blob');
 
 const args = process.argv.slice(2);
 const DRY = args.includes('--dry-run');
@@ -27,6 +28,7 @@ function removeEmptyDirs(dir) {
 }
 
 async function revert(manifestPath) {
+  if (getBlob().driver !== 'local') throw new Error('--revert solo funciona con el almacén local (STORAGE_DRIVER=local)');
   const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const db = openSql();
   let ok = 0, fail = 0;
@@ -55,8 +57,8 @@ async function migrate() {
   console.log(`${DRY ? '[SIMULACIÓN] ' : ''}Tracks en la BD: ${tracks.length}`);
   for (const t of tracks) {
     const src = abs(t.file);
-    if (!fs.existsSync(src)) { missing.push(t); continue; }
-    const buf = fs.readFileSync(src);
+    const buf = await readTrackFile(t.file);
+    if (!buf) { missing.push(t); continue; }
     const hash = sha256(buf);
     if (hashes.has(hash)) console.log(`  ⚠ id=${t.id} tiene el mismo contenido que id=${hashes.get(hash)}`);
     else hashes.set(hash, t.id);
@@ -68,15 +70,16 @@ async function migrate() {
     const uid = t.uid || newUid();
     if (DRY) { moved++; continue; }
     let rel;
-    try { rel = putFile(src, uid); }
+    try { rel = await putFile(src, uid, { keep: true }); }
     catch (err) { console.log(`  ✗ id=${t.id} ${t.file}: ${err.message}`); continue; }
     try {
       await db.tx(t2 => t2.run(UPD, [rel, uid, hash, t.id]));
     } catch (err) {
-      fs.renameSync(storeAbs(uid), src);           // put it back if the DB update failed
+      await getBlob().del(storeKey(uid)).catch(() => {});   // undo the copy if the DB update failed
       console.log(`  ✗ id=${t.id} BD: ${err.message}`);
       continue;
     }
+    fs.unlinkSync(src);
     entries.push({ id: t.id, uid, from: t.file, to: rel });
     moved++;
   }
@@ -91,7 +94,7 @@ async function migrate() {
 
   console.log(`${DRY ? 'Se moverían' : 'Movidos'}: ${moved}  ·  Huella añadida: ${hashed}  ·  Sin fichero en disco: ${missing.length}  ·  Carpetas vacías borradas: ${emptied}`);
   missing.forEach(t => console.log(`  ⚠ Sin fichero: id=${t.id} «${t.name}» → ${t.file}`));
-  if (!DRY) console.log(`Almacén: ${path.relative(ROOT, STORE_DIR)} (${fs.readdirSync(STORE_DIR).length} ficheros)`);
+  if (!DRY) { const b = getBlob(); console.log(`Almacén (${b.driver}): ${b.where} (${(await b.list()).length} ficheros)`); }
   await db.close();
 }
 

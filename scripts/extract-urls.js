@@ -6,9 +6,9 @@
 const fs   = require('fs');
 const path = require('path');
 const { openSql } = require('../repo/sql');
+const { readTrackFile, gpxText } = require('./store');
 
 const ROOT    = path.join(__dirname, '..');
-const GPX_DIR = path.join(ROOT, 'TracksGps');
 
 const args    = process.argv.slice(2);
 const force   = args.includes('--force');
@@ -91,16 +91,6 @@ function bestUrl(links) {
   return best;
 }
 
-// ── Walk GPX files ────────────────────────────────────────────────
-function walkGpx(dir, result = []) {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) walkGpx(full, result);
-    else if (e.name.toLowerCase().endsWith('.gpx')) result.push(full);
-  }
-  return result;
-}
-
 // ── Main ──────────────────────────────────────────────────────────
 (async () => {
 const db     = openSql();
@@ -108,12 +98,6 @@ const tracks = await db.all(
   force ? 'SELECT id, file, url FROM tracks ORDER BY id'
         : 'SELECT id, file, url FROM tracks WHERE url IS NULL ORDER BY id');
 
-const gpxFiles = walkGpx(GPX_DIR);
-const gpxMap   = {};
-for (const f of gpxFiles) {
-  const rel = path.relative(ROOT, f).replace(/\\/g, '/');
-  gpxMap[rel] = f;
-}
 
 console.log(`Buscando URLs en ${tracks.length} tracks${force ? ' (todos)' : ' (sin URL)'}${dryRun ? ' [dry-run]' : ''}...`);
 
@@ -121,12 +105,9 @@ let found = 0, notFound = 0, skipped = 0;
 
 
 for (const t of tracks) {
-  const absPath = gpxMap[t.file];
-  if (!absPath) { skipped++; continue; }
-
-  let content;
-  try { content = fs.readFileSync(absPath, 'utf8'); }
-  catch { try { content = fs.readFileSync(absPath, 'latin1'); } catch { skipped++; continue; } }
+  const buf = await readTrackFile(t.file);
+  if (!buf) { skipped++; continue; }
+  const content = gpxText(buf);
 
   const links = extractLinks(content);
   const url   = bestUrl(links);

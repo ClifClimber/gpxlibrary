@@ -18,9 +18,23 @@ if (fs.existsSync(envFile)) {
 const DB_DRIVER = (process.env.DB_DRIVER || 'sqlite').toLowerCase();
 if (!['sqlite', 'postgres'].includes(DB_DRIVER)) throw new Error(`DB_DRIVER no válido: ${DB_DRIVER} (sqlite | postgres)`);
 
+const STORAGE_DRIVER = (process.env.STORAGE_DRIVER || 'local').toLowerCase();
+if (!['local', 's3'].includes(STORAGE_DRIVER)) throw new Error(`STORAGE_DRIVER no válido: ${STORAGE_DRIVER} (local | s3)`);
+
 module.exports = {
   ROOT,
   DB_DRIVER,
   DATABASE_URL: process.env.DATABASE_URL || '',
   SQLITE_PATH: process.env.SQLITE_PATH || path.join(ROOT, 'data', 'tracks.db'),
+  // Original GPX files: local folder or an S3-compatible bucket (Garage, R2, AWS)
+  STORAGE_DRIVER,
+  STORE_DIR: process.env.STORE_DIR || path.join(ROOT, 'TracksGps', 'store'),
+  S3: {
+    endpoint: process.env.S3_ENDPOINT || '',
+    region: process.env.S3_REGION || 'garage',
+    bucket: process.env.S3_BUCKET || '',
+    accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+    prefix: process.env.S3_PREFIX || '',
+  },
 };

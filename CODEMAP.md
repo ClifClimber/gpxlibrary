@@ -17,7 +17,7 @@ gpxlibrary/
 ├── shared.css          Estilos comunes: nav, .page-header, .hbtn-nav
 ├── server.js           Servidor HTTP + toda la API REST
 ├── config.js           Lee .env: DB_DRIVER (sqlite|postgres), DATABASE_URL, SQLITE_PATH
-├── docker-compose.yml  PostgreSQL 17 + PostGIS 3.5 local
+├── docker-compose.yml  PostgreSQL 17 + PostGIS 3.5 (db) y Garage S3 (storage) locales
 ├── .env                NO en git — motor activo y contraseña de PostgreSQL
 ├── catalog-data.js     AUTO-GENERADO — const CATALOG = [...]
 ├── ibp.key             API key de IBP Index (no en git)
@@ -32,11 +32,20 @@ gpxlibrary/
 │   ├── pg-migrate.js + pg/NNN_*.sql   Esquema PostgreSQL
 │   └── repo.test.js    Tests de contrato contra los dos motores
 │
+├── blob/               Almacén de los GPX originales (STORAGE_DRIVER=local|s3)
+│   ├── index.js        createBlob() / getBlob()
+│   ├── local.js        Carpeta TracksGps/store
+│   ├── s3.js           Cliente S3 mínimo (SigV4, sin dependencias): Garage, R2, AWS
+│   └── blob.test.js    Tests de contrato contra los dos almacenes
+│
 ├── scripts/
 │   ├── db.js                   SQLite: openDb(), schema y migraciones (los scripts usan repo/sql.js)
 │   ├── db-copy.js              Copia entre motores (--to postgres|sqlite) y --verify
 │   ├── import-from-temp.js     Pipeline completo: geocodifica + clasifica + guarda en store/ + importa
-│   ├── store.js                Almacén inmutable: TracksGps/store/{uid}.gpx, sha256
+│   ├── store.js                Almacén inmutable: clave {uid}.gpx, putFile/readTrackFile/deleteTrackFile, sha256
+│   ├── blob-copy.js            Copia GPX local ↔ S3 comprobando sha256 (--verify)
+│   ├── storage-setup.js        Configura Garage: secretos en .env, buckets y clave
+│   ├── docker.js               Localiza docker (instalación global o por usuario)
 │   ├── migrate-store.js        Migra carpetas antiguas al almacén (--dry-run, --revert)
 │   ├── export-folders.js       Copia Actividad/Sierra/Nombre.gpx en una carpeta elegida
 │   ├── export-catalog.js       BD → catalog-data.js (con simplificación de puntos)
@@ -174,6 +183,8 @@ Servidor HTTP vanilla en Node.js. Todas las rutas en una única función `handle
 | POST | `/api/admin/vacuum` | `VACUUM` (SQLite) / `VACUUM (ANALYZE)` (PostgreSQL) |
 | GET | `/api/admin/integrity` | `PRAGMA integrity_check` (SQLite) / geometrías y recuentos (PostgreSQL) |
 | GET | `/api/admin/db-engine` | Estado de los dos motores |
+| GET | `/api/admin/storage` | Estado de los dos almacenes de GPX |
+| POST | `/api/admin/storage/switch` | Cambia de almacén con copia y verificación (SSE) |
 | POST | `/api/admin/db-engine/switch` | Cambia de motor con copia y verificación (SSE) |
 | POST | `/api/db/import-temp` | Lanza import-from-temp.js (SSE) |
 | POST | `/api/db/export` | Lanza export-catalog.js (SSE, legado, solo SQLite) |

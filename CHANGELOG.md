@@ -1,5 +1,19 @@
 # Changelog
 
+## Sin publicar
+
+### Almacén de GPX en S3 (Garage) o carpeta local
+- Nueva capa `blob/` con dos almacenes intercambiables para los GPX originales: **carpeta local** (`TracksGps/store`, por defecto) y **S3** (Garage en local; Cloudflare R2 o AWS S3 en la nube), elegidos con `STORAGE_DRIVER`
+- Cliente S3 propio (firma AWS SigV4 con `node:crypto`), sin dependencias nuevas
+- Importar, descargar, borrar, IBP, URLs, exportar en carpetas y almacén leen y escriben a través de esta capa; la importación solo borra el original de `_TEMP_` cuando la ruta ya está en la base de datos
+- Garage v2.4.1 en `docker-compose` (servicio `storage`); `scripts/storage-setup.js` genera los secretos en `.env` y crea los buckets y la clave
+- `scripts/blob-copy.js` copia los ficheros entre almacenes y comprueba cada uno con su huella SHA-256
+- Admin → Base de datos → **Almacén de GPX**: muestra los dos almacenes y cambia de uno a otro sin reiniciar, tras copiar y comprobar; el anterior se conserva
+- Tests de contrato contra los dos almacenes (35 tests en total)
+- El cambio de motor de base de datos encuentra Docker Desktop también cuando está instalado por usuario
+
+---
+
 ## v2.3.0 — 2026-10-25
 
 ### Todas las operaciones funcionan con PostgreSQL
