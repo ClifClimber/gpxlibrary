@@ -1,6 +1,6 @@
 # Changelog
 
-## Sin publicar
+## v2.4.0 — 2026-10-25
 
 ### Almacén de GPX en S3 (Garage) o carpeta local
 - Nueva capa `blob/` con dos almacenes intercambiables para los GPX originales: **carpeta local** (`TracksGps/store`, por defecto) y **S3** (Garage en local; Cloudflare R2 o AWS S3 en la nube), elegidos con `STORAGE_DRIVER`

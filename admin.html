@@ -617,7 +617,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.3.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.4.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">25 octubre 2026</div>
         </div>
       </div>
@@ -636,8 +636,21 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.3.0</span>
+            <span class="cl-version">v2.4.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">25 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Almacén de GPX en S3 o carpeta local</b> (Base de datos → Almacén de GPX): los originales pueden estar en <code>TracksGps/store</code> o en un almacén S3 (Garage en Docker; R2 o AWS en la nube), y se cambia sin reiniciar tras copiar y comprobar cada fichero con su huella</li>
+            <li>Garage incluido en <code>docker-compose</code>; <code>storage-setup.js</code> lo configura y <code>blob-copy.js</code> copia y verifica los ficheros</li>
+            <li>La importación solo borra el fichero de <code>_TEMP_</code> cuando la ruta ya está guardada en la base de datos</li>
+            <li>El cambio de motor encuentra Docker Desktop también instalado por usuario</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.3.0</span>
             <span class="cl-date">25 oct 2026</span>
           </div>
           <ul class="cl-list">
