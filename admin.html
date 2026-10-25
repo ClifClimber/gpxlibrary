@@ -605,7 +605,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.1.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.2.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">25 octubre 2026</div>
         </div>
       </div>
@@ -624,8 +624,20 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.1.0</span>
+            <span class="cl-version">v2.2.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">25 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Cambiar de motor desde Admin</b> (Base de datos → Motor de base de datos): copia los datos, compara los dos motores y cambia sin reiniciar; si algo falla se mantiene el actual</li>
+            <li>Arranca el contenedor de PostgreSQL si no responde; al volver a SQLite hace copia de seguridad y solo sustituye la base tras comprobarla</li>
+            <li>No se puede cambiar con una importación en marcha; con PostgreSQL, las secciones aún solo de SQLite lo indican</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.1.0</span>
             <span class="cl-date">25 oct 2026</span>
           </div>
           <ul class="cl-list">

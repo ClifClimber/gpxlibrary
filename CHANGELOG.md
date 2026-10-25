@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.2.0 — 2026-10-25
+
+### Cambiar de motor de base de datos desde Admin
+- Nueva tarjeta **Motor de base de datos** en Admin → Base de datos: muestra SQLite y PostgreSQL con sus rutas, cuál está en uso y si PostgreSQL responde
+- Botón **Cambiar a PostgreSQL / Cambiar a SQLite** con el progreso en pantalla:
+  1. comprueba PostgreSQL y, si no responde, arranca el contenedor de Docker
+  2. al volver a SQLite, hace antes una copia de seguridad
+  3. copia los datos del motor actual al nuevo y compara los dos consulta a consulta
+  4. cambia de motor sin reiniciar el servidor y lo guarda en `.env` para los siguientes arranques
+- Si algo falla o los motores no coinciden, se mantiene el motor anterior
+- La copia hacia SQLite se escribe en un fichero temporal y solo sustituye la base principal tras comprobarla
+- No se permite cambiar mientras hay una importación u otro proceso en marcha
+
+### Otros
+- Con PostgreSQL, estadísticas, copias de seguridad y caché OSM indican «Solo disponible con SQLite» en vez de mostrar errores
+- La copia de seguridad diaria automática solo se hace cuando SQLite es el motor activo
+
+---
+
 ## v2.1.0 — 2026-10-25
 
 Fase 1 hacia la nube: **la aplicación funciona igual con SQLite o con PostgreSQL + PostGIS.**
