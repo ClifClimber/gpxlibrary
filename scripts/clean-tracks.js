@@ -21,17 +21,7 @@ const { openDb, withTransaction } = require('./db');
 
 // ── catalog_pts ────────────────────────────────────────────────────
 const MAX_CATALOG_PTS = 300;
-function catalogPts(pts) {
-  if (!pts || pts.length < 2) return null;
-  const n = Math.min(pts.length, MAX_CATALOG_PTS);
-  const step = (pts.length - 1) / (n - 1);
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    const p = pts[Math.round(i * step)];
-    out.push([Math.round(p.lat*100000)/100000, Math.round(p.lon*100000)/100000, p.ele!=null?Math.round(p.ele):null]);
-  }
-  return JSON.stringify(out);
-}
+const { cleanPoints, catalogPts } = require('../domain');
 
 // ── Ayuda ──────────────────────────────────────────────────────────
 if (process.argv.includes('--help')) {
@@ -140,77 +130,6 @@ if (!opts.reset && !opts.minDist && !opts.maxJump && !opts.rdp) {
   process.exit(1);
 }
 
-// ── Algoritmos de limpieza ─────────────────────────────────────────
-
-function haversineM(lat1,lon1,lat2,lon2) {
-  const R=6371000, D=Math.PI/180;
-  const dl=(lat2-lat1)*D, dn=(lon2-lon1)*D;
-  const a=Math.sin(dl/2)**2+Math.cos(lat1*D)*Math.cos(lat2*D)*Math.sin(dn/2)**2;
-  return R*2*Math.asin(Math.sqrt(a));
-}
-
-function perpDistM(p, a, b) {
-  const midLat=(a.lat+b.lat)/2, mLat=111132, mLon=111132*Math.cos(midLat*Math.PI/180);
-  const bx=(b.lon-a.lon)*mLon, by=(b.lat-a.lat)*mLat;
-  const px=(p.lon-a.lon)*mLon, py=(p.lat-a.lat)*mLat;
-  const len2=bx*bx+by*by;
-  if(len2===0) return Math.hypot(px,py);
-  const t=Math.max(0,Math.min(1,(px*bx+py*by)/len2));
-  return Math.hypot(px-t*bx, py-t*by);
-}
-
-// 1. Picos GPS: punto aislado muy desviado que prev y next se hubieran saltado
-function filterMaxJump(pts, maxM) {
-  if (!maxM || pts.length<=2) return pts;
-  const out=[pts[0]];
-  for (let i=1;i<pts.length-1;i++) {
-    const prev=out[out.length-1], next=pts[i+1];
-    const dPC=haversineM(prev.lat,prev.lon,pts[i].lat,pts[i].lon);
-    const dCN=haversineM(pts[i].lat,pts[i].lon,next.lat,next.lon);
-    const dPN=haversineM(prev.lat,prev.lon,next.lat,next.lon);
-    const spike=dPC>maxM&&dCN>maxM&&dPN<(dPC+dCN)*0.55;
-    if(!spike) out.push(pts[i]);
-  }
-  if(pts.length>1) out.push(pts[pts.length-1]);
-  return out;
-}
-
-// 2. Puntos muy cercanos (GPS estático, ruido de posición)
-function filterMinDist(pts, minM) {
-  if (!minM || pts.length<=2) return pts;
-  const out=[pts[0]];
-  for (let i=1;i<pts.length-1;i++) {
-    const prev=out[out.length-1];
-    if(haversineM(prev.lat,prev.lon,pts[i].lat,pts[i].lon)>=minM) out.push(pts[i]);
-  }
-  out.push(pts[pts.length-1]);
-  return out;
-}
-
-// 3. Ramer-Douglas-Peucker iterativo (sin recursión para no desbordar la pila)
-function rdpSimplify(pts, eps) {
-  if (!eps || pts.length<=2) return pts;
-  const n=pts.length, keep=new Uint8Array(n);
-  keep[0]=keep[n-1]=1;
-  const stack=[[0,n-1]];
-  while(stack.length) {
-    const [i,j]=stack.pop();
-    if(j-i<2) continue;
-    let maxD=0, maxK=i+1;
-    for(let k=i+1;k<j;k++){const d=perpDistM(pts[k],pts[i],pts[j]);if(d>maxD){maxD=d;maxK=k;}}
-    if(maxD>eps){keep[maxK]=1;stack.push([i,maxK],[maxK,j]);}
-  }
-  return pts.filter((_,i)=>keep[i]);
-}
-
-function clean(pts, o) {
-  let out=pts;
-  if(o.maxJump>0) out=filterMaxJump(out, o.maxJump);
-  if(o.minDist>0) out=filterMinDist(out, o.minDist);
-  if(o.rdp>0)     out=rdpSimplify(out, o.rdp);
-  return out;
-}
-
 // ── Construir consulta de tracks ──────────────────────────────────
 let sql = 'SELECT id,name,activity,raw_count FROM tracks';
 const conds=[], params=[];
@@ -250,7 +169,7 @@ for(const track of tracks) {
     continue;
   }
 
-  const cleaned=clean(rawPts,opts);
+  const cleaned=cleanPoints(rawPts, opts);
   const pct=((1-cleaned.length/rawPts.length)*100).toFixed(1);
   totRaw+=rawPts.length; totCln+=cleaned.length;
 
@@ -267,7 +186,7 @@ for(const track of tracks) {
         insClean.run(track.id,i,p.lat,p.lon,p.ele??null);
       }
       updCleaned.run(cleaned.length, track.id);
-      const cp = catalogPts(cleaned);
+      const cp = catalogPts(cleaned, MAX_CATALOG_PTS);
       if (cp) db.prepare('UPDATE tracks SET catalog_pts=? WHERE id=?').run(cp, track.id);
     });
   }

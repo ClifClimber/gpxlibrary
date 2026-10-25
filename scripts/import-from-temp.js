@@ -14,6 +14,8 @@ const fs   = require('fs');
 const path = require('path');
 const { openDb, withTransaction } = require('./db');
 const { newUid, sha256, putFile }  = require('./store');
+const { parseGpx, computeMetrics, computeTimes, inferActivity, sierraFromBbox,
+        extractSierraFromNominatim, locationFromNominatim, computeIBP } = require('../domain');
 const { CACHE_DIR, slugify }      = require('./osm-strategy-batch');
 const { fetchTrackPts, filterWaysToBbox, applyWaysToTrack } = require('./osm-shared');
 
@@ -48,45 +50,6 @@ function loadSierrasFromDb() {
   }
 }
 
-// Palabras que indican nombre de sierra en el display_name de Nominatim
-const SIERRA_KEYWORDS = [
-  'Sierra de ','Sierra del ','Sierras de ','Serra de ','Serra del ',
-  'Macizo de ','Macizo del ','Picos de ','Cordillera ','Sistema ',
-  'Montes de ','Montes del ',
-];
-
-function sierraFromBbox(lat, lon) {
-  for (const z of SIERRAS) {
-    if (lat >= z.sw[0] && lat <= z.ne[0] && lon >= z.sw[1] && lon <= z.ne[1]) return z.name;
-  }
-  return null;
-}
-
-function extractSierraFromNominatim(data) {
-  if (!data) return null;
-  // municipality puede ser nombre de sierra en algunas áreas
-  const candidates = [
-    data.address?.municipality,
-    data.address?.county,
-    data.address?.state_district,
-    ...(data.display_name || '').split(',').map(s => s.trim()),
-  ].filter(Boolean);
-
-  for (const kw of SIERRA_KEYWORDS) {
-    for (const c of candidates) {
-      if (c.includes(kw)) {
-        // Devuelve hasta 4 palabras desde la keyword
-        const idx = c.indexOf(kw);
-        const raw = c.substring(idx).split(',')[0].trim();
-        // Limitar longitud razonable
-        const words = raw.split(' ').slice(0, 5);
-        return words.join(' ');
-      }
-    }
-  }
-  return null;
-}
-
 // ── Nominatim ────────────────────────────────────────────────────────
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 let lastNominatim = 0;
@@ -106,202 +69,14 @@ async function fetchNominatim(lat, lon) {
   return resp.json();
 }
 
-// ── Actividad por nombre + métricas ─────────────────────────────────
-function inferActivity(name, dist, gain) {
-  const n = (name || '').toLowerCase();
-
-  if (n.includes('gravel'))                              return { act: 'Gravel',                  conf: 'high' };
-  if (n.includes('escalad') || n.includes('climbing'))  return { act: 'Escalada',                conf: 'high' };
-  if (n.includes('esquí') || n.includes('esqui') || /\bski\b/.test(n)) return { act: 'Esquí de montaña', conf: 'high' };
-  if (/trail.?run|running/.test(n))                     return { act: 'Trail Running',            conf: 'high' };
-  if (n.includes('senderism') || /\bcaminata\b/.test(n)) return { act: 'Senderismo',             conf: 'high' };
-  if (/\bcamino\b/.test(n) && !n.includes('carretera')) return { act: 'Senderismo',               conf: 'high' };
-  if (n.includes('carretera') || n.includes('ciclism'))  return { act: 'Ciclismo de carretera',  conf: 'high' };
-  if (n.includes('mtb') || n.includes('mountain bike') || n.includes('btt')) return { act: 'MTB', conf: 'high' };
-  if (n.includes('bikepacking'))                         return { act: 'Bikepacking',             conf: 'high' };
-  if (n.includes('kayak') || n.includes('pirag'))        return { act: 'Kayak',                  conf: 'high' };
-
-  const gpk = dist > 0 ? gain / dist : 0;
-
-  if (dist > 100) return gpk < 15
-    ? { act: 'Ciclismo de carretera', conf: 'medium' }
-    : { act: 'MTB',                   conf: 'medium' };
-  if (dist > 50) {
-    if (gpk < 20) return { act: 'Ciclismo de carretera', conf: 'medium' };
-    if (gpk < 50) return { act: 'MTB',                   conf: 'medium' };
-    return         { act: 'Trail Running',                conf: 'medium' };
-  }
-  if (dist > 20) {
-    if (gpk > 60) return { act: 'Trail Running', conf: 'medium' };
-    if (gpk > 25) return { act: 'Senderismo',    conf: 'medium' };
-    return         { act: 'MTB',                 conf: 'low'    };
-  }
-  return gpk > 60
-    ? { act: 'Senderismo', conf: 'medium' }
-    : { act: 'Senderismo', conf: 'low'    };
+// ── GPX → datos de track (lógica pura en domain/) ────────────────
+function parseTrack(content, filePath) {
+  const p = parseGpx(content, { fileName: filePath });
+  const m = computeMetrics(p.points);
+  if (!m) return null;
+  return { name: p.name, date: p.date, url: p.url, ...m, points: p.points, waypoints: p.waypoints, times: computeTimes(p.points) };
 }
 
-// ── IBP (Índice Bicicleta Pedestre) ──────────────────────────────────
-// Fórmulas derivadas empíricamente de tracks reales con elevación corregida
-function computeIBP(dist_km, gain_m) {
-  return {
-    ibp_hiking:  Math.round(1.664 * dist_km + 0.0603 * gain_m),
-    ibp_bicycle: Math.round(0.162 * dist_km + 0.074  * gain_m),
-    ibp_running: Math.round(2.181 * dist_km + 0.148  * gain_m),
-  };
-}
-
-// ── Nombre seguro para carpetas Windows ─────────────────────────────
-function safeFolderName(s) {
-  return (s || 'General').replace(/[<>:"/\\|?*]/g, '_').trim() || 'General';
-}
-
-// ── Haversine ────────────────────────────────────────────────────────
-function hav(lat1, lon1, lat2, lon2) {
-  const R = 6371, D = Math.PI / 180;
-  const dl = (lat2-lat1)*D, dn = (lon2-lon1)*D;
-  const a = Math.sin(dl/2)**2 + Math.cos(lat1*D)*Math.cos(lat2*D)*Math.sin(dn/2)**2;
-  return R * 2 * Math.asin(Math.sqrt(a));
-}
-
-// ── Parser GPX ───────────────────────────────────────────────────────
-function parseGpx(content, filePath) {
-  const unesc = s => s
-    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
-    .replace(/&quot;/g,'"').replace(/&apos;/g,"'")
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1').trim();
-
-  let name = path.basename(filePath, '.gpx');
-  const trkName = content.match(/<trk\b[^>]*>[\s\S]*?<name>([\s\S]*?)<\/name>/);
-  if (trkName) name = unesc(trkName[1]);
-  else {
-    const mn = content.match(/<metadata\b[^>]*>[\s\S]*?<name>([\s\S]*?)<\/name>/);
-    if (mn) name = unesc(mn[1]).replace(/^wikiloc\s*-\s*/i,'').trim();
-  }
-
-  // URL desde <metadata><link href="..."> o <trk><link href="...">
-  let sourceUrl = null;
-  const metaLink = content.match(/<metadata\b[^>]*>[\s\S]*?<link\s[^>]*href="([^"]+)"/);
-  if (metaLink) sourceUrl = metaLink[1].trim();
-  if (!sourceUrl) {
-    const trkLink = content.match(/<trk\b[^>]*>[\s\S]*?<link\s[^>]*href="([^"]+)"/);
-    if (trkLink) sourceUrl = trkLink[1].trim();
-  }
-
-  let date = null;
-  const mt = content.match(/<metadata\b[^>]*>[\s\S]*?<time>([^<]+)<\/time>/);
-  if (mt) date = mt[1].trim().substring(0,10);
-  if (!date) {
-    const pt = content.match(/<trkpt\b[^>]*>[\s\S]*?<time>([^<]+)<\/time>/);
-    if (pt) date = pt[1].trim().substring(0,10);
-  }
-  if (!date) {
-    const fn = path.basename(filePath).match(/^(\d{4}-\d{2}-\d{2})/);
-    if (fn) date = fn[1];
-  }
-
-  const points = [];
-  let pos = 0;
-  while (true) {
-    const ts = content.indexOf('<trkpt', pos);
-    if (ts === -1) break;
-    const te = content.indexOf('>', ts);
-    if (te === -1) break;
-    const ce  = content.indexOf('</trkpt>', te);
-    const tag  = content.substring(ts, te + 1);
-    const body = ce !== -1 ? content.substring(te + 1, ce) : '';
-    const latM = tag.match(/\blat="([^"]+)"/);
-    const lonM = tag.match(/\blon="([^"]+)"/);
-    const eleM = body.match(/<ele>([^<]+)<\/ele>/);
-    if (latM && lonM) {
-      const lat = parseFloat(latM[1]), lon = parseFloat(lonM[1]);
-      if (!isNaN(lat) && !isNaN(lon))
-        points.push({ lat, lon, ele: eleM ? parseFloat(eleM[1]) : null });
-    }
-    pos = ce !== -1 ? ce + 8 : te + 1;
-  }
-
-  // Parse waypoints (<wpt>)
-  const waypoints = [];
-  let wpos = 0;
-  while (true) {
-    const ws = content.indexOf('<wpt', wpos);
-    if (ws === -1) break;
-    const wte = content.indexOf('>', ws);
-    if (wte === -1) break;
-    const wce  = content.indexOf('</wpt>', wte);
-    const wtag  = content.substring(ws, wte + 1);
-    const wbody = wce !== -1 ? content.substring(wte + 1, wce) : '';
-    const wlatM = wtag.match(/\blat="([^"]+)"/);
-    const wlonM = wtag.match(/\blon="([^"]+)"/);
-    if (wlatM && wlonM) {
-      const wlat = parseFloat(wlatM[1]), wlon = parseFloat(wlonM[1]);
-      if (!isNaN(wlat) && !isNaN(wlon)) {
-        const wNameM = wbody.match(/<name>([\s\S]*?)<\/name>/);
-        const wEleM  = wbody.match(/<ele>([^<]+)<\/ele>/);
-        const wSymM  = wbody.match(/<sym>([^<]+)<\/sym>/);
-        const wDescM = wbody.match(/<desc>([\s\S]*?)<\/desc>/);
-        waypoints.push({
-          lat: wlat, lon: wlon,
-          ele:  wEleM  ? parseFloat(wEleM[1])     : null,
-          name: wNameM ? unesc(wNameM[1])           : null,
-          sym:  wSymM  ? wSymM[1].trim()            : null,
-          desc: wDescM ? unesc(wDescM[1])           : null,
-        });
-      }
-    }
-    wpos = wce !== -1 ? wce + 6 : wte + 1;
-  }
-
-  if (points.length < 2) return null;
-
-  let dist = 0;
-  for (let i = 1; i < points.length; i++)
-    dist += hav(points[i-1].lat, points[i-1].lon, points[i].lat, points[i].lon);
-
-  const circular = hav(points[0].lat, points[0].lon, points[points.length-1].lat, points[points.length-1].lon) < 0.5 ? 1 : 0;
-
-  let gain = 0, loss = 0, minEle = Infinity, maxEle = -Infinity, hasEle = false;
-  let lastAccEle = null;
-  for (let i = 0; i < points.length; i++) {
-    const e = points[i].ele;
-    if (e != null && !isNaN(e)) {
-      hasEle = true;
-      if (e < minEle) minEle = e;
-      if (e > maxEle) maxEle = e;
-      if (lastAccEle != null) {
-        const d = e - lastAccEle;
-        if (Math.abs(d) >= 8) {
-          if (d > 0) gain += d; else loss -= d;
-          lastAccEle = e;
-        }
-      } else { lastAccEle = e; }
-    }
-  }
-
-  let swLat=Infinity, swLon=Infinity, neLat=-Infinity, neLon=-Infinity;
-  for (const p of points) {
-    if (p.lat < swLat) swLat = p.lat;
-    if (p.lat > neLat) neLat = p.lat;
-    if (p.lon < swLon) swLon = p.lon;
-    if (p.lon > neLon) neLon = p.lon;
-  }
-
-  return {
-    name, origFile: filePath, date, url: sourceUrl,
-    distance:      Math.round(dist * 10) / 10,
-    elevationGain: Math.round(gain),
-    elevationLoss: Math.round(loss),
-    minElevation:  hasEle ? Math.round(minEle) : null,
-    maxElevation:  hasEle ? Math.round(maxEle) : null,
-    swLat, swLon, neLat, neLon,
-    centerLat: Math.round((swLat+neLat)/2 * 10000)/10000,
-    centerLon: Math.round((swLon+neLon)/2 * 10000)/10000,
-    circular, points, waypoints,
-  };
-}
-
-// ── Mover (o copiar) archivo con manejo de colisiones ─────────────────
 // ── Recoger GPX de _TEMP_ (excluye _REVIEW_) ─────────────────────────
 function collectTempGpx(dir) {
   const out = [];
@@ -341,6 +116,7 @@ function collectTempGpx(dir) {
   const findByHash = db.prepare('SELECT id, name FROM tracks WHERE sha256=? LIMIT 1');
   const setStoreCols = db.prepare('UPDATE tracks SET uid=?, sha256=?, zone=COALESCE(zone, sierra) WHERE id=?');
   const tagForReview = db.prepare(`UPDATE tracks SET tags=? WHERE id=?`);
+  const setTimes = db.prepare('UPDATE tracks SET moving_time=?, stopped_time=? WHERE id=?');
 
   // Limpiar el flag de importación reciente antes de marcar los nuevos
   db.prepare('UPDATE tracks SET is_recent_import=0 WHERE is_recent_import=1').run();
@@ -433,7 +209,7 @@ function collectTempGpx(dir) {
 
     let track;
     try {
-      track = parseGpx(content, filePath);
+      track = parseTrack(content, filePath);
       if (!track) { console.log(`  ⚠ Sin puntos de track`); errors++; continue; }
     } catch (e) { console.log(`  ✗ Error parseando: ${e.message}`); errors++; continue; }
 
@@ -444,10 +220,7 @@ function collectTempGpx(dir) {
     try {
       console.log(`  Consultando Nominatim...`);
       const geo = await fetchNominatim(track.centerLat, track.centerLon);
-      const addr = geo.address || {};
-      province = addr.county || addr.state_district || null;
-      if (province) province = province.replace(/^Provincia de /i,'').trim();
-      ccaa = addr.state || null;
+      ({ province, ccaa } = locationFromNominatim(geo));
       sierraNominatim = extractSierraFromNominatim(geo);
       if (province || ccaa) console.log(`  Ubicación  : ${[province, ccaa].filter(Boolean).join(', ')}`);
     } catch (e) {
@@ -455,7 +228,7 @@ function collectTempGpx(dir) {
     }
 
     // ── Paso 2: Determinar sierra (Nominatim → bounding box) ────────
-    const sierra = sierraNominatim || sierraFromBbox(track.centerLat, track.centerLon);
+    const sierra = sierraNominatim || sierraFromBbox(track.centerLat, track.centerLon, SIERRAS);
     console.log(`  Sierra     : ${sierra || 'no detectada'}`);
 
     // ── Paso 3: Inferir actividad ────────────────────────────────────
@@ -476,6 +249,7 @@ function collectTempGpx(dir) {
     try {
       const newId = importTrack(track, relFile, act, sierra, province, ccaa, ibp);
       setStoreCols.run(uid, hash, newId);
+      if (track.times) setTimes.run(track.times.moving, track.times.stopped, newId);
       if (needsReview) tagForReview.run(JSON.stringify(['revisar']), newId);
       importedIds.push(newId);
       imported++;

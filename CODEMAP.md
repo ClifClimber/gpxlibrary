@@ -23,8 +23,10 @@ gpxlibrary/
 │
 ├── scripts/
 │   ├── db.js                   openDb(), withTransaction(), schema inicial
-│   ├── import-gpx.js           Importa GPX de TracksGps/ → BD (modo básico)
-│   ├── import-from-temp.js     Pipeline completo: geocodifica + clasifica + mueve + importa
+│   ├── import-from-temp.js     Pipeline completo: geocodifica + clasifica + guarda en store/ + importa
+│   ├── store.js                Almacén inmutable: TracksGps/store/{uid}.gpx, sha256
+│   ├── migrate-store.js        Migra carpetas antiguas al almacén (--dry-run, --revert)
+│   ├── export-folders.js       Copia Actividad/Sierra/Nombre.gpx en una carpeta elegida
 │   ├── export-catalog.js       BD → catalog-data.js (con simplificación de puntos)
 │   ├── build-catalog.js        GPX → catalog-data.js (sin BD, modo legacy)
 │   ├── clean-tracks.js         Elimina ruido GPS de raw_points → clean_points
@@ -33,12 +35,12 @@ gpxlibrary/
 │   ├── calc-ibp.js             Calcula IBP Index vía API ibpindex.com
 │   └── extract-urls.js         Extrae URLs de los metadatos GPX
 │
-└── TracksGps/
-    ├── <Actividad>/
-    │   └── <Sierra>/
-    │       └── track.gpx
+├── domain/             Lógica pura (sin BD ni disco): parseo GPX, métricas, clasificación,
+│                       IBP, simplificación/limpieza y exportación GPX + tests (npm test)
+│
+└── TracksGps/          NO en git (.gitignore)
+    ├── store/          Originales inmutables: {uid}.gpx
     └── _TEMP_/         Zona de entrada; se vacía al importar
-        └── _REVIEW_/   Tracks sin clasificar automática
 ```
 
 ---

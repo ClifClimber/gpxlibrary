@@ -1,5 +1,5 @@
 'use strict';
-const fs = require('fs');
+// GPX generation and metadata rewriting on text. No I/O.
 
 function escXml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -45,13 +45,35 @@ function applyGpxMetadata(content, fields) {
   return content.slice(0, trkStart) + header + after;
 }
 
-/** Versión en disco de applyGpxMetadata. No usar con ficheros del almacén (inmutables). */
-function updateGpxMetadata(filePath, fields) {
-  let content;
-  try { content = fs.readFileSync(filePath, 'utf8'); } catch { return false; }
-  const out = applyGpxMetadata(content, fields);
-  if (out === content) return false;
-  try { fs.writeFileSync(filePath, out, 'utf8'); return true; } catch { return false; }
+/** Builds a GPX 1.1 document from [{name, date?, pts:[{lat,lon,ele}]}]. */
+function buildGpx(tracks) {
+  const lines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<gpx version="1.1" creator="GPX Library" xmlns="http://www.topografix.com/GPX/1/1">',
+  ];
+  for (const t of tracks) {
+    lines.push('  <trk>');
+    lines.push(`    <name>${escXml(t.name)}</name>`);
+    if (t.date) lines.push(`    <desc>Fecha: ${t.date.slice(0, 10)}</desc>`);
+    lines.push('    <trkseg>');
+    for (const p of t.pts) {
+      const ele = p.ele != null ? `<ele>${p.ele}</ele>` : '';
+      lines.push(`      <trkpt lat="${p.lat}" lon="${p.lon}">${ele}</trkpt>`);
+    }
+    lines.push('    </trkseg>');
+    lines.push('  </trk>');
+  }
+  lines.push('</gpx>');
+  return lines.join('\n');
 }
 
-module.exports = { escXml, applyGpxMetadata, updateGpxMetadata };
+/** Metadata fields applied to a stored original when it leaves the app. */
+function metaFromTrack(t) {
+  const meta = { name: t.name };
+  if (t.activity) meta.activity = t.activity;
+  if (t.notes) meta.notes = t.notes;
+  if (t.url) meta.url = t.url;
+  return meta;
+}
+
+module.exports = { escXml, applyGpxMetadata, buildGpx, metaFromTrack };

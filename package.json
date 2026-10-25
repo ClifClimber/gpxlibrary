@@ -3,17 +3,20 @@
   "version": "2.0.0",
   "description": "GPX Track Viewer with Leaflet",
   "scripts": {
-    "start":       "node server.js",
+    "start": "node server.js",
     "start-basic": "npx http-server . -p 8080 -o --cors",
-    "dev":         "node server.js",
-    "db:import": "node scripts/import-gpx.js",
+    "dev": "node server.js",
+    "db:import": "node scripts/import-from-temp.js",
+    "db:migrate-store": "node scripts/migrate-store.js",
+    "db:export-folders": "node scripts/export-folders.js --dest",
     "db:clean": "node scripts/clean-tracks.js",
     "db:stats": "node scripts/clean-tracks.js --stats",
     "db:list": "node scripts/clean-tracks.js --list",
     "db:enrich": "node scripts/enrich-tracks.js",
     "db:enrich-all": "node scripts/enrich-tracks.js --all",
     "db:extract-urls": "node scripts/extract-urls.js",
-    "db:extract-urls-force": "node scripts/extract-urls.js --force"
+    "db:extract-urls-force": "node scripts/extract-urls.js --force",
+    "test": "node --test \"domain/**/*.test.js\""
   },
   "engines": {
     "node": ">=22.5.0"

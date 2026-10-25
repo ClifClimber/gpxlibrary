@@ -5,11 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Import all GPX files from TracksGps/ into the DB (skips existing unless --force)
-node scripts/import-gpx.js [--force]
-
-# Import new files from TracksGps/_TEMP_/ (auto-classifies, geocodes, moves files)
+# Import new files from TracksGps/_TEMP_/ into the store (classifies, geocodes, skips duplicates)
 node scripts/import-from-temp.js [--force]
+
+# Unit tests of the pure domain logic (node:test, no dependencies)
+npm test
 
 # Clean/smooth raw GPS points
 node scripts/clean-tracks.js [--ids 1,2,3] [--all]
@@ -27,6 +27,9 @@ npm run dev
 The viewer works only via HTTP server, not `file://`, because it uses fetch/SSE APIs.
 
 ## Architecture
+
+### Domain — `domain/`
+Pure functions with no database, filesystem or network access (phase 1 of the cloud plan): `gpx-parse` (GPX text → name/date/url/points/waypoints), `metrics` (distance, elevation with 8 m noise threshold, bounds, circular, moving/stopped time), `classify` (activity inference, sierra by bbox, Nominatim parsing), `ibp`, `simplify` (even sampling, catalog polyline, GPS cleaning filters) and `gpx-export` (build GPX, apply metadata). Scripts and `server.js` must import from `./domain` instead of re-implementing these; tests live in `domain/*.test.js`.
 
 Node.js HTTP server (`server.js`) with SQLite (`data/tracks.db`, auto-created). No npm runtime dependencies — uses Node.js built-ins only (`node:sqlite` requires Node v22+).
 
@@ -114,7 +117,7 @@ Key component classes: `.btn` (+ modifiers), `.input`/`.select`, `.chip` (+ `.ac
 New pages start from `docs/page-template.html` and must be added to the `<nav>` in every page.
 
 ## GPX conventions
-- Originals live in the immutable store `TracksGps/store/{uid}.gpx`. Never rename, move or rewrite them; name/activity/zone/notes/url live only in the DB and are applied on the fly when downloading (`applyGpxMetadata()` in `scripts/gpx-utils.js`).
+- Originals live in the immutable store `TracksGps/store/{uid}.gpx`. Never rename, move or rewrite them; name/activity/zone/notes/url live only in the DB and are applied on the fly when downloading (`applyGpxMetadata()` in `domain/gpx-export.js`).
 - A browsable `Actividad/Sierra/Nombre.gpx` copy is produced on demand: Admin → Gestión de Tracks → «Exportar en carpetas» (`scripts/export-folders.js`, refuses destinations inside `TracksGps`) or the ZIP «tree» layout.
 - `scripts/migrate-store.js [--dry-run] [--revert <manifest>]` moves legacy folder files into the store and writes a revert manifest to `data/migrations/`.
 - Files with `YYYY-MM-DD` filename prefix get that date if no `<time>` tag is present.

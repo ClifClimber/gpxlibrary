@@ -15,7 +15,7 @@ const zlib   = require('zlib');
 const { pipeline } = require('stream/promises');
 const { spawn } = require('child_process');
 const { openDb, closeDb, withTransaction, DB_PATH } = require('./scripts/db');
-const { escXml, applyGpxMetadata } = require('./scripts/gpx-utils');
+const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampleEvenly } = require('./domain');
 const { downloadName } = require('./scripts/store');
 
 const PORT = parseInt(process.env.PORT || '8080');
@@ -211,36 +211,7 @@ function parseBody(req) {
 
 // ── GPX moving/stopped time ───────────────────────────────────────
 function computeGpxTimes(filePath) {
-  let content;
-  try { content = fs.readFileSync(filePath, 'utf8'); } catch { return null; }
-  const pts = [];
-  let pos = 0;
-  while (true) {
-    const ts = content.indexOf('<trkpt', pos);
-    if (ts === -1) break;
-    const te = content.indexOf('</trkpt>', ts);
-    if (te === -1) break;
-    const seg = content.substring(ts, te + 8);
-    const lat = seg.match(/lat="([^"]+)"/)?.[1];
-    const lon = seg.match(/lon="([^"]+)"/)?.[1];
-    const tm  = seg.match(/<time>([^<]+)<\/time>/)?.[1];
-    if (lat && lon && tm) pts.push({ lat: +lat, lon: +lon, t: new Date(tm.trim()).getTime() });
-    pos = te + 8;
-  }
-  if (pts.length < 2 || !pts[0].t || isNaN(pts[0].t)) return null;
-  function h(a, b) {
-    const R=6371, D=Math.PI/180, dl=(b.lat-a.lat)*D, dn=(b.lon-a.lon)*D;
-    const x=Math.sin(dl/2)**2+Math.cos(a.lat*D)*Math.cos(b.lat*D)*Math.sin(dn/2)**2;
-    return R*2*Math.asin(Math.sqrt(x));
-  }
-  let moving = 0, stopped = 0;
-  for (let i = 1; i < pts.length; i++) {
-    const dt = (pts[i].t - pts[i-1].t) / 1000;
-    if (dt <= 0 || dt > 300) continue;
-    const speed = h(pts[i-1], pts[i]) / dt * 3600;
-    if (speed > 0.8) moving += dt; else stopped += dt;
-  }
-  return moving + stopped > 0 ? { moving: Math.round(moving), stopped: Math.round(stopped) } : null;
+  try { return computeTimes(parseGpx(fs.readFileSync(filePath, 'utf8')).points); } catch { return null; }
 }
 
 // ── API /tracks/:id ───────────────────────────────────────────────
@@ -377,32 +348,6 @@ function buildZip(entries) {
 }
 
 // ── Export GPX ────────────────────────────────────────────────────
-function simplifyPts(pts, maxN) {
-  if (pts.length <= maxN) return pts;
-  const out = [], step = (pts.length - 1) / (maxN - 1);
-  for (let i = 0; i < maxN; i++) out.push(pts[Math.round(i * step)]);
-  return out;
-}
-function buildGpx(tracksData) {
-  const lines = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<gpx version="1.1" creator="GPX Library" xmlns="http://www.topografix.com/GPX/1/1">',
-  ];
-  for (const t of tracksData) {
-    lines.push('  <trk>');
-    lines.push(`    <name>${escXml(t.name)}</name>`);
-    if (t.date) lines.push(`    <desc>Fecha: ${t.date.slice(0,10)}</desc>`);
-    lines.push('    <trkseg>');
-    for (const p of t.pts) {
-      const ele = p.ele != null ? `<ele>${p.ele}</ele>` : '';
-      lines.push(`      <trkpt lat="${p.lat}" lon="${p.lon}">${ele}</trkpt>`);
-    }
-    lines.push('    </trkseg>');
-    lines.push('  </trk>');
-  }
-  lines.push('</gpx>');
-  return lines.join('\n');
-}
 function exportGpxResponse(res, tracksData, filename) {
   const gpx = buildGpx(tracksData);
   const safe = filename.replace(/[^\w\s\-áéíóúñÁÉÍÓÚÑ.]/g, '_').trim();
@@ -420,7 +365,7 @@ function getTracksForExport(db, ids, mode, maxPts) {
     const t = db.prepare('SELECT id,name,date,file,cleaned,activity,sierra,zone FROM tracks WHERE id=?').get(id);
     if (!t) continue;
     let pts = t.cleaned ? fetchClean.all(t.id) : fetchRaw.all(t.id);
-    if (mode === 'simplified') pts = simplifyPts(pts, maxPts);
+    if (mode === 'simplified') pts = sampleEvenly(pts, maxPts);
     result.push({ id: t.id, name: t.name, date: t.date, file: t.file, activity: t.activity, sierra: t.sierra || t.zone, pts });
   }
   return result;
@@ -483,11 +428,7 @@ function originalGpxWithMeta(track) {
   const buf = fs.readFileSync(path.join(ROOT, track.file));
   let text = buf.toString('utf8');
   if (text.includes('�')) text = buf.toString('latin1');
-  const meta = { name: track.name };
-  if (track.activity) meta.activity = track.activity;
-  if (track.notes) meta.notes = track.notes;
-  if (track.url) meta.url = track.url;
-  return applyGpxMetadata(text, meta);
+  return applyGpxMetadata(text, metaFromTrack(track));
 }
 
 // GET /api/tracks/:id/gpx           → original GPX file from disk
@@ -552,22 +493,6 @@ function checkpointWal() {
   try { openDb().exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch (e) { console.error('[wal] checkpoint:', e.message); }
 }
 
-function simplifyCatalog(pts, maxN) {
-  if(pts.length<=maxN) return pts;
-  const out=[],step=(pts.length-1)/(maxN-1);
-  for(let i=0;i<maxN;i++) out.push(pts[Math.round(i*step)]);
-  return out;
-}
-
-function computeCatalogPts(pts) {
-  if (!pts || pts.length < 2) return null;
-  const disp = simplifyCatalog(pts, MAX_CATALOG_PTS);
-  return JSON.stringify(disp.map(p => [
-    Math.round(p.lat * 100000) / 100000,
-    Math.round(p.lon * 100000) / 100000,
-    p.ele != null ? Math.round(p.ele) : null,
-  ]));
-}
 
 function buildCatalog() {
   const db = openDb();
@@ -590,7 +515,7 @@ function buildCatalog() {
     } else {
       const pts = t.cleaned ? fetchClean.all(t.id) : fetchRaw.all(t.id);
       if(pts.length<2) continue;
-      const disp = simplifyCatalog(pts, MAX_CATALOG_PTS);
+      const disp = sampleEvenly(pts, MAX_CATALOG_PTS);
       points = disp.map(p=>[
         Math.round(p.lat*100000)/100000,
         Math.round(p.lon*100000)/100000,
@@ -1105,10 +1030,6 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/db/stats' && method === 'GET')
     return apiStats(res);
 
-  if (pathname === '/api/db/import' && method === 'POST') {
-    const force = searchParams.get('force') === '1';
-    return apiRunScript(res, path.join(ROOT,'scripts','import-gpx.js'), force ? ['--force'] : []);
-  }
 
   if (pathname === '/api/db/export' && method === 'POST') {
     const opts = await parseBody(req);

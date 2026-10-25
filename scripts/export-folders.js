@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { openDb } = require('./db');
 const { ROOT } = require('./store');
-const { applyGpxMetadata } = require('./gpx-utils');
+const { applyGpxMetadata, metaFromTrack } = require('../domain');
 
 const arg = k => { const i = process.argv.indexOf(k); return i >= 0 ? process.argv[i + 1] : null; };
 const destArg = arg('--dest');
@@ -46,12 +46,8 @@ rows.forEach((t, i) => {
     const buf = fs.readFileSync(src);
     let text = buf.toString('utf8');
     if (text.includes('\uFFFD')) text = buf.toString('latin1');
-    const meta = { name: t.name };
-    if (t.activity) meta.activity = t.activity;
-    if (t.notes) meta.notes = t.notes;
-    if (t.url) meta.url = t.url;
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(file, applyGpxMetadata(text, meta), 'utf8');
+    fs.writeFileSync(file, applyGpxMetadata(text, metaFromTrack(t)), 'utf8');
     written++;
     if ((i + 1) % 25 === 0) console.log(`Exportados: ${i + 1} de ${rows.length}`);
   } catch (e) { console.log(`  ✗ «${t.name}» (id=${t.id}): ${e.message}`); errors++; }

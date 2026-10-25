@@ -62,7 +62,7 @@ const tracks = db.prepare(
 ).all();
 
 if(!tracks.length){
-  console.error('\nError: No hay tracks en la BD. Ejecuta: node scripts/import-gpx.js\n');
+  console.error('\nError: No hay tracks en la BD. Importa rutas con: node scripts/import-from-temp.js\n');
   process.exit(1);
 }
 
