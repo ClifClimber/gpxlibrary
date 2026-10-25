@@ -722,49 +722,6 @@ async function apiConfigProvinces(res) {
   }
 }
 
-// ── API: reorganizar archivos según actividad/sierra en BD ─────────
-// ── API: borrar todos los tracks y archivos GPX ────────────────────
-async function apiDeleteAll(res) {
-  res.writeHead(200, {
-    'Content-Type':  'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection':    'keep-alive',
-  });
-  const send = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  try {
-    send({ type: 'start' });
-    const db = sqlDb();
-    const { n: trackCount } = await db.get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM tracks');
-    send({ type: 'log', text: `Eliminando ${trackCount} tracks de la BD...` });
-    await db.exec('DELETE FROM tracks');
-    invalidateCatalogCache();
-    send({ type: 'log', text: `✓ BD limpiada (${trackCount} tracks eliminados)` });
-
-    const tracksDir = path.join(ROOT, 'TracksGps');
-    let filesDeleted = 0, dirsRemoved = 0;
-
-    function cleanDir(dir) {
-      if (!fs.existsSync(dir)) return;
-      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, e.name);
-        if (e.isDirectory() && e.name !== '_TEMP_') {
-          cleanDir(full);
-          try { fs.rmdirSync(full); dirsRemoved++; } catch {}
-        } else if (e.name.toLowerCase().endsWith('.gpx')) {
-          try { fs.unlinkSync(full); filesDeleted++; } catch {}
-        }
-      }
-    }
-    cleanDir(tracksDir);
-    send({ type: 'log', text: `✓ ${filesDeleted} archivos GPX eliminados, ${dirsRemoved} carpetas` });
-    send({ type: 'done', code: 0 });
-  } catch (e) {
-    send({ type: 'error', text: e.message });
-    send({ type: 'done', code: 1 });
-  }
-  res.end();
-}
-
 // ── Admin API ─────────────────────────────────────────────────────
 const BACKUPS_DIR        = path.join(path.dirname(DB_PATH), 'backups');
 const BACKUP_CONFIG_PATH = path.join(path.dirname(DB_PATH), 'backup-config.json');
@@ -1232,8 +1189,6 @@ const server = http.createServer(async (req, res) => {
     return apiRunScript(res, path.join(ROOT,'scripts','import-from-temp.js'), args);
   }
 
-  if (pathname === '/api/tracks/delete-all' && method === 'POST')
-    return apiDeleteAll(res);
 
   if (pathname === '/api/db/enrich' && method === 'POST') {
     const force = searchParams.get('force') === '1';

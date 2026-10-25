@@ -211,14 +211,6 @@
     .tag-sug-already { opacity:.4; cursor:default; font-style:italic; }
 
 
-    /* ── Delete-all confirm modal ───────────────── */
-    #da-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:500; display:none; align-items:center; justify-content:center; }
-    #da-overlay.open { display:flex; }
-    #da-modal { background:var(--surface); border-radius:12px; padding:24px; width:420px; max-width:95vw; box-shadow:0 8px 40px rgba(0,0,0,.4); }
-    #da-modal h3 { font-size:16px; font-weight:700; color:var(--danger); margin-bottom:8px; display:flex; align-items:center; gap:8px; }
-    #da-modal p { font-size:13px; color:var(--muted); line-height:1.6; margin-bottom:18px; }
-    #da-actions { display:flex; gap:10px; justify-content:flex-end; }
-
     /* ── Delete confirm modal ───────────────── */
     #del-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:600; display:none; align-items:center; justify-content:center; }
     #del-overlay.open { display:flex; }
@@ -415,21 +407,6 @@
 </div>
 
 
-
-<!-- Delete-all confirm modal -->
-<div id="da-overlay">
-  <div id="da-modal">
-    <h3>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      Borrar TODOS los tracks
-    </h3>
-    <p>Esto eliminará <strong>todos los tracks</strong> de la base de datos y borrará los archivos GPX del disco (salvo los de <code>_TEMP_</code>).<br><br>Esta acción <strong>no se puede deshacer</strong>.</p>
-    <div id="da-actions">
-      <button class="btn-del-cancel" id="da-cancel">Cancelar</button>
-      <button class="btn-del-confirm" id="da-confirm">Sí, borrar todo</button>
-    </div>
-  </div>
-</div>
 
 <!-- Delete confirmation modal -->
 <div id="del-overlay">
@@ -1764,20 +1741,6 @@ document.getElementById('enrich-overlay').addEventListener('click', e => {
 });
 
 
-
-document.getElementById('da-cancel').addEventListener('click', () => {
-  document.getElementById('da-overlay').classList.remove('open');
-});
-document.getElementById('da-confirm').addEventListener('click', async () => {
-  document.getElementById('da-overlay').classList.remove('open');
-  try {
-    const resp = await fetch('/api/tracks/delete-all', { method: 'POST' });
-    if (resp.ok) { toast('Todos los tracks eliminados'); loadTracks(); }
-    else { const d = await resp.json().catch(() => ({})); toast(d.error || 'Error al eliminar', true); }
-  } catch (e) {
-    toast('Error: ' + e.message, true);
-  }
-});
 
 // ── Última importación ─────────────────────────────────────────────
 document.getElementById('btn-last-import').addEventListener('click', () => {
