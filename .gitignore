@@ -13,3 +13,6 @@ osm-settings.json
 
 # GPX originales (almacén inmutable) e importaciones pendientes: datos personales, no van a git
 TracksGps/
+
+# Configuración local con credenciales
+.env

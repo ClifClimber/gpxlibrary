@@ -1,0 +1,27 @@
+# Entorno local de la fase 1: PostgreSQL + PostGIS.
+#   docker compose up -d      → arranca (la primera vez crea la BD y activa PostGIS)
+#   docker compose down       → para (los datos se conservan en el volumen pgdata)
+#   docker compose down -v    → para y BORRA los datos
+# Credenciales en .env (ver .env.example). Solo escucha en 127.0.0.1.
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    container_name: gpxlibrary-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PG_DB:-gpxlibrary}
+      POSTGRES_USER: ${PG_USER:-gpx}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?Define PG_PASSWORD en .env}
+    ports:
+      - "127.0.0.1:${PG_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:
