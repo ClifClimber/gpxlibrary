@@ -8,8 +8,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Import new files from TracksGps/_TEMP_/ into the store (classifies, geocodes, skips duplicates)
 node scripts/import-from-temp.js [--force]
 
-# Unit tests of the pure domain logic (node:test, no dependencies)
+# Tests: pure domain logic + repository contract tests against SQLite and Postgres
+# (Postgres tests use a separate gpxlibrary_test database and are skipped if it is unreachable)
 npm test
+
+# Local PostgreSQL + PostGIS (Docker Desktop); credentials in .env
+docker compose up -d
+
+# Copy all data between engines, then compare them query by query
+node scripts/db-copy.js --to postgres [--replace]
+node scripts/db-copy.js --to sqlite [--sqlite data/otra.db] [--replace]
+node scripts/db-copy.js --verify
 
 # Clean/smooth raw GPS points
 node scripts/clean-tracks.js [--ids 1,2,3] [--all]
@@ -31,7 +40,10 @@ The viewer works only via HTTP server, not `file://`, because it uses fetch/SSE 
 ### Domain — `domain/`
 Pure functions with no database, filesystem or network access (phase 1 of the cloud plan): `gpx-parse` (GPX text → name/date/url/points/waypoints), `metrics` (distance, elevation with 8 m noise threshold, bounds, circular, moving/stopped time), `classify` (activity inference, sierra by bbox, Nominatim parsing), `ibp`, `simplify` (even sampling, catalog polyline, GPS cleaning filters) and `gpx-export` (build GPX, apply metadata). Scripts and `server.js` must import from `./domain` instead of re-implementing these; tests live in `domain/*.test.js`.
 
-Node.js HTTP server (`server.js`) with SQLite (`data/tracks.db`, auto-created). No npm runtime dependencies — uses Node.js built-ins only (`node:sqlite` requires Node v22+).
+### Data access — `repo/` (two interchangeable engines)
+`config.js` loads `.env` (no dependency) and exposes `DB_DRIVER` (`sqlite` default | `postgres`), `DATABASE_URL` and `SQLITE_PATH`. `repo/index.js#getRepo()` returns the engine-specific implementation (`repo/sqlite.js`, `repo/postgres.js`) with the same async API (`listTracks`, `getTrack`, `getPoints`, `catalogTracks`, `updateTrack`, `bulkUpdate`, `moveTrack`, `deleteTrack`, `tags`, `geo`, `recentIds`, config CRUD…). Both must return rows with identical keys, values and order: column lists live in `repo/columns.js`, Postgres orders names with `COLLATE "C"` and dates with `NULLS LAST`, and every ordering ends with `id`. New queries go into **both** implementations plus `repo/repo.test.js`. Postgres schema: `repo/pg/NNN_*.sql`, applied by `repo/pg-migrate.js`; points are a PostGIS `LineString` (`geom`/`geom_clean`) plus `ele`/`ele_clean` arrays. Endpoints still SQLite-only (scripts, backups, import, OSM…) are listed in `SQLITE_ONLY` in `server.js` and answer 501 under Postgres. Only npm dependency: `pg`, loaded only with `DB_DRIVER=postgres`.
+
+Node.js HTTP server (`server.js`); SQLite at `data/tracks.db` (auto-created, `node:sqlite` requires Node v22+) or PostgreSQL via `repo/`.
 
 ### DB — `scripts/db.js`
 Singleton (`openDb()`) using `node:sqlite` (DatabaseSync). `_migrate()` uses `ALTER TABLE … ADD COLUMN` for non-breaking schema evolution. DB path: `data/tracks.db`.
@@ -55,6 +67,7 @@ Pure Node.js HTTP server. No framework. Routes:
 - `DELETE /api/tracks/:id`
 - `GET /api/geo` — returns `{provinces, ccaa, zones}` distinct values from DB
 - `GET /api/config/activities` — activity list with colors
+- `GET /api/admin/version` — `{version, name, db}` (`db` is the active engine)
 - `POST /api/db/import-temp` (SSE) — runs `import-from-temp.js`, streams log lines
 - `POST /api/db/enrich-road-types?ids=1,2,3` (SSE) — runs `enrich-road-types.js`
 - `POST /api/db/clean?ids=…` (SSE) — runs `clean-tracks.js`

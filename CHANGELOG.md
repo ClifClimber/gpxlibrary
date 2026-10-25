@@ -1,5 +1,35 @@
 # Changelog
 
+## v2.1.0 — 2026-10-25
+
+Fase 1 hacia la nube: **la aplicación funciona igual con SQLite o con PostgreSQL + PostGIS.**
+
+### Dos motores de base de datos intercambiables
+- Nueva capa de acceso a datos `repo/` con una implementación para **SQLite** y otra para **PostgreSQL + PostGIS**; se elige con `DB_DRIVER=sqlite|postgres` en `.env` (por defecto SQLite, sin cambios para quien no lo toque)
+- El visor, el catálogo, el detalle, editar / mover / borrar rutas (una o en bloque), las etiquetas, las zonas y la configuración de actividades y sierras pasan por esta capa
+- Verificado con los datos reales: las respuestas del servidor son **idénticas byte a byte** con los dos motores (391 rutas, 1.092.850 puntos)
+- Con PostgreSQL, las operaciones aún no portadas (importar, enriquecer con OSM, IBP, limpiar, copias de seguridad, exportar en carpetas) responden «aún no disponible con PostgreSQL» en lugar de fallar
+
+### PostgreSQL en local con Docker
+- `docker-compose.yml` con PostgreSQL 17 + PostGIS 3.5, accesible solo desde el propio equipo
+- Esquema en `repo/pg/001_init.sql` aplicado con migraciones numeradas; los puntos se guardan como geometría PostGIS más un array de altitudes
+- Configuración en `.env` (plantilla `.env.example`); `.env` no va a git
+
+### Copiar datos entre motores
+- `scripts/db-copy.js --to postgres` y `--to sqlite` (a un fichero nuevo; nunca sobrescribe la base principal sin `--replace`), conservando los identificadores de las rutas
+- Al terminar compara los dos motores consulta a consulta; `--verify` hace solo la comparación
+- Atajos: `npm run db:copy-to-postgres`, `db:copy-to-sqlite`, `db:compare`
+
+### Calidad
+- 16 tests nuevos que ejecutan las mismas comprobaciones contra SQLite y PostgreSQL (`npm test`: 27 en total)
+- Orden de listas totalmente determinista en los dos motores (desempate por id; rutas sin fecha al final)
+- «Acerca de» indica qué motor de base de datos está en uso
+
+### Dependencias
+- Primera dependencia npm: `pg` (cliente de PostgreSQL), solo se carga con `DB_DRIVER=postgres`
+
+---
+
 ## v2.0.0 — 2026-10-24
 
 Primera versión de la fase 1 hacia la nube (rama `cloud/fase-1`). **Cambia cómo se guardan los ficheros.**

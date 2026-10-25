@@ -593,12 +593,12 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.0.0</div>
-          <div style="font-size:11px;color:var(--muted)" id="about-date">24 octubre 2026</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.1.0</div>
+          <div style="font-size:11px;color:var(--muted)" id="about-date">25 octubre 2026</div>
         </div>
       </div>
       <div style="border-top:1px solid var(--line);padding:14px 24px;display:flex;gap:24px;flex-wrap:wrap">
-        <span style="font-size:12px;color:var(--muted)">⚙ Node.js + SQLite</span>
+        <span style="font-size:12px;color:var(--muted)" id="about-db">⚙ Node.js + SQLite</span>
         <span style="font-size:12px;color:var(--muted)">🗺 Leaflet 1.9</span>
         <span style="font-size:12px;color:var(--muted)">📐 OpenStreetMap / Overpass</span>
         <span style="font-size:12px;color:var(--muted)">🏔 IBP Index API</span>
@@ -612,8 +612,23 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.0.0</span>
+            <span class="cl-version">v2.1.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">25 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Dos motores de base de datos</b>: la aplicación funciona igual con SQLite o con PostgreSQL + PostGIS; se elige con <code>DB_DRIVER</code> en <code>.env</code></li>
+            <li>Visor, catálogo, detalle, edición y configuración pasan por la nueva capa <code>repo/</code>; respuestas idénticas byte a byte con los dos motores</li>
+            <li><b>PostgreSQL en Docker</b> (<code>docker-compose.yml</code>) con esquema versionado por migraciones</li>
+            <li><b>Copiar datos entre motores</b> en los dos sentidos con comprobación final (<code>scripts/db-copy.js</code>)</li>
+            <li>16 tests que comprueban SQLite y PostgreSQL con las mismas aserciones; «Acerca de» muestra el motor en uso</li>
+            <li>Con PostgreSQL, importar, OSM, IBP y copias de seguridad aún no están disponibles y lo indican</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.0.0</span>
             <span class="cl-date">24 oct 2026</span>
           </div>
           <ul class="cl-list">
@@ -1163,6 +1178,8 @@ loadBackupConfig();
 fetch('/api/admin/version').then(r => r.json()).then(d => {
   const el = document.getElementById('about-version');
   if (el) el.textContent = 'v' + d.version;
+  const dbEl = document.getElementById('about-db');
+  if (dbEl) dbEl.textContent = '⚙ Node.js + ' + (d.db === 'postgres' ? 'PostgreSQL + PostGIS' : 'SQLite');
 }).catch(() => {});
 
 // ── OSM strategy section ────────────────────────────────────────────

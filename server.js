@@ -16,6 +16,9 @@ const { pipeline } = require('stream/promises');
 const { spawn } = require('child_process');
 const { openDb, closeDb, withTransaction, DB_PATH } = require('./scripts/db');
 const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampleEvenly } = require('./domain');
+const { getRepo } = require('./repo');
+const { EDITABLE_FIELDS } = require('./repo/columns');
+const repo = getRepo();
 const { downloadName } = require('./scripts/store');
 
 const PORT = parseInt(process.env.PORT || '8080');
@@ -215,24 +218,13 @@ function computeGpxTimes(filePath) {
 }
 
 // ── API /tracks/:id ───────────────────────────────────────────────
-function apiGetTrackById(res, id, full = false) {
+async function apiGetTrackById(res, id, full = false) {
   try {
-    const db = openDb();
-    const track = db.prepare(`
-      SELECT id, name, file, zone, date,
-             distance, elevation_gain, elevation_loss, min_elevation, max_elevation,
-             sw_lat, sw_lon, ne_lat, ne_lon, center_lat, center_lon,
-             raw_count, clean_count, cleaned,
-             activity, province, ccaa, sierra, notes, url,
-             road_types, surface_types, road_type_seq, moving_time, stopped_time, tags,
-             ibp_bicycle, ibp_hiking, ibp_running, circular, waypoints_json
-      FROM tracks WHERE id=?
-    `).get(id);
+    const track = await repo.getTrack(id);
     if (!track) { res.writeHead(404); res.end('Not found'); return; }
 
-    const ptTable = track.cleaned ? 'clean_points' : 'raw_points';
     const MAX_PTS = 800;
-    let allPts = db.prepare(`SELECT lat, lon, ele FROM ${ptTable} WHERE track_id=? ORDER BY seq`).all(id);
+    let allPts = await repo.getPoints(id, { clean: !!track.cleaned });
     if (!full && allPts.length > MAX_PTS) {
       const step = Math.ceil(allPts.length / MAX_PTS);
       allPts = allPts.filter((_, i) => i % step === 0);
@@ -244,13 +236,11 @@ function apiGetTrackById(res, id, full = false) {
 
     // Compute moving/stopped time from GPX if not cached
     if (track.moving_time == null) {
-      const gpxPath = path.join(ROOT, track.file);
-      const times = computeGpxTimes(gpxPath);
+      const times = computeGpxTimes(path.join(ROOT, track.file));
       if (times) {
         track.moving_time  = times.moving;
         track.stopped_time = times.stopped;
-        db.prepare(`UPDATE tracks SET moving_time=?, stopped_time=? WHERE id=?`)
-          .run(times.moving, times.stopped, id);
+        await repo.setTimes(id, times.moving, times.stopped);
       }
     }
 
@@ -357,14 +347,12 @@ function exportGpxResponse(res, tracksData, filename) {
   });
   res.end(gpx);
 }
-function getTracksForExport(db, ids, mode, maxPts) {
-  const fetchRaw   = db.prepare('SELECT lat,lon,ele FROM raw_points   WHERE track_id=? ORDER BY seq');
-  const fetchClean = db.prepare('SELECT lat,lon,ele FROM clean_points WHERE track_id=? ORDER BY seq');
+async function getTracksForExport(ids, mode, maxPts) {
   const result = [];
   for (const id of ids) {
-    const t = db.prepare('SELECT id,name,date,file,cleaned,activity,sierra,zone FROM tracks WHERE id=?').get(id);
+    const t = await repo.getTrack(id);
     if (!t) continue;
-    let pts = t.cleaned ? fetchClean.all(t.id) : fetchRaw.all(t.id);
+    let pts = await repo.getPoints(t.id, { clean: !!t.cleaned });
     if (mode === 'simplified') pts = sampleEvenly(pts, maxPts);
     result.push({ id: t.id, name: t.name, date: t.date, file: t.file, activity: t.activity, sierra: t.sierra || t.zone, pts });
   }
@@ -379,8 +367,7 @@ async function apiExportGpx(req, res) {
     const format = body.format === 'zip' ? 'zip' : 'gpx';
     const layout = body.layout === 'flat' ? 'flat' : 'tree';
     if (!ids.length) { res.writeHead(400); return res.end('ids required'); }
-    const db   = openDb();
-    const data = getTracksForExport(db, ids, mode, maxPts);
+    const data = await getTracksForExport(ids, mode, maxPts);
     if (!data.length) { res.writeHead(404); return res.end('No tracks found'); }
 
     if (format === 'zip') {
@@ -412,12 +399,11 @@ async function apiExportGpx(req, res) {
     }
   } catch(e) { res.writeHead(500); res.end(e.message); }
 }
-function apiExportGpxSingle(res, id, searchParams) {
+async function apiExportGpxSingle(res, id, searchParams) {
   try {
     const mode   = searchParams.get('mode') === 'simplified' ? 'simplified' : 'full';
     const maxPts = parseInt(searchParams.get('pts')) || 500;
-    const db   = openDb();
-    const data = getTracksForExport(db, [id], mode, maxPts);
+    const data = await getTracksForExport([id], mode, maxPts);
     if (!data.length) { res.writeHead(404); return res.end('Not found'); }
     exportGpxResponse(res, data, data[0].name + '.gpx');
   } catch(e) { res.writeHead(500); res.end(e.message); }
@@ -433,10 +419,9 @@ function originalGpxWithMeta(track) {
 
 // GET /api/tracks/:id/gpx           → original GPX file from disk
 // GET /api/tracks/:id/gpx?pts=300   → generated GPX with N simplified points
-function apiDownloadGpx(res, id, searchParams) {
+async function apiDownloadGpx(res, id, searchParams) {
   try {
-    const db = openDb();
-    const track = db.prepare('SELECT id,name,file,date,cleaned,activity,notes,url FROM tracks WHERE id=?').get(id);
+    const track = await repo.getTrack(id);
     if (!track) { res.writeHead(404); res.end('Not found'); return; }
 
     const ptsParam = searchParams.get('pts');
@@ -449,7 +434,7 @@ function apiDownloadGpx(res, id, searchParams) {
       res.end(originalGpxWithMeta(track));
     } else {
       const maxPts = Math.max(2, parseInt(ptsParam) || 300);
-      const data = getTracksForExport(db, [id], 'simplified', maxPts);
+      const data = await getTracksForExport([id], 'simplified', maxPts);
       if (!data.length) { res.writeHead(404); res.end('Not found'); return; }
       exportGpxResponse(res, data, data[0].name + '.gpx');
     }
@@ -490,22 +475,13 @@ let _catalogEtag = '';
 function invalidateCatalogCache() { _catalogCache = null; }
 
 function checkpointWal() {
+  if (repo.driver !== 'sqlite') return;
   try { openDb().exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch (e) { console.error('[wal] checkpoint:', e.message); }
 }
 
 
-function buildCatalog() {
-  const db = openDb();
-  const tracks = db.prepare(
-    'SELECT id,name,file,zone,date,cleaned,color,activity,sierra,ccaa,tags,' +
-    'ibp_bicycle,ibp_hiking,ibp_running,' +
-    'distance,elevation_gain,elevation_loss,min_elevation,max_elevation,' +
-    'sw_lat,sw_lon,ne_lat,ne_lon,center_lat,center_lon,catalog_pts,road_types,' +
-    'moving_time,stopped_time,circular ' +
-    'FROM tracks ORDER BY date DESC,name ASC'
-  ).all();
-  const fetchRaw   = db.prepare('SELECT lat,lon,ele FROM raw_points   WHERE track_id=? ORDER BY seq');
-  const fetchClean = db.prepare('SELECT lat,lon,ele FROM clean_points WHERE track_id=? ORDER BY seq');
+async function buildCatalog() {
+  const tracks = await repo.catalogTracks();
   const catalog = [];
   for(const t of tracks){
     if(t.sw_lat==null || t.ne_lat==null) continue;
@@ -513,7 +489,7 @@ function buildCatalog() {
     if (t.catalog_pts) {
       try { points = JSON.parse(t.catalog_pts); } catch { continue; }
     } else {
-      const pts = t.cleaned ? fetchClean.all(t.id) : fetchRaw.all(t.id);
+      const pts = await repo.getPoints(t.id, { clean: !!t.cleaned });
       if(pts.length<2) continue;
       const disp = sampleEvenly(pts, MAX_CATALOG_PTS);
       points = disp.map(p=>[
@@ -554,10 +530,10 @@ function buildCatalog() {
   return JSON.stringify(catalog);
 }
 
-function apiCatalog(req, res) {
+async function apiCatalog(req, res) {
   try {
     if (!_catalogCache) {
-      _catalogCache = buildCatalog();
+      _catalogCache = await buildCatalog();
       _catalogCacheSize = Buffer.byteLength(_catalogCache);
       _catalogEtag = `"cat-${Date.now().toString(36)}"`;
       console.log(`[catalog] built: ${Math.round(_catalogCacheSize/1024)}KB`);
@@ -574,17 +550,9 @@ function apiCatalog(req, res) {
 }
 
 // ── API /tracks ───────────────────────────────────────────────────
-function apiGetTracks(res) {
+async function apiGetTracks(res) {
   try {
-    const db = openDb();
-    const tracks = db.prepare(`
-      SELECT id, name, file, zone, date,
-             distance, elevation_gain, elevation_loss, min_elevation, max_elevation,
-             center_lat, center_lon, raw_count, clean_count, cleaned,
-             activity, province, ccaa, sierra, notes, url, imported_at, tags,
-             ibp_bicycle, ibp_hiking, ibp_running, is_recent_import, circular, road_types
-      FROM tracks ORDER BY imported_at DESC, name
-    `).all();
+    const tracks = await repo.listTracks();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(tracks));
   } catch (e) {
@@ -593,25 +561,22 @@ function apiGetTracks(res) {
   }
 }
 
-const EDITABLE_FIELDS = new Set(['name','activity','province','ccaa','sierra','notes','url','tags']);
 
-function deleteTrackById(id) {
-  const db = openDb();
-  const track = db.prepare('SELECT file FROM tracks WHERE id=?').get(id);
-  if (!track) return { ok: false, error: 'Not found' };
-  db.prepare('DELETE FROM tracks WHERE id=?').run(id);
+async function deleteTrackById(id) {
+  const file = await repo.deleteTrack(id);
+  if (!file) return { ok: false, error: 'Not found' };
   invalidateCatalogCache();
   let fileDeleted = false;
   try {
-    const fp = path.join(ROOT, track.file);
+    const fp = path.join(ROOT, file);
     if (fs.existsSync(fp)) { fs.unlinkSync(fp); fileDeleted = true; }
-  } catch (e) { /* file delete failed — DB row is already gone */ }
+  } catch (e) { /* file delete failed: the DB row is already gone */ }
   return { ok: true, fileDeleted };
 }
 
-function apiDeleteTrack(res, id) {
+async function apiDeleteTrack(res, id) {
   try {
-    const result = deleteTrackById(id);
+    const result = await deleteTrackById(id);
     if (!result.ok) { res.writeHead(404); res.end(result.error); return; }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(result));
@@ -628,7 +593,7 @@ async function apiBulkDelete(req, res) {
     if (!ids.length) { res.writeHead(400); res.end('No ids'); return; }
     let deleted = 0, filesDeleted = 0;
     for (const id of ids) {
-      const r = deleteTrackById(id);
+      const r = await deleteTrackById(id);
       if (r.ok) { deleted++; if (r.fileDeleted) filesDeleted++; }
     }
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -644,9 +609,7 @@ async function apiMoveTrack(req, res, id) {
   try {
     const { category: actParam, zone } = await parseBody(req);
     if (!actParam) { res.writeHead(400); res.end('category required'); return; }
-    const db = openDb();
-    const r = db.prepare('UPDATE tracks SET activity=?, zone=COALESCE(?, zone) WHERE id=?').run(actParam, zone || null, id);
-    if (!r.changes) { res.writeHead(404); res.end('Not found'); return; }
+    if (!(await repo.moveTrack(id, actParam, zone))) { res.writeHead(404); res.end('Not found'); return; }
     invalidateCatalogCache();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
@@ -661,13 +624,8 @@ async function apiPatchTrack(req, res, id) {
     const body   = await parseBody(req);
     const fields = Object.keys(body).filter(k => EDITABLE_FIELDS.has(k));
     if (!fields.length) { res.writeHead(400); res.end('No editable fields'); return; }
-    const db   = openDb();
-    const sets = fields.map(f => `${f}=?`).join(',');
-    db.prepare(`UPDATE tracks SET ${sets} WHERE id=?`).run(...fields.map(f => body[f] ?? null), id);
-
     // The GPX is immutable: metadata lives only in the DB (it is applied on download).
-    if (fields.includes('sierra')) db.prepare('UPDATE tracks SET zone=sierra WHERE id=? AND sierra IS NOT NULL').run(id);
-
+    await repo.updateTrack(id, body);
     invalidateCatalogCache();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
@@ -686,28 +644,7 @@ async function apiBulkUpdate(req, res) {
     }
     const editFields = Object.keys(fields).filter(k => EDITABLE_FIELDS.has(k) && fields[k] !== undefined);
     if (!editFields.length) { res.writeHead(400); res.end('No fields'); return; }
-
-    const db = openDb();
-    withTransaction(() => {
-      if (editFields.includes('notes') && notesAppend) {
-        const noteOnly = db.prepare(`UPDATE tracks SET notes = CASE WHEN notes IS NULL THEN ? ELSE notes || char(10) || ? END WHERE id=?`);
-        const otherFields = editFields.filter(f => f !== 'notes');
-        if (otherFields.length) {
-          const stmt = db.prepare(`UPDATE tracks SET ${otherFields.map(f=>`${f}=?`).join(',')} WHERE id=?`);
-          for (const id of ids) stmt.run(...otherFields.map(f=>fields[f]??null), id);
-        }
-        for (const id of ids) noteOnly.run(fields.notes, fields.notes, id);
-      } else {
-        const stmt = db.prepare(`UPDATE tracks SET ${editFields.map(f=>`${f}=?`).join(',')} WHERE id=?`);
-        for (const id of ids) stmt.run(...editFields.map(f=>fields[f]??null), id);
-      }
-    });
-
-    if (editFields.includes('sierra')) {
-      const z = db.prepare('UPDATE tracks SET zone=sierra WHERE id=? AND sierra IS NOT NULL');
-      for (const id of ids) z.run(id);
-    }
-
+    await repo.bulkUpdate(ids.map(Number).filter(Boolean), fields, !!notesAppend);
     invalidateCatalogCache();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, updated: ids.length }));
@@ -718,11 +655,9 @@ async function apiBulkUpdate(req, res) {
 }
 
 // ── API: configuración (actividades, sierras) ─────────────────────
-function apiConfigList(res, table) {
+async function apiConfigList(res, table) {
   try {
-    const db = openDb();
-    const order = table === 'config_activities' ? 'sort_order, name' : 'name';
-    const rows = db.prepare(`SELECT * FROM ${table} ORDER BY ${order}`).all();
+    const rows = await repo.listConfig(table);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(rows));
   } catch (e) {
@@ -733,21 +668,7 @@ function apiConfigList(res, table) {
 
 async function apiConfigCreate(req, res, table) {
   try {
-    const body = await parseBody(req);
-    const db = openDb();
-    let id;
-    if (table === 'config_activities') {
-      const r = db.prepare(
-        'INSERT INTO config_activities (name,color,keywords,sort_order,active) VALUES (?,?,?,?,1)'
-      ).run(body.name, body.color || null, body.keywords || '', body.sort_order ?? 99);
-      id = r.lastInsertRowid;
-    } else {
-      const r = db.prepare(
-        'INSERT INTO config_sierras (name,sw_lat,sw_lon,ne_lat,ne_lon,active) VALUES (?,?,?,?,?,1)'
-      ).run(body.name, body.sw_lat ?? null, body.sw_lon ?? null, body.ne_lat ?? null, body.ne_lon ?? null);
-      id = r.lastInsertRowid;
-    }
-    const row = db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);
+    const row = await repo.createConfig(table, await parseBody(req));
     res.writeHead(201, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(row));
   } catch (e) {
@@ -758,18 +679,7 @@ async function apiConfigCreate(req, res, table) {
 
 async function apiConfigUpdate(req, res, table, id) {
   try {
-    const body = await parseBody(req);
-    const db = openDb();
-    if (table === 'config_activities') {
-      db.prepare(
-        'UPDATE config_activities SET name=?,color=?,keywords=?,sort_order=?,active=? WHERE id=?'
-      ).run(body.name, body.color ?? null, body.keywords ?? '', body.sort_order ?? 0, body.active ?? 1, id);
-    } else {
-      db.prepare(
-        'UPDATE config_sierras SET name=?,sw_lat=?,sw_lon=?,ne_lat=?,ne_lon=?,active=? WHERE id=?'
-      ).run(body.name, body.sw_lat ?? null, body.sw_lon ?? null, body.ne_lat ?? null, body.ne_lon ?? null, body.active ?? 1, id);
-    }
-    const row = db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);
+    const row = await repo.updateConfig(table, id, await parseBody(req));
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(row));
   } catch (e) {
@@ -778,10 +688,9 @@ async function apiConfigUpdate(req, res, table, id) {
   }
 }
 
-function apiConfigDelete(res, table, id) {
+async function apiConfigDelete(res, table, id) {
   try {
-    const db = openDb();
-    db.prepare(`DELETE FROM ${table} WHERE id=?`).run(id);
+    await repo.deleteConfig(table, id);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
   } catch (e) {
@@ -790,20 +699,11 @@ function apiConfigDelete(res, table, id) {
   }
 }
 
-function apiConfigProvinces(res) {
+async function apiConfigProvinces(res) {
   try {
-    const db = openDb();
-    const provinces = db.prepare(
-      "SELECT DISTINCT province FROM tracks WHERE province IS NOT NULL AND province != '' ORDER BY province"
-    ).all().map(r => r.province);
-    const ccaa = db.prepare(
-      "SELECT DISTINCT ccaa FROM tracks WHERE ccaa IS NOT NULL AND ccaa != '' ORDER BY ccaa"
-    ).all().map(r => r.ccaa);
-    const zones = db.prepare(
-      "SELECT DISTINCT sierra FROM tracks WHERE sierra IS NOT NULL AND sierra != '' ORDER BY sierra"
-    ).all().map(r => r.sierra);
+    const geo = await repo.geo();
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ provinces, ccaa, zones }));
+    res.end(JSON.stringify(geo));
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
@@ -1014,6 +914,11 @@ function apiAdminIntegrity(res) {
   }
 }
 
+// Operations not yet ported to the repository layer (scripts and SQLite maintenance).
+const SQLITE_ONLY = [/^\/api\/db\//, /^\/api\/import\//, /^\/api\/export\/folders$/, /^\/api\/tracks\/delete-all$/,
+  /^\/api\/admin\/(stats|backup|backups|restore|vacuum|integrity|osm-cache|backup-config)/];
+const isSqliteOnly = p => SQLITE_ONLY.some(re => re.test(p));
+
 // ── Enrutador ──────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
   const { pathname, searchParams } = new URL(req.url, `http://localhost:${PORT}`);
@@ -1024,6 +929,10 @@ const server = http.createServer(async (req, res) => {
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+  if (repo.driver !== 'sqlite' && isSqliteOnly(pathname)) {
+    res.writeHead(501, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Aún no disponible con PostgreSQL (DB_DRIVER=postgres). Usa SQLite para esta operación.' }));
+  }
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Filename');
   if (method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
@@ -1063,12 +972,9 @@ const server = http.createServer(async (req, res) => {
   // ── Track CRUD ────────────────────────────────────────────────────
   if (pathname === '/api/tags' && method === 'GET') {
     try {
-      const db = openDb();
-      const rows = db.prepare("SELECT tags FROM tracks WHERE tags IS NOT NULL AND tags != '[]'").all();
-      const all = new Set();
-      for (const r of rows) { try { JSON.parse(r.tags).forEach(t => all.add(t)); } catch {} }
+      const tags = await repo.tags();
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify([...all].sort()));
+      res.end(JSON.stringify(tags));
     } catch (e) { res.writeHead(500); res.end(JSON.stringify({ error: e.message })); }
     return;
   }
@@ -1078,8 +984,7 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/tracks/recent-ids' && method === 'GET') {
     try {
-      const db = openDb();
-      const ids = db.prepare('SELECT id FROM tracks WHERE is_recent_import=1').all().map(r => r.id);
+      const ids = await repo.recentIds();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(ids));
     } catch (e) { res.writeHead(500); res.end('[]'); }
@@ -1483,7 +1388,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/admin/version' && method === 'GET') {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ version: pkg.version, name: pkg.name }));
+    res.end(JSON.stringify({ version: pkg.version, name: pkg.name, db: repo.driver }));
     return;
   }
 
