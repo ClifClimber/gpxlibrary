@@ -617,7 +617,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.4.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.5.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">25 octubre 2026</div>
         </div>
       </div>
@@ -636,8 +636,20 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.4.0</span>
+            <span class="cl-version">v2.5.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">25 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>La aplicación en Docker</b>: <code>docker compose up -d --build</code> levanta la aplicación, PostgreSQL y Garage (http://localhost:8081); el contenedor no guarda datos propios</li>
+            <li>Dentro del contenedor el motor y el almacén los fija el despliegue y no se cambian desde Admin</li>
+            <li><b>Seguridad</b>: el servidor ya no entrega ficheros privados (<code>.env</code>, ajustes, clave IBP, base de datos) y rechaza las peticiones de otras webs</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.4.0</span>
             <span class="cl-date">25 oct 2026</span>
           </div>
           <ul class="cl-list">

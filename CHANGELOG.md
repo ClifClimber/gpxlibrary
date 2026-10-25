@@ -1,6 +1,6 @@
 # Changelog
 
-## Sin publicar
+## v2.5.0 — 2026-10-25
 
 ### La aplicación en Docker
 - `Dockerfile` (Node 24.21, usuario sin privilegios, healthcheck) y servicio `app` en `docker-compose`: `docker compose up -d --build` levanta la aplicación, PostgreSQL y Garage → http://localhost:8081
