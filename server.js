@@ -16,9 +16,9 @@ const { pipeline } = require('stream/promises');
 const { spawn } = require('child_process');
 const { openDb, closeDb, withTransaction, DB_PATH } = require('./scripts/db');
 const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampleEvenly } = require('./domain');
-const { getRepo } = require('./repo');
+const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
-const repo = getRepo();
+let repo = getRepo();   // reassigned when the engine is switched from Admin
 const { downloadName } = require('./scripts/store');
 
 const PORT = parseInt(process.env.PORT || '8080');
@@ -118,6 +118,8 @@ function countGpx(dir) {
 }
 
 // ── API: ejecutar script con SSE ───────────────────────────────────
+let runningScripts = 0;
+
 function apiRunScript(res, scriptPath, args = []) {
   res.writeHead(200, {
     'Content-Type':  'text/event-stream',
@@ -134,6 +136,8 @@ function apiRunScript(res, scriptPath, args = []) {
   const child = spawn(process.execPath, [scriptPath, ...args], {
     cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
   });
+  runningScripts++;
+  child.on('close', () => { runningScripts--; });
 
   let buf = '', lastImported = -1, allLines = [];
 
@@ -914,6 +918,144 @@ function apiAdminIntegrity(res) {
   }
 }
 
+// ── Database engine: status and live switch (Admin → Base de datos) ─────
+let switchingEngine = false;
+const ENGINE_LABEL = { sqlite: 'SQLite', postgres: 'PostgreSQL + PostGIS' };
+
+async function postgresStatus() {
+  const config = require('./config');
+  if (!config.DATABASE_URL) return { configured: false, reachable: false };
+  if (repo.driver === 'postgres') {
+    const r = await repo.pool.query("SELECT count(*)::int AS n FROM tracks");
+    return { configured: true, reachable: true, tracks: r.rows[0].n };
+  }
+  const { Pool } = require('pg');
+  const pool = new Pool({ connectionString: config.DATABASE_URL, connectionTimeoutMillis: 2500 });
+  try {
+    const has = (await pool.query("SELECT to_regclass('public.tracks') IS NOT NULL AS ok")).rows[0].ok;
+    const tracks = has ? (await pool.query('SELECT count(*)::int AS n FROM tracks')).rows[0].n : 0;
+    return { configured: true, reachable: true, tracks };
+  } catch (e) {
+    return { configured: true, reachable: false, error: e.code === 'ECONNREFUSED' ? 'no responde (¿Docker parado?)' : e.message };
+  } finally { await pool.end().catch(() => {}); }
+}
+
+function sqliteStatus() {
+  if (switchingEngine) return { busy: true };  // never reopen the file while it is being replaced
+  try {
+    const n = openDb().prepare('SELECT count(*) AS n FROM tracks').get().n;
+    if (repo.driver !== 'sqlite') closeDb();
+    return { tracks: n, file: path.relative(ROOT, DB_PATH) };
+  } catch (e) { return { error: e.message }; }
+}
+
+async function apiEngineStatus(res) {
+  try {
+    const body = { driver: repo.driver, label: ENGINE_LABEL[repo.driver], busy: switchingEngine || runningScripts > 0,
+      sqlite: sqliteStatus(), postgres: await postgresStatus() };
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+// Runs a command and streams its output lines; resolves with the exit code.
+function runStreaming(cmd, args, onLine, opts = {}) {
+  return new Promise(resolve => {
+    const child = spawn(cmd, args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], ...opts });
+    let buf = '';
+    const feed = chunk => {
+      buf += chunk.toString().replace(/\r(?!\n)/g, '\n');
+      const lines = buf.split('\n'); buf = lines.pop();
+      lines.map(l => l.trim()).filter(Boolean).forEach(onLine);
+    };
+    child.stdout.on('data', feed);
+    child.stderr.on('data', feed);
+    child.on('error', e => { onLine('✗ ' + e.message); resolve(-1); });
+    child.on('close', code => { if (buf.trim()) onLine(buf.trim()); resolve(code); });
+  });
+}
+
+function dockerCommand() {
+  const win = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe';
+  return process.platform === 'win32' && fs.existsSync(win) ? win : 'docker';
+}
+
+function setEnvDriver(driver) {
+  const file = path.join(ROOT, '.env');
+  let text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  text = /^DB_DRIVER=.*$/m.test(text) ? text.replace(/^DB_DRIVER=.*$/m, `DB_DRIVER=${driver}`) : `DB_DRIVER=${driver}\n` + text;
+  fs.writeFileSync(file, text);
+  process.env.DB_DRIVER = driver;
+}
+
+async function apiEngineSwitch(req, res) {
+  const { to } = await parseBody(req).catch(() => ({}));
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+  const send = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+  const log = text => send({ type: text.startsWith('✗') ? 'error' : text.startsWith('⚠') ? 'warn' : 'log', text });
+  const finish = code => { send({ type: 'done', code }); res.end(); };
+  send({ type: 'start' });
+
+  if (!['sqlite', 'postgres'].includes(to)) { log('✗ Motor de destino no válido'); return finish(1); }
+  if (to === repo.driver) { log(`✗ ${ENGINE_LABEL[to]} ya es el motor en uso`); return finish(1); }
+  if (switchingEngine) { log('✗ Ya hay un cambio de motor en curso'); return finish(1); }
+  if (runningScripts > 0) { log('✗ Hay una importación u otro proceso en marcha: espera a que termine'); return finish(1); }
+  if (!require('./config').DATABASE_URL) { log('✗ Falta DATABASE_URL en .env'); return finish(1); }
+
+  switchingEngine = true;
+  const from = repo.driver;
+  appendLog('info', 'db-engine', `Cambio de motor ${from} → ${to} iniciado`);
+  try {
+    log(`1/4 Comprobando PostgreSQL…`);
+    let pg = await postgresStatus();
+    if (!pg.reachable) {
+      log(`⚠ PostgreSQL ${pg.error || 'no responde'}; intentando arrancarlo con docker compose…`);
+      const code = await runStreaming(dockerCommand(), ['compose', 'up', '-d'], l => log('   ' + l));
+      if (code !== 0) throw new Error('No se pudo arrancar Docker. Abre Docker Desktop y vuelve a intentarlo.');
+      for (let i = 0; i < 30 && !pg.reachable; i++) { await new Promise(r => setTimeout(r, 2000)); pg = await postgresStatus(); }
+      if (!pg.reachable) throw new Error('PostgreSQL no responde tras arrancar el contenedor');
+    }
+    log(`✓ PostgreSQL disponible (${pg.tracks ?? 0} rutas ahora)`);
+
+    if (to === 'sqlite') {
+      log('2/4 Copia de seguridad de la base SQLite actual…');
+      const gz = await createBackupFile();
+      closeDb();
+      log(`✓ ${path.basename(gz)}`);
+    } else {
+      log('2/4 Preparando PostgreSQL (se sustituirán sus datos por los actuales de SQLite)…');
+      checkpointWal();
+    }
+
+    log(`3/4 Copiando ${ENGINE_LABEL[from]} → ${ENGINE_LABEL[to]} y comprobando…`);
+    const args = to === 'postgres'
+      ? [path.join(ROOT, 'scripts', 'db-copy.js'), '--to', 'postgres', '--replace']
+      : [path.join(ROOT, 'scripts', 'db-copy.js'), '--to', 'sqlite', '--sqlite', DB_PATH, '--replace'];
+    const code = await runStreaming(process.execPath, args, l => { if (!l.startsWith('…')) log('   ' + l); });
+    if (code !== 0) throw new Error(code === 2 ? 'Los motores no coinciden tras la copia; se cancela el cambio' : 'La copia ha fallado; se cancela el cambio');
+
+    log('4/4 Activando el nuevo motor…');
+    const next = createRepo({ driver: to });
+    if (to === 'postgres') await next.pool.query('SELECT 1');
+    const old = repo;
+    repo = next;
+    setEnvDriver(to);
+    invalidateCatalogCache();
+    await old.close().catch(() => {});
+    appendLog('info', 'db-engine', `Motor cambiado a ${to}`);
+    log(`✓ La aplicación usa ahora ${ENGINE_LABEL[to]}`);
+    finish(0);
+  } catch (e) {
+    appendLog('error', 'db-engine', `Cambio de motor ${from} → ${to} fallido: ${e.message}`);
+    log('✗ ' + e.message);
+    log(`Se mantiene ${ENGINE_LABEL[from]}`);
+    finish(1);
+  } finally { switchingEngine = false; }
+}
+
 // Operations not yet ported to the repository layer (scripts and SQLite maintenance).
 const SQLITE_ONLY = [/^\/api\/db\//, /^\/api\/import\//, /^\/api\/export\/folders$/, /^\/api\/tracks\/delete-all$/,
   /^\/api\/admin\/(stats|backup|backups|restore|vacuum|integrity|osm-cache|backup-config)/];
@@ -1385,6 +1527,9 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/admin' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'admin.html'), req);
 
+  if (pathname === '/api/admin/db-engine' && method === 'GET') return apiEngineStatus(res);
+  if (pathname === '/api/admin/db-engine/switch' && method === 'POST') return apiEngineSwitch(req, res);
+
   if (pathname === '/api/admin/version' && method === 'GET') {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1518,6 +1663,7 @@ server.listen(PORT, '127.0.0.1', () => {
   // Daily auto-backup on startup if none exists for today
   setImmediate(async () => {
     checkpointWal();
+    if (repo.driver !== 'sqlite') return;   // daily backup is of the SQLite file
     try {
       const today = new Date().toISOString().slice(0, 10);
       fs.mkdirSync(BACKUPS_DIR, { recursive: true });

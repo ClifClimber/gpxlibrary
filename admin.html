@@ -179,6 +179,18 @@ tr.inactive td { opacity: .4; }
 
   <!-- ── Tab: Base de datos ── -->
   <div class="tab-panel active" id="tab-bd">
+    <div class="card" id="engine-card" style="margin-bottom:16px">
+      <div class="card-head">
+        <h2>Motor de base de datos</h2>
+        <button class="btn btn-primary btn-sm" id="btn-engine-switch" disabled>Cambiar…</button>
+      </div>
+      <div class="card-body">
+        <div id="engine-status" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="section-desc">Cargando…</div>
+        </div>
+        <p class="section-desc" style="margin-top:12px">Al cambiar de motor se copian los datos del motor actual al nuevo, se comprueba que los dos coinciden consulta a consulta y solo entonces se activa; si algo no cuadra se mantiene el actual. Antes de sustituir SQLite se hace una copia de seguridad. Con PostgreSQL aún no están disponibles importar, OSM, IBP, limpiar ni las copias de seguridad.</p>
+      </div>
+    </div>
     <div class="card">
       <div class="card-head">
         <h2>Estado de la base de datos</h2>
@@ -855,6 +867,7 @@ function fmtN(n) { return n == null ? '—' : Number(n).toLocaleString('es'); }
 
 async function loadStats() {
   const r = await fetch('/api/admin/stats');
+  if (!r.ok) { document.getElementById('stats-grid').innerHTML = '<div class="section-desc">Solo disponible con SQLite.</div>'; return; }
   const d = await r.json();
   const raw   = d.rawPoints   || 0;
   const clean = d.cleanPoints || 0;
@@ -895,8 +908,9 @@ async function loadBackupConfig() {
 
 async function loadBackups() {
   const r = await fetch('/api/admin/backups');
-  const list = await r.json();
   const el = document.getElementById('backups-list');
+  if (!r.ok) { el.innerHTML = '<div class="section-desc">Solo disponible con SQLite.</div>'; return; }
+  const list = await r.json();
   const note = document.getElementById('backup-auto-note');
   if (list.length) {
     const last = new Date(list[0].mtime);
@@ -1173,6 +1187,45 @@ document.querySelectorAll('#admin-tabs .seg-tab').forEach(btn => {
 loadStats();
 loadBackups();
 loadBackupConfig();
+// ── Motor de base de datos ──────────────────────────────────────────
+let engineState = null;
+async function loadEngine() {
+  const box = document.getElementById('engine-status'), btn = document.getElementById('btn-engine-switch');
+  try {
+    const d = engineState = await fetch('/api/admin/db-engine').then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const tile = (key, title, info) => {
+      const active = d.driver === key;
+      return `<div style="border:1px solid ${active ? 'var(--accent)' : 'var(--line)'};border-radius:var(--radius-md);padding:10px 12px;background:${active ? 'var(--accent-soft)' : 'transparent'}">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:600">${esc(title)}${active ? '<span class="badge badge-blue">En uso</span>' : ''}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">${info}</div></div>`;
+    };
+    const sq = d.sqlite.error ? `⚠ ${esc(d.sqlite.error)}` : d.sqlite.busy ? 'Ocupado' : `${d.sqlite.tracks} rutas · ${esc(d.sqlite.file)}`;
+    const pg = !d.postgres.configured ? 'Sin configurar (DATABASE_URL en .env)'
+      : d.postgres.reachable ? `${d.postgres.tracks} rutas · Docker (127.0.0.1)` : `⚠ ${esc(d.postgres.error || 'no responde')} · se intentará arrancar al cambiar`;
+    box.innerHTML = tile('sqlite', 'SQLite', sq) + tile('postgres', 'PostgreSQL + PostGIS', pg);
+    const to = d.driver === 'sqlite' ? 'postgres' : 'sqlite';
+    btn.textContent = `Cambiar a ${to === 'postgres' ? 'PostgreSQL' : 'SQLite'}`;
+    btn.dataset.to = to;
+    btn.disabled = d.busy || !d.postgres.configured;
+    btn.title = d.busy ? 'Hay un proceso en marcha' : '';
+  } catch (e) {
+    box.innerHTML = `<div class="section-desc">No se pudo consultar el motor: ${e.message}</div>`;
+  }
+}
+document.getElementById('btn-engine-switch').addEventListener('click', function () {
+  const to = this.dataset.to, from = engineState?.driver;
+  const name = { sqlite: 'SQLite', postgres: 'PostgreSQL' };
+  const msg = to === 'postgres'
+    ? `¿Cambiar a PostgreSQL?\n\nLos datos actuales de SQLite se copiarán a PostgreSQL (sustituyendo lo que tenga) y se comprobará que coinciden. SQLite no se modifica.`
+    : `¿Volver a SQLite?\n\nSe hará una copia de seguridad de la base SQLite y se sustituirá por los datos actuales de PostgreSQL, tras comprobar que coinciden.`;
+  if (!confirm(msg)) return;
+  this.disabled = true;
+  streamScript('/api/admin/db-engine/switch', `Cambiar de ${name[from]} a ${name[to]}`, { to }, () => setTimeout(() => location.reload(), 1200))
+    .finally(() => loadEngine());
+});
+loadEngine();
 
 // Load version info for About tab
 fetch('/api/admin/version').then(r => r.json()).then(d => {
@@ -1227,7 +1280,9 @@ async function loadOsmCache() {
   const el = document.getElementById('osm-cache-table');
   el.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando…</div>';
   try {
-    const entries = await fetch('/api/admin/osm-cache').then(r => r.json());
+    const resp = await fetch('/api/admin/osm-cache');
+    if (!resp.ok) { el.innerHTML = '<div class="section-desc">Solo disponible con SQLite.</div>'; return; }
+    const entries = await resp.json();
     const cached   = entries.filter(e => e.cached);
     const missing  = entries.filter(e => !e.cached);
     const ttlH     = (osmSettings.cacheTtlDays || 30) * 24;

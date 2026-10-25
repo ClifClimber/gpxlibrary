@@ -20,15 +20,28 @@ if (!VERIFY_ONLY && !['postgres', 'sqlite'].includes(TO)) {
 const ROOT = path.join(__dirname, '..');
 const MAIN_DB = path.resolve(ROOT, 'data', 'tracks.db');
 const SQLITE_TARGET = TO === 'sqlite' ? path.resolve(arg('--sqlite') || path.join(ROOT, 'data', 'tracks-from-postgres.db')) : null;
-if (SQLITE_TARGET) process.env.SQLITE_PATH = SQLITE_TARGET;
+// SQLite copies are written to a temporary file that replaces the target only after verification.
+const SQLITE_TMP = SQLITE_TARGET ? SQLITE_TARGET + '.copying' : null;
+if (SQLITE_TMP) process.env.SQLITE_PATH = SQLITE_TMP;
 const config = require('../config');
 const SQLITE_PATH = config.SQLITE_PATH;
 
 const { Pool } = require('pg');
-const { openDb, withTransaction, DB_PATH } = require('./db');
+const { openDb, closeDb, withTransaction, DB_PATH } = require('./db');
 const { migrate } = require('../repo/pg-migrate');
 const { createPostgresRepo, lineParams } = require('../repo/postgres');
 const { createSqliteRepo } = require('../repo/sqlite');
+
+function removeSqlite(file) { for (const ext of ['', '-wal', '-shm']) { try { fs.unlinkSync(file + ext); } catch (e) { if (e.code !== 'ENOENT') throw e; } } }
+
+// Swap the verified temporary copy into place (the previous target is removed first).
+function promoteSqlite() {
+  closeDb();
+  removeSqlite(SQLITE_TARGET);
+  fs.renameSync(SQLITE_TMP, SQLITE_TARGET);
+  for (const ext of ['-wal', '-shm']) { try { fs.unlinkSync(SQLITE_TMP + ext); } catch {} }
+  console.log(`✓ ${path.relative(config.ROOT, SQLITE_TARGET)} sustituido por la copia comprobada`);
+}
 
 const toIso = t => (t ? String(t).replace(' ', 'T') + 'Z' : null);
 const CONFIG = { config_activities: ['id', 'name', 'color', 'keywords', 'sort_order', 'active'], config_sierras: ['id', 'name', 'sw_lat', 'sw_lon', 'ne_lat', 'ne_lon', 'active'] };
@@ -72,10 +85,10 @@ async function toPostgres(pool) {
 }
 
 async function toSqlite(pool) {
-  if (path.resolve(DB_PATH) !== SQLITE_TARGET) throw new Error(`Seguridad: la BD abierta (${DB_PATH}) no es el destino (${SQLITE_TARGET}); no se escribe nada.`);
+  if (path.resolve(DB_PATH) !== SQLITE_TMP) throw new Error(`Seguridad: la BD abierta (${DB_PATH}) no es el fichero temporal (${SQLITE_TMP}); no se escribe nada.`);
   if (fs.existsSync(SQLITE_TARGET) && !REPLACE) throw new Error(`${SQLITE_TARGET} ya existe. Usa --replace para sobrescribirlo.`);
   if (SQLITE_TARGET === MAIN_DB && !REPLACE) throw new Error('El destino es la base de datos principal: usa --replace si de verdad quieres sustituirla.');
-  for (const ext of ['', '-wal', '-shm']) { try { fs.unlinkSync(SQLITE_TARGET + ext); } catch {} }
+  removeSqlite(SQLITE_TMP);
   const db = openDb();
   const cols = db.prepare('PRAGMA table_info(tracks)').all().map(c => c.name);
   const pgRepo = createPostgresRepo({ pool });
@@ -101,7 +114,7 @@ async function toSqlite(pool) {
       points[t.id].clean.forEach((p, i) => cln.run(t.id, i, p.lat, p.lon, p.ele));
     }
   });
-  console.log(`✓ Copiadas ${tracks.length} rutas a ${path.relative(config.ROOT, SQLITE_TARGET)}`);
+  console.log(`✓ Copiadas ${tracks.length} rutas (fichero temporal, pendiente de comprobar)`);
 }
 
 // Same queries through both repositories must give identical results.
@@ -143,6 +156,10 @@ async function verify(pool) {
     if (TO === 'postgres') await toPostgres(pool);
     if (TO === 'sqlite') await toSqlite(pool);
     const ok = await verify(pool);
+    if (TO === 'sqlite') {
+      if (ok) promoteSqlite();
+      else { closeDb(); removeSqlite(SQLITE_TMP); console.log('✗ Copia descartada: el destino no se ha tocado'); }
+    }
     process.exitCode = ok ? 0 : 2;
   } finally { await pool.end(); }
 })().catch(e => { console.error('✗ ' + e.message); process.exit(1); });
