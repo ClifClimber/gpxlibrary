@@ -1,5 +1,19 @@
 # Changelog
 
+## Sin publicar
+
+### La aplicación en Docker
+- `Dockerfile` (Node 24.21, usuario sin privilegios, healthcheck) y servicio `app` en `docker-compose`: `docker compose up -d --build` levanta la aplicación, PostgreSQL y Garage → http://localhost:8081
+- El contenedor no guarda datos propios: usa siempre PostgreSQL y S3 (`DATABASE_HOST=db:5432`, `S3_ENDPOINT=http://storage:3900`); copias, logs, caché OSM, ajustes, clave IBP y `_TEMP_` van al volumen `appdata`
+- Dentro del contenedor el motor y el almacén los fija el despliegue: los botones de cambio de Admin quedan desactivados
+- El servidor acepta `HOST` (0.0.0.0 en el contenedor) y se cierra limpiamente con `docker stop`
+
+### Seguridad
+- El servidor ya **no sirve ficheros privados**: antes cualquiera con acceso al puerto, incluida cualquier web abierta en el navegador, podía descargar `.env`, `osm-settings.json`, `ibp.key` o la base de datos. Ahora solo se sirven las páginas, los estilos, los scripts del navegador y `assets/`
+- Fuera la cabecera `Access-Control-Allow-Origin: *`, y se rechazan las peticiones que modifican datos si vienen de otra web
+
+---
+
 ## v2.4.0 — 2026-10-25
 
 ### Almacén de GPX en S3 (Garage) o carpeta local

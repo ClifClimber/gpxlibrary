@@ -59,6 +59,16 @@ const MIME = {
 };
 
 // ── Archivos estáticos ─────────────────────────────────────────────
+// Public: the pages and styles at the root, the browser scripts listed here and assets/.
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js']);
+function isPublicFile(rel) {
+  if (rel.split('/').some(s => s.startsWith('.'))) return false;
+  if (rel.startsWith('assets/')) return true;
+  if (rel.includes('/')) return false;
+  const ext = path.extname(rel).toLowerCase();
+  return ext === '.html' || ext === '.css' || PUBLIC_JS.has(rel);
+}
+
 function serveStatic(res, filePath, req) {
   const ext  = path.extname(filePath).toLowerCase();
   const mime = MIME[ext] || 'application/octet-stream';
@@ -908,6 +918,9 @@ async function apiAdminIntegrity(res) {
 
 // ── Database engine: status and live switch (Admin → Base de datos) ─────
 let switchingEngine = false;
+// In a deployment (docker-compose) engine and store are fixed by its environment, not by Admin.
+const BACKENDS_LOCKED = !!process.env.LOCK_BACKENDS;
+const LOCKED_MSG = 'Fijado por el despliegue (docker-compose): cámbialo en su configuración';
 const ENGINE_LABEL = { sqlite: 'SQLite', postgres: 'PostgreSQL + PostGIS' };
 
 async function postgresStatus() {
@@ -939,7 +952,7 @@ function sqliteStatus() {
 
 async function apiEngineStatus(res) {
   try {
-    const body = { driver: repo.driver, label: ENGINE_LABEL[repo.driver], busy: switchingEngine || runningScripts > 0,
+    const body = { driver: repo.driver, label: ENGINE_LABEL[repo.driver], busy: switchingEngine || runningScripts > 0, locked: BACKENDS_LOCKED,
       sqlite: sqliteStatus(), postgres: await postgresStatus() };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(body));
@@ -986,6 +999,7 @@ async function apiEngineSwitch(req, res) {
   const finish = code => { send({ type: 'done', code }); res.end(); };
   send({ type: 'start' });
 
+  if (BACKENDS_LOCKED) { log('✗ ' + LOCKED_MSG); return finish(1); }
   if (!['sqlite', 'postgres'].includes(to)) { log('✗ Motor de destino no válido'); return finish(1); }
   if (to === repo.driver) { log(`✗ ${ENGINE_LABEL[to]} ya es el motor en uso`); return finish(1); }
   if (switchingEngine || switchingStorage) { log('✗ Ya hay un cambio en curso'); return finish(1); }
@@ -1061,7 +1075,7 @@ async function storeStatus(driver) {
 
 async function apiStorageStatus(res) {
   try {
-    const body = { driver: blob.driver, label: STORAGE_LABEL[blob.driver], busy: switchingStorage || runningScripts > 0,
+    const body = { driver: blob.driver, label: STORAGE_LABEL[blob.driver], busy: switchingStorage || runningScripts > 0, locked: BACKENDS_LOCKED,
       local: await storeStatus('local'), s3: await storeStatus('s3') };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(body));
@@ -1079,6 +1093,7 @@ async function apiStorageSwitch(req, res) {
   const finish = code => { send({ type: 'done', code }); res.end(); };
   send({ type: 'start' });
 
+  if (BACKENDS_LOCKED) { log('✗ ' + LOCKED_MSG); return finish(1); }
   if (!['local', 's3'].includes(to)) { log('✗ Almacén de destino no válido'); return finish(1); }
   if (to === blob.driver) { log(`✗ ${STORAGE_LABEL[to]} ya es el almacén en uso`); return finish(1); }
   if (switchingStorage || switchingEngine) { log('✗ Ya hay un cambio en curso'); return finish(1); }
@@ -1134,13 +1149,17 @@ const server = http.createServer(async (req, res) => {
   const _origEnd = res.end.bind(res);
   res.end = function(...a) { const ms = Date.now() - _t0; if (ms > 80 && !String(res.getHeader('Content-Type')).includes('event-stream')) console.log(`[slow] ${ms}ms  ${method} ${pathname}`); return _origEnd(...a); };
 
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+  // Same-origin only: no CORS headers, and changes requested by another site are refused
+  // (a page on another origin could otherwise send POST/DELETE to this server from the browser).
+  if (!['GET', 'HEAD'].includes(method) && req.headers.origin) {
+    let sameOrigin = false;
+    try { sameOrigin = new URL(req.headers.origin).host === req.headers.host; } catch {}
+    if (!sameOrigin) { res.writeHead(403); return res.end('Cross-origin request refused'); }
+  }
   if (repo.driver !== 'sqlite' && isSqliteOnly(pathname)) {
     res.writeHead(501, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ error: 'Operación solo disponible con SQLite.' }));
   }
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Filename');
   if (method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   if (pathname === '/api/db/stats' && method === 'GET')
@@ -1704,20 +1723,33 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Static files — block path traversal
-  let filePath = path.normalize(path.join(ROOT, pathname === '/' ? 'index.html' : pathname));
-  if (!filePath.startsWith(ROOT + path.sep) && filePath !== ROOT) {
-    res.writeHead(403); res.end('Forbidden'); return;
+  // Static files: only the front end (never .env, data/, settings or server code)
+  let filePath = path.normalize(path.join(ROOT, pathname === '/' ? 'index.html' : decodeURIComponent(pathname)));
+  if (!filePath.startsWith(ROOT + path.sep) || !isPublicFile(path.relative(ROOT, filePath).split(path.sep).join('/'))) {
+    res.writeHead(404); res.end('Not found'); return;
   }
   serveStatic(res, filePath, req);
 });
 
-// Browsers resolve "localhost" to ::1 first; without an IPv6 listener every connection waits for the fallback.
-const server6 = http.createServer((req, res) => server.emit('request', req, res));
-server6.on('error', () => {});
-server6.listen(PORT, '::1');
+// HOST=0.0.0.0 in the container; locally only loopback.
+const HOST = process.env.HOST || '127.0.0.1';
+if (!process.env.HOST) {
+  // Browsers resolve "localhost" to ::1 first; without an IPv6 listener every connection waits for the fallback.
+  const server6 = http.createServer((req, res) => server.emit('request', req, res));
+  server6.on('error', () => {});
+  server6.listen(PORT, '::1');
+}
 
-server.listen(PORT, '127.0.0.1', () => {
+// docker stop sends SIGTERM: close the database pool and the store cleanly
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.once(sig, () => {
+    server.close();
+    Promise.allSettled([repo.close(), blob.close()]).finally(() => process.exit(0));
+    setTimeout(() => process.exit(0), 3000).unref();
+  });
+}
+
+server.listen(PORT, HOST, () => {
   const url = `http://localhost:${PORT}`;
   console.log(`\n  GPX Library  →  ${url}\n`);
   appendLog('info', 'server', `Servidor iniciado en puerto ${PORT}`);

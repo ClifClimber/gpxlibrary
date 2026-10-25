@@ -1260,8 +1260,8 @@ async function loadEngine() {
     const to = d.driver === 'sqlite' ? 'postgres' : 'sqlite';
     btn.textContent = `Cambiar a ${to === 'postgres' ? 'PostgreSQL' : 'SQLite'}`;
     btn.dataset.to = to;
-    btn.disabled = d.busy || !d.postgres.configured;
-    btn.title = d.busy ? 'Hay un proceso en marcha' : '';
+    btn.disabled = d.busy || d.locked || !d.postgres.configured;
+    btn.title = d.locked ? 'Fijado por el despliegue (docker-compose)' : d.busy ? 'Hay un proceso en marcha' : '';
   } catch (e) {
     box.innerHTML = `<div class="section-desc">No se pudo consultar el motor: ${e.message}</div>`;
   }
@@ -1292,8 +1292,8 @@ async function loadStorage() {
     const to = d.driver === 'local' ? 's3' : 'local';
     btn.textContent = `Cambiar a ${to === 's3' ? 'S3' : 'carpeta local'}`;
     btn.dataset.to = to;
-    btn.disabled = d.busy || !d.s3.configured;
-    btn.title = d.busy ? 'Hay un proceso en marcha' : '';
+    btn.disabled = d.busy || d.locked || !d.s3.configured;
+    btn.title = d.locked ? 'Fijado por el despliegue (docker-compose)' : d.busy ? 'Hay un proceso en marcha' : '';
   } catch (e) {
     box.innerHTML = `<div class="section-desc">No se pudo consultar el almacén: ${esc(e.message)}</div>`;
   }

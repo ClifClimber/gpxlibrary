@@ -18,13 +18,21 @@ if (fs.existsSync(envFile)) {
 const DB_DRIVER = (process.env.DB_DRIVER || 'sqlite').toLowerCase();
 if (!['sqlite', 'postgres'].includes(DB_DRIVER)) throw new Error(`DB_DRIVER no válido: ${DB_DRIVER} (sqlite | postgres)`);
 
-const STORAGE_DRIVER = (process.env.STORAGE_DRIVER || 'local').toLowerCase();
+function withHost(url, host) {
+  if (!url || !host) return url;
+  const u = new URL(url);
+  u.host = host;
+  return u.toString();
+}
+
+const STORAGE_DRIVER =(process.env.STORAGE_DRIVER || 'local').toLowerCase();
 if (!['local', 's3'].includes(STORAGE_DRIVER)) throw new Error(`STORAGE_DRIVER no válido: ${STORAGE_DRIVER} (local | s3)`);
 
 module.exports = {
   ROOT,
   DB_DRIVER,
-  DATABASE_URL: process.env.DATABASE_URL || '',
+  // DATABASE_HOST (host:port) replaces the host of DATABASE_URL, e.g. `db:5432` inside docker-compose
+  DATABASE_URL: withHost(process.env.DATABASE_URL || '', process.env.DATABASE_HOST),
   SQLITE_PATH: process.env.SQLITE_PATH || path.join(ROOT, 'data', 'tracks.db'),
   // Original GPX files: local folder or an S3-compatible bucket (Garage, R2, AWS)
   STORAGE_DRIVER,

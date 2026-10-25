@@ -17,6 +17,15 @@ npm start            # servidor en http://localhost:8080
 npm run dev          # igual, abriendo el navegador
 ```
 
+### Con Docker (aplicación + PostgreSQL + Garage)
+
+```bash
+node scripts/storage-setup.js        # primera vez: secretos de Garage en .env, buckets y clave
+docker compose up -d --build         # → http://localhost:8081 (APP_PORT en .env para cambiarlo)
+```
+
+La aplicación del contenedor usa siempre PostgreSQL y S3, así que antes los datos deben estar ahí (Admin → «Motor de base de datos» y «Almacén de GPX», o `db-copy.js --to postgres` y `blob-copy.js --to s3`). Sus copias de seguridad, logs, caché OSM y ajustes (token de Wikiloc, clave IBP) se guardan en el volumen `appdata`; para llevar los ajustes actuales: `docker cp osm-settings.json gpxlibrary-app:/app/data/`.
+
 Al arrancar se abre el navegador; con `NO_OPEN=1` no se abre. Se hace también una copia de seguridad diaria automática si aún no hay una de hoy.
 
 ---

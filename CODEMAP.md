@@ -17,7 +17,9 @@ gpxlibrary/
 ├── shared.css          Estilos comunes: nav, .page-header, .hbtn-nav
 ├── server.js           Servidor HTTP + toda la API REST
 ├── config.js           Lee .env: DB_DRIVER (sqlite|postgres), DATABASE_URL, SQLITE_PATH
-├── docker-compose.yml  PostgreSQL 17 + PostGIS 3.5 (db) y Garage S3 (storage) locales
+├── docker-compose.yml  app (esta imagen) + PostgreSQL 17/PostGIS 3.5 (db) + Garage S3 (storage)
+├── Dockerfile          Imagen de la app: Node 24, sin estado, datos en el volumen appdata
+├── .dockerignore       Nunca en la imagen: data/, TracksGps/, .env, tokens
 ├── .env                NO en git — motor activo y contraseña de PostgreSQL
 ├── catalog-data.js     AUTO-GENERADO — const CATALOG = [...]
 ├── ibp.key             API key de IBP Index (no en git)

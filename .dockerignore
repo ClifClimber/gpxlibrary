@@ -1,0 +1,18 @@
+# Never in the image: data, originals, credentials and local tooling
+.git
+.github
+.claude
+node_modules
+data
+TracksGps
+.env
+.env.*
+!.env.example
+osm-settings.json
+ibp.key
+*.db
+*.db-wal
+*.db-shm
+catalog-data.js
+docs
+*.log

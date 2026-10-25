@@ -1,7 +1,9 @@
-# Entorno local de la fase 1: PostgreSQL + PostGIS (db) y almacén S3 Garage para los GPX (storage).
-#   docker compose up -d        → arranca todo (la primera vez crea la BD y activa PostGIS)
-#   docker compose up -d db     → solo PostgreSQL
-#   node scripts/storage-setup.js → primera configuración de Garage (secretos en .env, buckets, clave)
+# GPX Library completa: aplicación (app), PostgreSQL + PostGIS (db) y almacén S3 Garage para los GPX (storage).
+#   node scripts/storage-setup.js → primera vez: secretos de Garage en .env, buckets y clave
+#   docker compose up -d --build  → construye la imagen y arranca todo → http://localhost:8081
+#   docker compose up -d db       → solo PostgreSQL (para ejecutar la app fuera de Docker)
+# La app del contenedor usa siempre PostgreSQL y S3; antes, copia los datos con
+# node scripts/db-copy.js --to postgres y node scripts/blob-copy.js --to s3 (o desde Admin).
 #   docker compose down         → para (los datos se conservan en los volúmenes)
 #   docker compose down -v      → para y BORRA los datos
 # Credenciales en .env (ver .env.example). Solo escucha en 127.0.0.1.
@@ -38,8 +40,37 @@ services:
       - ./db/garage.toml:/etc/garage.toml:ro
       - garage-meta:/var/lib/garage/meta
       - garage-data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    image: gpxlibrary-app:local
+    container_name: gpxlibrary-app
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      DB_DRIVER: postgres
+      STORAGE_DRIVER: s3
+      DATABASE_HOST: db:5432
+      S3_ENDPOINT: http://storage:3900
+      LOCK_BACKENDS: "1"
+    ports:
+      - "127.0.0.1:${APP_PORT:-8081}:8080"
+    volumes:
+      - appdata:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
 
 volumes:
   pgdata:
   garage-meta:
   garage-data:
+  appdata:
