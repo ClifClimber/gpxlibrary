@@ -38,9 +38,9 @@ async function perTrackFallback(groupTracks, db) {
       const osmData = await queryOverpass(t.sw_lat - buf, t.sw_lon - buf, t.ne_lat + buf, t.ne_lon + buf);
       const ways = (osmData.elements || []).filter(el => el.type === 'way' && el.tags?.highway);
       console.log(`    OSM: ${ways.length} caminos`);
-      const pts = fetchTrackPts(t, db, MAX_PTS);
+      const pts = await fetchTrackPts(t, db, MAX_PTS);
       if (pts.length < 2) { console.log('    ⚠ Sin puntos'); fail++; continue; }
-      applyWaysToTrack(t, pts, filterWaysToBbox(ways, t), db);
+      await applyWaysToTrack(t, pts, filterWaysToBbox(ways, t), db);
       ok++;
     } catch (err) {
       console.log(`    ✗ ${err.message}`);
@@ -128,9 +128,9 @@ async function enrichTracks(tracks, db, opts = {}) {
     for (let i = 0; i < groupTracks.length; i++) {
       const t = groupTracks[i];
       console.log(`  [${i+1}/${groupTracks.length}] ${t.name}`);
-      const pts = fetchTrackPts(t, db, MAX_PTS);
+      const pts = await fetchTrackPts(t, db, MAX_PTS);
       if (pts.length < 2) { console.log('    ⚠ Sin puntos'); totalFail++; continue; }
-      applyWaysToTrack(t, pts, filterWaysToBbox(ways, t), db);
+      await applyWaysToTrack(t, pts, filterWaysToBbox(ways, t), db);
       totalOk++;
     }
 

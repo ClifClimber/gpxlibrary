@@ -73,10 +73,10 @@ async function enrichTracks(tracks, db, opts = {}) {
       continue;
     }
 
-    const pts = fetchTrackPts(t, db, MAX_PTS);
+    const pts = await fetchTrackPts(t, db, MAX_PTS);
     if (pts.length < 2) { console.log('  ⚠ Sin puntos'); fail++; continue; }
 
-    applyWaysToTrack(t, pts, ways, db);
+    await applyWaysToTrack(t, pts, ways, db);
     ok++;
   }
 

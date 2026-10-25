@@ -2,19 +2,17 @@
 // Enriquece los tracks con datos geográficos (provincia, CCAA) via Nominatim
 // y deduce actividad + sierra a partir de categoría/zona/coordenadas.
 // Uso: node scripts/enrich-tracks.js [--all] [--dry-run] [--track-id N]
-const { openDb } = require('./db');
+const { openSql } = require('../repo/sql');
 
 let SIERRAS = [];
-function loadSierrasFromDb() {
+async function loadSierrasFromDb(db) {
   try {
-    const db = openDb();
-    SIERRAS = db.prepare('SELECT name,sw_lat,sw_lon,ne_lat,ne_lon FROM config_sierras WHERE active=1').all()
+    SIERRAS = (await db.all('SELECT name,sw_lat,sw_lon,ne_lat,ne_lon FROM config_sierras WHERE active=1'))
       .map(r => ({ name: r.name, sw: [r.sw_lat, r.sw_lon], ne: [r.ne_lat, r.ne_lon] }));
   } catch(e) {
     console.warn('⚠ No se pudieron cargar sierras desde BD:', e.message);
   }
 }
-loadSierrasFromDb();
 
 function inferSierraFromZone(zone) {
   if (!zone) return null;
@@ -82,7 +80,8 @@ const trackId = (() => { const i = args.indexOf('--track-id'); return i >= 0 ? p
 const idsArg  = (() => { const i = args.indexOf('--ids'); return i >= 0 ? args[i+1] : null; })();
 
 (async () => {
-  const db = openDb();
+  const db = openSql();
+  await loadSierrasFromDb(db);
   // "activity IS NULL" = nunca procesado (activity siempre se infiere, incluso sin red)
   let where = 'WHERE center_lat IS NOT NULL';
   if (idsArg) {
@@ -94,16 +93,12 @@ const idsArg  = (() => { const i = args.indexOf('--ids'); return i >= 0 ? args[i
     where += ` AND activity IS NULL`;
   }
 
-  const tracks = db.prepare(
-    `SELECT id, name, zone, center_lat, center_lon, activity, province, ccaa, sierra FROM tracks ${where} ORDER BY id`
-  ).all();
+  const tracks = await db.all(
+    `SELECT id, name, zone, center_lat, center_lon, activity, province, ccaa, sierra FROM tracks ${where} ORDER BY id`);
 
   console.log(`Enriqueciendo ${tracks.length} tracks${forceAll ? ' (todos)' : ' (sin datos)'}${dryRun ? ' [dry-run]' : ''}...`);
-  if (!tracks.length) { console.log('✓ Nada que procesar.'); return; }
+  if (!tracks.length) { console.log('✓ Nada que procesar.'); await db.close(); return; }
 
-  const updStmt = dryRun ? null : db.prepare(
-    'UPDATE tracks SET activity=?, province=?, ccaa=?, sierra=? WHERE id=?'
-  );
 
   let ok = 0, errs = 0;
   for (let i = 0; i < tracks.length; i++) {
@@ -130,7 +125,7 @@ const idsArg  = (() => { const i = args.indexOf('--ids'); return i >= 0 ? args[i
     }
 
     // Siempre guardar — aunque Nominatim falle, activity y sierra ya tienen valor
-    if (!dryRun) updStmt.run(activity, province, ccaa, sierra, t.id);
+    if (!dryRun) await db.run('UPDATE tracks SET activity=?, province=?, ccaa=?, sierra=? WHERE id=?', [activity, province, ccaa, sierra, t.id]);
     ok++;
     process.stdout.write(`\rProcesados: ${i + 1}/${tracks.length}`);
     if ((i + 1) % 25 === 0 || i + 1 === tracks.length) {
@@ -139,4 +134,5 @@ const idsArg  = (() => { const i = args.indexOf('--ids'); return i >= 0 ? args[i
   }
 
   console.log(`\n✓ Enriquecimiento completado: ${ok} OK, ${errs} errores`);
+  await db.close();
 })().catch(e => { console.error(`Error: ${e.message}`); process.exit(1); });

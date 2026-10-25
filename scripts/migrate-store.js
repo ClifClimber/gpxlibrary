@@ -5,7 +5,7 @@
 //   node scripts/migrate-store.js --revert <file>    → move files back using that manifest
 const fs = require('fs');
 const path = require('path');
-const { openDb, withTransaction } = require('./db');
+const { openSql } = require('../repo/sql');
 const { ROOT, STORE_DIR, newUid, storeAbs, sha256, isStored, putFile } = require('./store');
 
 const args = process.argv.slice(2);
@@ -26,10 +26,9 @@ function removeEmptyDirs(dir) {
   return removed;
 }
 
-function revert(manifestPath) {
+async function revert(manifestPath) {
   const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  const db = openDb();
-  const upd = db.prepare('UPDATE tracks SET file=? WHERE id=?');
+  const db = openSql();
   let ok = 0, fail = 0;
   for (const e of m.entries) {
     try {
@@ -38,17 +37,18 @@ function revert(manifestPath) {
       if (fs.existsSync(dest)) throw new Error('ya existe el destino');
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.renameSync(src, dest);
-      upd.run(e.from, e.id);
+      await db.run('UPDATE tracks SET file=? WHERE id=?', [e.from, e.id]);
       ok++;
     } catch (err) { console.log(`  ✗ id=${e.id} ${e.from}: ${err.message}`); fail++; }
   }
   console.log(`Revertidos: ${ok}  ·  Errores: ${fail}`);
+  await db.close();
 }
 
-function migrate() {
-  const db = openDb();
-  const tracks = db.prepare('SELECT id, name, file, uid, sha256 FROM tracks ORDER BY id').all();
-  const upd = db.prepare('UPDATE tracks SET file=?, uid=?, sha256=? WHERE id=?');
+async function migrate() {
+  const db = openSql();
+  const tracks = await db.all('SELECT id, name, file, uid, sha256 FROM tracks ORDER BY id');
+  const UPD = 'UPDATE tracks SET file=?, uid=?, sha256=? WHERE id=?';
   const entries = [], missing = [], hashes = new Map();
   let moved = 0, hashed = 0;
 
@@ -62,7 +62,7 @@ function migrate() {
     else hashes.set(hash, t.id);
 
     if (isStored(t.file)) {
-      if (!t.sha256 || !t.uid) { if (!DRY) upd.run(t.file, t.uid || path.basename(t.file, '.gpx'), hash, t.id); hashed++; }
+      if (!t.sha256 || !t.uid) { if (!DRY) await db.run(UPD, [t.file, t.uid || path.basename(t.file, '.gpx'), hash, t.id]); hashed++; }
       continue;
     }
     const uid = t.uid || newUid();
@@ -71,7 +71,7 @@ function migrate() {
     try { rel = putFile(src, uid); }
     catch (err) { console.log(`  ✗ id=${t.id} ${t.file}: ${err.message}`); continue; }
     try {
-      withTransaction(() => upd.run(rel, uid, hash, t.id));
+      await db.tx(t2 => t2.run(UPD, [rel, uid, hash, t.id]));
     } catch (err) {
       fs.renameSync(storeAbs(uid), src);           // put it back if the DB update failed
       console.log(`  ✗ id=${t.id} BD: ${err.message}`);
@@ -92,10 +92,11 @@ function migrate() {
   console.log(`${DRY ? 'Se moverían' : 'Movidos'}: ${moved}  ·  Huella añadida: ${hashed}  ·  Sin fichero en disco: ${missing.length}  ·  Carpetas vacías borradas: ${emptied}`);
   missing.forEach(t => console.log(`  ⚠ Sin fichero: id=${t.id} «${t.name}» → ${t.file}`));
   if (!DRY) console.log(`Almacén: ${path.relative(ROOT, STORE_DIR)} (${fs.readdirSync(STORE_DIR).length} ficheros)`);
+  await db.close();
 }
 
 if (revertIdx >= 0) {
   const mf = args[revertIdx + 1];
   if (!mf) { console.error('Uso: --revert <manifiesto.json>'); process.exit(1); }
-  revert(path.resolve(mf));
-} else migrate();
+  revert(path.resolve(mf)).catch(e => { console.error('✗ ' + e.message); process.exit(1); });
+} else migrate().catch(e => { console.error('✗ ' + e.message); process.exit(1); });

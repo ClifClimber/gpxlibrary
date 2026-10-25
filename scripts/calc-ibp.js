@@ -15,7 +15,7 @@
 const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
-const { openDb } = require('./db');
+const { openSql } = require('../repo/sql');
 
 const ROOT     = path.join(__dirname, '..');
 const KEY_FILE = path.join(ROOT, 'ibp.key');
@@ -80,39 +80,29 @@ if (!apiKey) {
   process.exit(1);
 }
 
-const db = openDb();
+let ok = 0, errCount = 0;
 
-// Asegurar que las columnas existen
-['ibp_bicycle', 'ibp_hiking', 'ibp_running'].forEach(col => {
-  try { db.exec(`ALTER TABLE tracks ADD COLUMN ${col} REAL`); } catch {}
-});
+(async () => {
+const db = openSql();
 
 let query = 'SELECT id, name, file, activity FROM tracks WHERE file IS NOT NULL';
 if (!force) query += ' AND ibp_bicycle IS NULL';
 if (filterIds) query += ` AND id IN (${filterIds.map(() => '?').join(',')})`;
 query += ' ORDER BY date DESC, name ASC';
 
-const tracks = filterIds
-  ? db.prepare(query).all(...filterIds)
-  : db.prepare(query).all();
+const tracks = await db.all(query, filterIds || []);
 
 if (!tracks.length) {
   console.log(force
     ? '\nNo hay tracks con fichero GPX.\n'
     : '\n✓ Todos los tracks ya tienen IBP calculado. Usa --force para recalcular.\n'
   );
+  await db.close();
   process.exit(0);
 }
 
 console.log(`\nCalculando IBP para ${tracks.length} track(s)...\n`);
 
-const update = db.prepare(
-  'UPDATE tracks SET ibp_bicycle=?, ibp_hiking=?, ibp_running=? WHERE id=?'
-);
-
-let ok = 0, errCount = 0;
-
-(async () => {
   for (const t of tracks) {
     const gpxPath = path.join(ROOT, t.file);
     if (!fs.existsSync(gpxPath)) {
@@ -151,7 +141,7 @@ let ok = 0, errCount = 0;
         continue;
       }
 
-      update.run(ibpBicycle, ibpHiking, ibpRunning, t.id);
+      await db.run('UPDATE tracks SET ibp_bicycle=?, ibp_hiking=?, ibp_running=? WHERE id=?', [ibpBicycle, ibpHiking, ibpRunning, t.id]);
 
       const CYCLING = ['Mtb','Gravel','Bikepacking','Ciclismo de carretera'];
       const RUNNING = ['Trail Running','Running'];
@@ -172,8 +162,5 @@ let ok = 0, errCount = 0;
   }
 
   console.log(`\n✓ Procesados: ${ok} ok, ${errCount} errores.\n`);
-  if (ok > 0) {
-    console.log('  Regenera el catálogo para actualizar el visor:');
-    console.log('  node scripts/export-catalog.js\n');
-  }
-})();
+  await db.close();
+})().catch(e => { console.error('✗ ' + e.message); process.exit(1); });

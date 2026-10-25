@@ -188,7 +188,7 @@ tr.inactive td { opacity: .4; }
         <div id="engine-status" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="section-desc">Cargando…</div>
         </div>
-        <p class="section-desc" style="margin-top:12px">Al cambiar de motor se copian los datos del motor actual al nuevo, se comprueba que los dos coinciden consulta a consulta y solo entonces se activa; si algo no cuadra se mantiene el actual. Antes de sustituir SQLite se hace una copia de seguridad. Con PostgreSQL aún no están disponibles importar, OSM, IBP, limpiar ni las copias de seguridad.</p>
+        <p class="section-desc" style="margin-top:12px">Al cambiar de motor se copian los datos del motor actual al nuevo, se comprueba que los dos coinciden consulta a consulta y solo entonces se activa; si algo no cuadra se mantiene el actual. Antes de sustituir SQLite se hace una copia de seguridad. Todas las operaciones funcionan con los dos motores; las copias de seguridad son siempre un fichero SQLite comprimido, que se puede restaurar en cualquiera de ellos.</p>
       </div>
     </div>
     <div class="card">
@@ -203,7 +203,7 @@ tr.inactive td { opacity: .4; }
           <div class="srow"><span class="slbl">Limpiados</span><span class="sval" id="s-cleaned">—</span></div>
           <div class="srow"><span class="slbl">Reducción pts</span><span class="sval" id="s-reduction">—</span></div>
           <div class="srow"><span class="slbl">Tamaño BD</span><span class="sval" id="s-dbsize">—</span></div>
-          <div class="srow"><span class="slbl">WAL</span><span class="sval" id="s-walsize">—</span></div>
+          <div class="srow" id="s-walrow"><span class="slbl">WAL</span><span class="sval" id="s-walsize">—</span></div>
           <div class="srow"><span class="slbl">Backups</span><span class="sval" id="s-backups">—</span></div>
           <div class="srow"><span class="slbl">Última importación</span><span class="sval" id="s-last">—</span></div>
         </div>
@@ -879,8 +879,8 @@ function fmtN(n) { return n == null ? '—' : Number(n).toLocaleString('es'); }
 
 async function loadStats() {
   const r = await fetch('/api/admin/stats');
-  if (!r.ok) { document.getElementById('stats-grid').innerHTML = '<div class="section-desc">Solo disponible con SQLite.</div>'; return; }
-  const d = await r.json();
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { document.getElementById('stats-grid').innerHTML = `<div class="section-desc">No se pudieron leer las estadísticas: ${d.error || r.status}</div>`; return; }
   const raw   = d.rawPoints   || 0;
   const clean = d.cleanPoints || 0;
   const pct   = raw && clean ? ((1 - clean / raw) * 100).toFixed(1) + '%' : '—';
@@ -892,6 +892,7 @@ async function loadStats() {
   document.getElementById('s-gpx').textContent       = fmtN(d.gpxCount);
   document.getElementById('s-dbsize').textContent    = fmtSize(d.dbSize);
   document.getElementById('s-walsize').textContent   = fmtSize(d.walSize);
+  document.getElementById('s-walrow').style.display  = d.driver === 'postgres' ? 'none' : '';
   document.getElementById('s-backups').textContent   = (d.backups || []).length;
   document.getElementById('s-last').textContent      = fmtDate(d.lastImport);
 
@@ -921,7 +922,7 @@ async function loadBackupConfig() {
 async function loadBackups() {
   const r = await fetch('/api/admin/backups');
   const el = document.getElementById('backups-list');
-  if (!r.ok) { el.innerHTML = '<div class="section-desc">Solo disponible con SQLite.</div>'; return; }
+  if (!r.ok) { el.innerHTML = `<div class="section-desc">No se pudo leer la lista de copias (${r.status}).</div>`; return; }
   const list = await r.json();
   const note = document.getElementById('backup-auto-note');
   if (list.length) {
@@ -1293,7 +1294,7 @@ async function loadOsmCache() {
   el.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando…</div>';
   try {
     const resp = await fetch('/api/admin/osm-cache');
-    if (!resp.ok) { el.innerHTML = '<div class="section-desc">Solo disponible con SQLite.</div>'; return; }
+    if (!resp.ok) { el.innerHTML = `<div class="section-desc">No se pudo leer la caché OSM (${resp.status}).</div>`; return; }
     const entries = await resp.json();
     const cached   = entries.filter(e => e.cached);
     const missing  = entries.filter(e => !e.cached);

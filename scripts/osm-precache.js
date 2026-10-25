@@ -11,7 +11,7 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { openDb } = require('./db');
+const { openSql } = require('../repo/sql');
 const { queryOverpass, filterWaysToBbox, fetchTrackPts, applyWaysToTrack, sleep } = require('./osm-shared');
 const { CACHE_DIR, slugify } = require('./osm-strategy-batch');
 
@@ -27,7 +27,7 @@ async function main() {
   const sierraIdx   = args.indexOf('--sierra');
   const sierraArg   = sierraIdx !== -1 ? args[sierraIdx + 1] : null;
 
-  const db = openDb();
+  const db = openSql();
 
   let cacheTtlMs = 30 * 86400 * 1000;
   try {
@@ -39,17 +39,17 @@ async function main() {
   } catch {}
 
   // Aggregate bbox + track ids per group (sierra → province → 'sin-zona')
-  const rows = db.prepare(`
+  const rows = await db.all(`
     SELECT
       COALESCE(sierra, province, 'sin-zona') AS group_key,
       MIN(sw_lat) AS s, MIN(sw_lon) AS w,
       MAX(ne_lat) AS n, MAX(ne_lon) AS e,
-      COUNT(*)    AS track_count
+      CAST(COUNT(*) AS INTEGER) AS track_count
     FROM tracks
     WHERE sw_lat IS NOT NULL
     GROUP BY COALESCE(sierra, province, 'sin-zona')
-    ORDER BY track_count DESC
-  `).all();
+    ORDER BY track_count DESC, COALESCE(sierra, province, 'sin-zona') ${db.BIN}
+  `);
 
   const groups = sierraArg
     ? rows.filter(r => r.group_key.toLowerCase() === sierraArg.toLowerCase())
@@ -89,10 +89,9 @@ async function main() {
       }
       const ageH = (() => { try { return Math.round((Date.now() - JSON.parse(fs.readFileSync(file,'utf8')).ts) / 3600000); } catch { return '?'; } })();
       const osmFilter = force ? '' : "AND (road_types IS NULL OR road_types = '{}')";
-      const tracks = db.prepare(
+      const tracks = await db.all(
         `SELECT id, name, cleaned, sw_lat, sw_lon, ne_lat, ne_lon
-         FROM tracks WHERE COALESCE(sierra, province, 'sin-zona') = ? AND sw_lat IS NOT NULL ${osmFilter}`
-      ).all(g.group_key);
+         FROM tracks WHERE COALESCE(sierra, province, 'sin-zona') = ? AND sw_lat IS NOT NULL ${osmFilter}`, [g.group_key]);
       console.log(`[${i+1}/${groups.length}] ${g.group_key} — caché ${ageH}h — ${tracks.length}/${g.track_count} pendientes`);
       if (tracks.length === 0) {
         console.log('  ✓ Todos los tracks ya tienen datos OSM');
@@ -103,11 +102,11 @@ async function main() {
       for (let j = 0; j < tracks.length; j++) {
         const t = tracks[j];
         console.log(`  [${j+1}/${tracks.length}] ${t.name}`);
-        const pts = fetchTrackPts(t, db);
+        const pts = await fetchTrackPts(t, db);
         if (pts.length < 2) { console.log('    ⚠ Sin puntos'); continue; }
         const filtered = filterWaysToBbox(ways, t);
         console.log(`    ${filtered.length} caminos cercanos`);
-        applyWaysToTrack(t, pts, filtered, db);
+        await applyWaysToTrack(t, pts, filtered, db);
         groupOk++;
       }
       console.log(`  ✓ ${groupOk} tracks enriquecidos`);
@@ -160,11 +159,11 @@ async function main() {
     // Apply to tracks unless --cache-only
     if (!cacheOnly) {
       const osmFilter2 = force ? '' : "AND (road_types IS NULL OR road_types = '{}')";
-      const tracks = db.prepare(`
+      const tracks = await db.all(`
         SELECT id, name, cleaned, sw_lat, sw_lon, ne_lat, ne_lon
         FROM tracks
         WHERE COALESCE(sierra, province, 'sin-zona') = ? AND sw_lat IS NOT NULL ${osmFilter2}
-      `).all(g.group_key);
+      `, [g.group_key]);
       if (tracks.length === 0) {
         console.log('  ✓ Todos los tracks ya tienen datos OSM');
         continue;
@@ -175,11 +174,11 @@ async function main() {
       for (let j = 0; j < tracks.length; j++) {
         const t = tracks[j];
         console.log(`  [${j+1}/${tracks.length}] ${t.name}`);
-        const pts = fetchTrackPts(t, db);
+        const pts = await fetchTrackPts(t, db);
         if (pts.length < 2) { console.log('    ⚠ Sin puntos'); continue; }
         const filtered = filterWaysToBbox(ways, t);
         console.log(`    ${filtered.length} caminos cercanos`);
-        applyWaysToTrack(t, pts, filtered, db);
+        await applyWaysToTrack(t, pts, filtered, db);
         groupOk++;
       }
       console.log(`  ✓ ${groupOk} tracks enriquecidos`);
@@ -194,6 +193,7 @@ async function main() {
   } else {
     console.log(`\n✓ Completado: ${enriched} tracks enriquecidos, ${cachedGroups} zonas ya en caché, ${skipped} saltadas, ${failed} fallidas\n`);
   }
+  await db.close();
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

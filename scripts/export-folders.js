@@ -4,7 +4,7 @@
 //   node scripts/export-folders.js --dest "D:\Rutas" [--ids 1,2,3]
 const fs = require('fs');
 const path = require('path');
-const { openDb } = require('./db');
+const { openSql } = require('../repo/sql');
 const { ROOT } = require('./store');
 const { applyGpxMetadata, metaFromTrack } = require('../domain');
 
@@ -22,10 +22,12 @@ if (!rel || (!rel.startsWith('..') && !path.isAbsolute(rel))) {
 }
 
 const safe = s => String(s || '').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '').trim().slice(0, 120);
-const db = openDb();
+(async () => {
+const db = openSql();
 const rows = ids.length
-  ? db.prepare(`SELECT id,name,file,activity,sierra,zone,notes,url FROM tracks WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY id`).all(...ids)
-  : db.prepare('SELECT id,name,file,activity,sierra,zone,notes,url FROM tracks ORDER BY activity, sierra, name').all();
+  ? await db.all(`SELECT id,name,file,activity,sierra,zone,notes,url FROM tracks WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY id`, ids)
+  : await db.all(`SELECT id,name,file,activity,sierra,zone,notes,url FROM tracks ORDER BY activity ${db.BIN}, sierra ${db.BIN}, name ${db.BIN}, id`);
+await db.close();
 
 console.log(`Destino: ${dest}`);
 console.log(`Exportando ${rows.length} track(s)…\n`);
@@ -59,3 +61,4 @@ console.log(`  Ficheros escritos   : ${written}`);
 if (renamed) console.log(`  Con sufijo (id)     : ${renamed}  (nombre repetido o ya existente en el destino)`);
 if (missing) console.log(`  Sin fichero origen  : ${missing}`);
 console.log(`  Errores             : ${errors}`);
+})().catch(e => { console.error('✗ ' + e.message); process.exit(1); });

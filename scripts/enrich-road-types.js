@@ -7,7 +7,7 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { openDb } = require('./db');
+const { openSql } = require('../repo/sql');
 
 const SETTINGS_FILE = path.join(__dirname, '..', 'osm-settings.json');
 
@@ -26,32 +26,29 @@ async function main() {
   const idsIdx = args.indexOf('--ids');
   const idsArg = idsIdx !== -1 ? args[idsIdx + 1] : null;
 
-  const db       = openDb();
+  const db       = openSql();
   const settings = loadSettings();
   const strategy = settings.strategy || 'per-track';
 
   let tracks;
   if (idsArg) {
     const ids = idsArg.split(',').map(Number);
-    tracks = db.prepare(
+    tracks = await db.all(
       `SELECT id, name, cleaned, sw_lat, sw_lon, ne_lat, ne_lon, sierra, province
-       FROM tracks WHERE id IN (${ids.map(() => '?').join(',')})`
-    ).all(...ids);
+       FROM tracks WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
   } else if (force || all) {
-    tracks = db.prepare(
+    tracks = await db.all(
       `SELECT id, name, cleaned, sw_lat, sw_lon, ne_lat, ne_lon, sierra, province
-       FROM tracks ORDER BY id`
-    ).all();
+       FROM tracks ORDER BY id`);
   } else {
-    tracks = db.prepare(
+    tracks = await db.all(
       `SELECT id, name, cleaned, sw_lat, sw_lon, ne_lat, ne_lon, sierra, province
-       FROM tracks WHERE road_types IS NULL ORDER BY id`
-    ).all();
+       FROM tracks WHERE road_types IS NULL ORDER BY id`);
   }
 
   console.log(`\nEnriqueciendo ${tracks.length} tracks con datos OSM…`);
   console.log(`Estrategia: ${strategy}`);
-  if (!tracks.length) { console.log('Nada que hacer.\n'); return; }
+  if (!tracks.length) { console.log('Nada que hacer.\n'); await db.close(); return; }
 
   let mod;
   if (strategy === 'batch-sierra') {
@@ -63,6 +60,7 @@ async function main() {
   }
 
   await mod.enrichTracks(tracks, db, settings);
+  await db.close();
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

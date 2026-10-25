@@ -24,7 +24,7 @@ async function enrichTracks(tracks, db) {
       continue;
     }
 
-    const pts = fetchTrackPts(t, db, MAX_PTS);
+    const pts = await fetchTrackPts(t, db, MAX_PTS);
     if (pts.length < 2) { console.log('  ⚠ Sin puntos'); fail++; continue; }
 
     const buf = 0.008;
@@ -40,7 +40,7 @@ async function enrichTracks(tracks, db) {
 
     const ways = (osmData.elements || []).filter(el => el.type === 'way' && el.tags?.highway);
     console.log(`  OSM: ${ways.length} caminos`);
-    applyWaysToTrack(t, pts, ways, db);
+    await applyWaysToTrack(t, pts, ways, db);
     ok++;
 
     if (i < tracks.length - 1) await sleep(DELAY_MS);

@@ -17,7 +17,7 @@
 //   node scripts/clean-tracks.js --reset              ← deshace la limpieza
 //   node scripts/clean-tracks.js --list
 
-const { openDb, withTransaction } = require('./db');
+const { openSql } = require('../repo/sql');
 
 // ── catalog_pts ────────────────────────────────────────────────────
 const MAX_CATALOG_PTS = 300;
@@ -74,13 +74,14 @@ const opts = {
   reset:    flag('--reset'),
 };
 
-const db = openDb();
+(async () => {
+const db = openSql();
 
 // ── LIST ──────────────────────────────────────────────────────────
 if (opts.list) {
-  const rows = db.prepare(
+  const rows = await db.all(
     'SELECT id,name,activity,raw_count,clean_count,cleaned,date FROM tracks ORDER BY activity,name'
-  ).all();
+  );
   console.log(`\n${'ID'.padStart(5)}  ${'Actividad'.padEnd(20)}  ${'Nombre'.padEnd(42)}  ${'Bruto'.padStart(6)}  ${'Limpio'.padStart(7)}  Fecha`);
   console.log('─'.repeat(106));
   for (const r of rows) {
@@ -88,14 +89,15 @@ if (opts.list) {
     console.log(`${String(r.id).padStart(5)}  ${(r.activity||'—').padEnd(20)}  ${r.name.substring(0,42).padEnd(42)}  ${String(r.raw_count).padStart(6)}  ${c}  ${r.date||'—'}`);
   }
   console.log(`\n${rows.length} tracks en total.\n`);
+  await db.close();
   process.exit(0);
 }
 
 // ── STATS ─────────────────────────────────────────────────────────
 if (opts.stats) {
-  const all = db.prepare(
+  const all = await db.all(
     'SELECT id,name,activity,raw_count,clean_count,cleaned,cleaned_at FROM tracks ORDER BY activity,name'
-  ).all();
+  );
   const cleaned = all.filter(r=>r.cleaned), pending = all.filter(r=>!r.cleaned);
   console.log(`\n━━━ ESTADÍSTICAS DE LIMPIEZA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
   console.log(`Total: ${all.length}  |  Limpios: ${cleaned.length}  |  Sin limpiar: ${pending.length}\n`);
@@ -120,6 +122,7 @@ if (opts.stats) {
       console.log(`  ${act.padEnd(25)} ${n}`);
   }
   console.log('');
+  await db.close();
   process.exit(0);
 }
 
@@ -137,7 +140,7 @@ if(opts.trackId) { conds.push('id=?'); params.push(opts.trackId); }
 if(conds.length) sql+=' WHERE '+conds.join(' AND ');
 sql+=' ORDER BY activity,name';
 
-const tracks = db.prepare(sql).all(...params);
+const tracks = await db.all(sql, params);
 if(!tracks.length){ console.error('\nNo se encontraron tracks con esos criterios.\n'); process.exit(1); }
 
 const label = opts.dryRun ? 'SIMULACIÓN (--dry-run)' : opts.reset ? 'RESET' : 'LIMPIEZA';
@@ -151,20 +154,14 @@ if(!opts.reset){
 }
 console.log(`Tracks a procesar: ${tracks.length}\n`);
 
-// Prepared statements
-const fetchRaw   = db.prepare('SELECT lat,lon,ele FROM raw_points   WHERE track_id=? ORDER BY seq');
-const delClean   = db.prepare('DELETE FROM clean_points WHERE track_id=?');
-const insClean   = db.prepare('INSERT INTO clean_points(track_id,seq,lat,lon,ele) VALUES(?,?,?,?,?)');
-const updCleaned = db.prepare("UPDATE tracks SET cleaned=1,clean_count=?,cleaned_at=datetime('now') WHERE id=?");
-const updReset   = db.prepare('UPDATE tracks SET cleaned=0,clean_count=NULL,cleaned_at=NULL WHERE id=?');
 
 let totRaw=0, totCln=0;
 
 for(const track of tracks) {
-  const rawPts=fetchRaw.all(track.id);
+  const rawPts=await db.getPoints(track.id);
 
   if(opts.reset){
-    if(!opts.dryRun) withTransaction(()=>{ delClean.run(track.id); updReset.run(track.id); });
+    if(!opts.dryRun) await db.tx(async t=>{ await t.setPoints(track.id, [], { clean: true }); await t.run('UPDATE tracks SET cleaned=0,clean_count=NULL,cleaned_at=NULL,catalog_pts=? WHERE id=?', [catalogPts(rawPts, MAX_CATALOG_PTS), track.id]); });
     console.log(`  ✓ reset  ${track.name.substring(0,55)} (${rawPts.length} pts)`);
     continue;
   }
@@ -179,15 +176,11 @@ for(const track of tracks) {
   );
 
   if(!opts.dryRun) {
-    withTransaction(()=>{
-      delClean.run(track.id);
-      for(let i=0;i<cleaned.length;i++){
-        const p=cleaned[i];
-        insClean.run(track.id,i,p.lat,p.lon,p.ele??null);
-      }
-      updCleaned.run(cleaned.length, track.id);
+    await db.tx(async t=>{
+      await t.setPoints(track.id, cleaned, { clean: true });
+      await t.run(`UPDATE tracks SET cleaned=1,clean_count=?,cleaned_at=${t.NOW} WHERE id=?`, [cleaned.length, track.id]);
       const cp = catalogPts(cleaned, MAX_CATALOG_PTS);
-      if (cp) db.prepare('UPDATE tracks SET catalog_pts=? WHERE id=?').run(cp, track.id);
+      if (cp) await t.run('UPDATE tracks SET catalog_pts=? WHERE id=?', [cp, track.id]);
     });
   }
 }
@@ -200,7 +193,8 @@ if(!opts.reset){
     console.log('\n(Simulación — BD NO modificada)');
     console.log('Quita --dry-run para aplicar la limpieza.\n');
   } else {
-    console.log('\n✓ Listo. Regenera el catálogo con:');
-    console.log('  node scripts/export-catalog.js\n');
+    console.log('\n✓ Listo.\n');
   }
 }
+await db.close();
+})().catch(e => { console.error('✗ ' + e.message); process.exit(1); });

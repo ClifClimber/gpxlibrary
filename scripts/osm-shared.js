@@ -132,9 +132,9 @@ function filterWaysToBbox(ways, track, buf = 0.015) {
   });
 }
 
-function fetchTrackPts(track, db, maxPts = 1500) {
-  const table = track.cleaned ? 'clean_points' : 'raw_points';
-  let pts = db.prepare(`SELECT lat, lon FROM ${table} WHERE track_id=? ORDER BY seq`).all(track.id);
+// db: engine-neutral handle from repo/sql.js (openSql)
+async function fetchTrackPts(track, db, maxPts = 1500) {
+  let pts = (await db.getPoints(track.id, { clean: !!track.cleaned })).map(p => ({ lat: p.lat, lon: p.lon }));
   if (pts.length > maxPts) {
     const step = Math.ceil(pts.length / maxPts);
     pts = pts.filter((_, i) => i % step === 0);
@@ -142,9 +142,9 @@ function fetchTrackPts(track, db, maxPts = 1500) {
   return pts;
 }
 
-function applyWaysToTrack(track, pts, ways, db) {
+async function applyWaysToTrack(track, pts, ways, db) {
   if (ways.length === 0) {
-    db.prepare(`UPDATE tracks SET road_types='{}', surface_types='{}', road_types_at=datetime('now') WHERE id=?`).run(track.id);
+    await db.run(`UPDATE tracks SET road_types='{}', surface_types='{}', road_types_at=${db.NOW_TEXT} WHERE id=?`, [track.id]);
     return;
   }
 
@@ -181,8 +181,8 @@ function applyWaysToTrack(track, pts, ways, db) {
   for (const k of Object.keys(hwDist)) hwDist[k] = Math.round(hwDist[k] * 100) / 100;
   for (const k of Object.keys(sfDist)) sfDist[k] = Math.round(sfDist[k] * 100) / 100;
 
-  db.prepare(`UPDATE tracks SET road_types=?, surface_types=?, road_type_seq=?, road_types_at=datetime('now') WHERE id=?`)
-    .run(JSON.stringify(hwDist), JSON.stringify(sfDist), roadSegs.length ? JSON.stringify(roadSegs) : null, track.id);
+  await db.run(`UPDATE tracks SET road_types=?, surface_types=?, road_type_seq=?, road_types_at=${db.NOW_TEXT} WHERE id=?`,
+    [JSON.stringify(hwDist), JSON.stringify(sfDist), roadSegs.length ? JSON.stringify(roadSegs) : null, track.id]);
 }
 
 module.exports = { HW, SF, hav, ptSegDist, nearestWay, sleep, overpassRequest, queryOverpass, filterWaysToBbox, fetchTrackPts, applyWaysToTrack };

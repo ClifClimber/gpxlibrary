@@ -18,6 +18,9 @@ const { openDb, closeDb, withTransaction, DB_PATH } = require('./scripts/db');
 const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampleEvenly } = require('./domain');
 const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
+const { openSql } = require('./repo/sql');
+// Engine-neutral SQL on the active engine (shares the repository's Postgres pool; never closed here).
+const sqlDb = () => openSql({ driver: repo.driver, pool: repo.pool });
 let repo = getRepo();   // reassigned when the engine is switched from Admin
 const { downloadName } = require('./scripts/store');
 
@@ -71,32 +74,37 @@ function serveStatic(res, filePath, req) {
 }
 
 // ── API /db/stats ──────────────────────────────────────────────────
-function apiStats(res) {
+// Summary, per-activity breakdown and storage size, identical on both engines.
+async function dbSummary() {
+  const db = sqlDb();
+  const pg = db.driver === 'postgres';
+  const lastImport = pg ? "to_char(MAX(imported_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')" : 'MAX(imported_at)';
+  const sums = `CAST(SUM(raw_count) AS INTEGER) AS rawPoints,
+        CAST(SUM(CASE WHEN cleaned=1 THEN clean_count ELSE 0 END) AS INTEGER) AS cleanPoints`;
+  const summary = await db.get(`
+      SELECT CAST(COUNT(*) AS INTEGER) AS tracks, ${sums},
+        CAST(SUM(cleaned) AS INTEGER) AS cleanedTracks, ${lastImport} AS lastImport
+      FROM tracks`);
+  const cats = await db.all(`
+      SELECT activity AS category, CAST(COUNT(*) AS INTEGER) AS count, ${sums},
+        CAST(SUM(cleaned) AS INTEGER) AS cleaned
+      FROM tracks
+      GROUP BY activity ORDER BY count DESC, activity ${db.BIN}`);
+  // Postgres folds unquoted aliases to lower case
+  const fix = r => pg ? Object.fromEntries(Object.entries(r).map(([k, v]) => [{ rawpoints: 'rawPoints', cleanpoints: 'cleanPoints', cleanedtracks: 'cleanedTracks', lastimport: 'lastImport' }[k] || k, v])) : r;
+  let dbSize = 0, walSize = 0;
+  if (pg) dbSize = Number((await db.get('SELECT pg_database_size(current_database()) AS n')).n);
+  else {
+    dbSize  = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
+    walSize = fs.existsSync(DB_PATH + '-wal') ? fs.statSync(DB_PATH + '-wal').size : 0;
+  }
+  return { summary: fix(summary), cats: cats.map(fix), dbSize, walSize };
+}
+
+async function apiStats(res) {
   try {
-    const db = openDb();
-    const summary = db.prepare(`
-      SELECT
-        COUNT(*)                                              AS tracks,
-        SUM(raw_count)                                        AS rawPoints,
-        SUM(CASE WHEN cleaned=1 THEN clean_count ELSE 0 END) AS cleanPoints,
-        SUM(cleaned)                                          AS cleanedTracks,
-        MAX(imported_at)                                      AS lastImport
-      FROM tracks
-    `).get();
-
-    const cats = db.prepare(`
-      SELECT activity AS category,
-        COUNT(*)                                              AS count,
-        SUM(raw_count)                                        AS rawPoints,
-        SUM(CASE WHEN cleaned=1 THEN clean_count ELSE 0 END) AS cleanPoints,
-        SUM(cleaned)                                          AS cleaned
-      FROM tracks
-      GROUP BY activity ORDER BY count DESC
-    `).all();
-
-    const dbSize = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
+    const { summary, cats, dbSize } = await dbSummary();
     const gpxCount = countGpx(path.join(ROOT, 'TracksGps'));
-
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ...summary, cats, dbSize, gpxCount }));
   } catch (e) {
@@ -716,7 +724,7 @@ async function apiConfigProvinces(res) {
 
 // ── API: reorganizar archivos según actividad/sierra en BD ─────────
 // ── API: borrar todos los tracks y archivos GPX ────────────────────
-function apiDeleteAll(res) {
+async function apiDeleteAll(res) {
   res.writeHead(200, {
     'Content-Type':  'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -725,10 +733,11 @@ function apiDeleteAll(res) {
   const send = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
   try {
     send({ type: 'start' });
-    const db = openDb();
-    const { n: trackCount } = db.prepare('SELECT COUNT(*) as n FROM tracks').get();
+    const db = sqlDb();
+    const { n: trackCount } = await db.get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM tracks');
     send({ type: 'log', text: `Eliminando ${trackCount} tracks de la BD...` });
-    db.exec('DELETE FROM tracks');
+    await db.exec('DELETE FROM tracks');
+    invalidateCatalogCache();
     send({ type: 'log', text: `✓ BD limpiada (${trackCount} tracks eliminados)` });
 
     const tracksDir = path.join(ROOT, 'TracksGps');
@@ -783,43 +792,31 @@ function pruneBackups(maxKeep) {
   }
 }
 
+// Backups are always a gzipped SQLite file, so they restore into either engine.
+// With Postgres the data is dumped to SQLite by db-copy (which verifies the copy).
 async function createBackupFile() {
-  const db = openDb();
   fs.mkdirSync(BACKUPS_DIR, { recursive: true });
   const ts      = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const tmpPath = path.join(BACKUPS_DIR, `tracks-${ts}.db`);
   const gz      = tmpPath + '.gz';
-  db.exec(`VACUUM INTO '${tmpPath.replace(/'/g, "''")}'`);
+  if (repo.driver === 'sqlite') openDb().exec(`VACUUM INTO '${tmpPath.replace(/'/g, "''")}'`);
+  else {
+    const out = [];
+    const code = await runStreaming(process.execPath,
+      [path.join(ROOT, 'scripts', 'db-copy.js'), '--to', 'sqlite', '--sqlite', tmpPath, '--replace'], l => out.push(l));
+    if (code !== 0) throw new Error('Volcado de PostgreSQL fallido: ' + out.slice(-3).join(' · '));
+  }
   await pipeline(fs.createReadStream(tmpPath), zlib.createGzip({ level: 6 }), fs.createWriteStream(gz));
   fs.unlinkSync(tmpPath);
   return gz;
 }
 
-function apiAdminStats(res) {
+async function apiAdminStats(res) {
   try {
-    const db = openDb();
-    const summary = db.prepare(`
-      SELECT COUNT(*) AS tracks,
-        SUM(raw_count) AS rawPoints,
-        SUM(CASE WHEN cleaned=1 THEN clean_count ELSE 0 END) AS cleanPoints,
-        SUM(cleaned) AS cleanedTracks,
-        MAX(imported_at) AS lastImport
-      FROM tracks
-    `).get();
-    const cats = db.prepare(`
-      SELECT activity AS category,
-        COUNT(*) AS count,
-        SUM(raw_count) AS rawPoints,
-        SUM(CASE WHEN cleaned=1 THEN clean_count ELSE 0 END) AS cleanPoints,
-        SUM(cleaned) AS cleaned
-      FROM tracks
-      GROUP BY activity ORDER BY count DESC
-    `).all();
-    const dbSize  = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
-    const walSize = fs.existsSync(DB_PATH + '-wal') ? fs.statSync(DB_PATH + '-wal').size : 0;
+    const { summary, cats, dbSize, walSize } = await dbSummary();
     const backups = listBackupFiles();
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ...summary, cats, dbSize, walSize, gpxCount: summary.tracks, backups }));
+    res.end(JSON.stringify({ ...summary, cats, dbSize, walSize, gpxCount: summary.tracks, backups, driver: repo.driver }));
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
@@ -858,16 +855,31 @@ async function apiAdminRestore(res, filename) {
     if (!src.startsWith(BACKUPS_DIR) || !fs.existsSync(src)) {
       res.writeHead(404); res.end('Backup not found'); return;
     }
-    closeDb();
-    if (filename.endsWith('.gz')) {
-      const tmp = DB_PATH + '.restore-tmp';
-      await pipeline(fs.createReadStream(src), zlib.createGunzip(), fs.createWriteStream(tmp));
-      fs.renameSync(tmp, DB_PATH);
+    if (repo.driver === 'postgres') {
+      // Unpack the SQLite backup next to the others and load it into Postgres with db-copy
+      const tmp = path.join(BACKUPS_DIR, `restore-${Date.now()}.tmp.db`);
+      const rm = () => { for (const ext of ['', '-wal', '-shm']) { try { fs.unlinkSync(tmp + ext); } catch {} } };
+      try {
+        if (filename.endsWith('.gz')) await pipeline(fs.createReadStream(src), zlib.createGunzip(), fs.createWriteStream(tmp));
+        else fs.copyFileSync(src, tmp);
+        const out = [];
+        const code = await runStreaming(process.execPath, [path.join(ROOT, 'scripts', 'db-copy.js'), '--to', 'postgres', '--replace'],
+          l => out.push(l), { env: { ...process.env, SQLITE_PATH: tmp } });
+        if (code !== 0) throw new Error('Carga en PostgreSQL fallida: ' + out.slice(-3).join(' · '));
+      } finally { rm(); }
     } else {
-      fs.copyFileSync(src, DB_PATH);
+      closeDb();
+      if (filename.endsWith('.gz')) {
+        const tmp = DB_PATH + '.restore-tmp';
+        await pipeline(fs.createReadStream(src), zlib.createGunzip(), fs.createWriteStream(tmp));
+        fs.renameSync(tmp, DB_PATH);
+      } else {
+        fs.copyFileSync(src, DB_PATH);
+      }
+      for (const ext of ['-wal', '-shm']) { try { fs.unlinkSync(DB_PATH + ext); } catch {} }
+      openDb();
     }
-    for (const ext of ['-wal', '-shm']) { try { fs.unlinkSync(DB_PATH + ext); } catch {} }
-    openDb();
+    invalidateCatalogCache();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
   } catch (e) {
@@ -892,26 +904,45 @@ function apiAdminDeleteBackup(res, filename) {
   }
 }
 
-function apiAdminVacuum(res) {
+async function apiAdminVacuum(res) {
   try {
-    const db = openDb();
-    db.exec('VACUUM');
-    const size = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
+    if (repo.driver === 'postgres') await repo.pool.query('VACUUM (ANALYZE) tracks, config_activities, config_sierras');
+    else openDb().exec('VACUUM');
+    const { dbSize } = await dbSummary();
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, dbSize: size }));
+    res.end(JSON.stringify({ ok: true, dbSize }));
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
   }
 }
 
-function apiAdminIntegrity(res) {
+// Postgres has no integrity_check: verify geometries and that elevations and counts match the points.
+async function pgIntegrity() {
+  const r = (await repo.pool.query(`
+    SELECT
+      count(*) FILTER (WHERE geom IS NOT NULL AND NOT ST_IsValid(geom))::int                                    AS geom_invalid,
+      count(*) FILTER (WHERE geom_clean IS NOT NULL AND NOT ST_IsValid(geom_clean))::int                        AS geom_clean_invalid,
+      count(*) FILTER (WHERE ele IS NOT NULL AND cardinality(ele) <> COALESCE(ST_NPoints(geom), 0))::int         AS ele_mismatch,
+      count(*) FILTER (WHERE ele_clean IS NOT NULL AND cardinality(ele_clean) <> COALESCE(ST_NPoints(geom_clean), 0))::int AS ele_clean_mismatch,
+      count(*) FILTER (WHERE raw_count <> COALESCE(ST_NPoints(geom), 0))::int                                   AS raw_count_mismatch,
+      count(*) FILTER (WHERE cleaned = 1 AND clean_count <> COALESCE(ST_NPoints(geom_clean), 0))::int           AS clean_count_mismatch
+    FROM tracks`)).rows[0];
+  const label = { geom_invalid: 'geometría no válida', geom_clean_invalid: 'geometría limpia no válida',
+    ele_mismatch: 'altitudes ≠ puntos', ele_clean_mismatch: 'altitudes limpias ≠ puntos limpios',
+    raw_count_mismatch: 'raw_count ≠ puntos', clean_count_mismatch: 'clean_count ≠ puntos limpios' };
+  const bad = Object.entries(r).filter(([, n]) => n > 0).map(([k, n]) => `${label[k]}: ${n} rutas`);
+  return bad.length ? bad : ['ok'];
+}
+
+async function apiAdminIntegrity(res) {
   try {
-    const db = openDb();
-    const rows = db.prepare('PRAGMA integrity_check').all();
-    const ok   = rows.length === 1 && rows[0].integrity_check === 'ok';
+    const result = repo.driver === 'postgres'
+      ? await pgIntegrity()
+      : openDb().prepare('PRAGMA integrity_check').all().map(r => r.integrity_check);
+    const ok = result.length === 1 && result[0] === 'ok';
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok, result: rows.map(r => r.integrity_check) }));
+    res.end(JSON.stringify({ ok, result }));
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
@@ -1056,9 +1087,8 @@ async function apiEngineSwitch(req, res) {
   } finally { switchingEngine = false; }
 }
 
-// Operations not yet ported to the repository layer (scripts and SQLite maintenance).
-const SQLITE_ONLY = [/^\/api\/db\//, /^\/api\/import\//, /^\/api\/export\/folders$/, /^\/api\/tracks\/delete-all$/,
-  /^\/api\/admin\/(stats|backup|backups|restore|vacuum|integrity|osm-cache|backup-config)/];
+// Operations still tied to the SQLite file (legacy catalog-data.js export).
+const SQLITE_ONLY = [/^\/api\/db\/export$/];
 const isSqliteOnly = p => SQLITE_ONLY.some(re => re.test(p));
 
 // ── Enrutador ──────────────────────────────────────────────────────
@@ -1073,7 +1103,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
   if (repo.driver !== 'sqlite' && isSqliteOnly(pathname)) {
     res.writeHead(501, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ error: 'Aún no disponible con PostgreSQL (DB_DRIVER=postgres). Usa SQLite para esta operación.' }));
+    return res.end(JSON.stringify({ error: 'Operación solo disponible con SQLite.' }));
   }
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Filename');
   if (method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
@@ -1369,11 +1399,10 @@ const server = http.createServer(async (req, res) => {
       .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
     try {
       // All groups from DB
-      const db = openDb();
-      const groups = db.prepare(
-        `SELECT COALESCE(sierra, province, 'sin-zona') AS group_key, COUNT(*) AS track_count
-         FROM tracks WHERE sw_lat IS NOT NULL GROUP BY group_key ORDER BY track_count DESC`
-      ).all();
+      const db = sqlDb();
+      const groups = await db.all(
+        `SELECT COALESCE(sierra, province, 'sin-zona') AS group_key, CAST(COUNT(*) AS INTEGER) AS track_count
+         FROM tracks WHERE sw_lat IS NOT NULL GROUP BY COALESCE(sierra, province, 'sin-zona') ORDER BY track_count DESC, COALESCE(sierra, province, 'sin-zona') ${db.BIN}`);
       const entries = groups.map(g => {
         const slug = slugify(g.group_key);
         const fp   = path.join(cacheDir, slug + '.json');
@@ -1415,8 +1444,8 @@ const server = http.createServer(async (req, res) => {
 
   // ── Config routes ────────────────────────────────────────────────
   if (pathname === '/api/config/activity-counts' && method === 'GET') {
-    const db = openDb();
-    const rows = db.prepare(`SELECT activity, COUNT(*) as cnt FROM tracks WHERE activity IS NOT NULL GROUP BY activity ORDER BY cnt DESC`).all();
+    const db = sqlDb();
+    const rows = await db.all(`SELECT activity, CAST(COUNT(*) AS INTEGER) AS cnt FROM tracks WHERE activity IS NOT NULL GROUP BY activity ORDER BY cnt DESC, activity ${db.BIN}`);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify(Object.fromEntries(rows.map(r => [r.activity, r.cnt]))));
   }
@@ -1659,11 +1688,10 @@ server.listen(PORT, '127.0.0.1', () => {
   appendLog('info', 'server', `Servidor iniciado en puerto ${PORT}`);
   const { exec } = require('child_process');
   const open = process.platform === 'win32' ? `start ${url}` : `open ${url}`;
-  exec(open);
+  if (!process.env.NO_OPEN) exec(open);
   // Daily auto-backup on startup if none exists for today
   setImmediate(async () => {
     checkpointWal();
-    if (repo.driver !== 'sqlite') return;   // daily backup is of the SQLite file
     try {
       const today = new Date().toISOString().slice(0, 10);
       fs.mkdirSync(BACKUPS_DIR, { recursive: true });

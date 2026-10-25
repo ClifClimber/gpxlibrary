@@ -5,7 +5,7 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { openDb, withTransaction } = require('./db');
+const { openSql } = require('../repo/sql');
 
 const ROOT    = path.join(__dirname, '..');
 const GPX_DIR = path.join(ROOT, 'TracksGps');
@@ -102,11 +102,11 @@ function walkGpx(dir, result = []) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────
-const db     = openDb();
-const tracks = db.prepare(
+(async () => {
+const db     = openSql();
+const tracks = await db.all(
   force ? 'SELECT id, file, url FROM tracks ORDER BY id'
-        : 'SELECT id, file, url FROM tracks WHERE url IS NULL ORDER BY id'
-).all();
+        : 'SELECT id, file, url FROM tracks WHERE url IS NULL ORDER BY id');
 
 const gpxFiles = walkGpx(GPX_DIR);
 const gpxMap   = {};
@@ -119,7 +119,6 @@ console.log(`Buscando URLs en ${tracks.length} tracks${force ? ' (todos)' : ' (s
 
 let found = 0, notFound = 0, skipped = 0;
 
-const updStmt = dryRun ? null : db.prepare('UPDATE tracks SET url=? WHERE id=?');
 
 for (const t of tracks) {
   const absPath = gpxMap[t.file];
@@ -133,7 +132,7 @@ for (const t of tracks) {
   const url   = bestUrl(links);
 
   if (url) {
-    if (!dryRun) updStmt.run(url, t.id);
+    if (!dryRun) await db.run('UPDATE tracks SET url=? WHERE id=?', [url, t.id]);
     found++;
     console.log(`✓ [${t.id}] ${path.basename(t.file, '.gpx').substring(0, 45)}`);
     console.log(`    → ${url}`);
@@ -146,3 +145,5 @@ for (const t of tracks) {
 }
 
 console.log(`\n✓ URLs encontradas: ${found}  |  Sin URL: ${notFound}  |  Saltados: ${skipped}`);
+await db.close();
+})().catch(e => { console.error('✗ ' + e.message); process.exit(1); });

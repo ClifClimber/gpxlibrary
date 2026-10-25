@@ -12,7 +12,7 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { openDb, withTransaction } = require('./db');
+const { openSql } = require('../repo/sql');
 const { newUid, sha256, putFile }  = require('./store');
 const { parseGpx, computeMetrics, computeTimes, inferActivity, sierraFromBbox,
         extractSierraFromNominatim, locationFromNominatim, computeIBP } = require('../domain');
@@ -39,10 +39,9 @@ const SRC_DIR = srcIdx !== -1 ? path.resolve(process.argv[srcIdx + 1]) : TEMP_DI
 
 // ── Sierras (cargadas desde BD en tiempo de ejecución) ──────────────
 let SIERRAS = [];
-function loadSierrasFromDb() {
+async function loadSierrasFromDb(db) {
   try {
-    const db = openDb();
-    SIERRAS = db.prepare('SELECT name,sw_lat,sw_lon,ne_lat,ne_lon FROM config_sierras WHERE active=1').all()
+    SIERRAS = (await db.all('SELECT name,sw_lat,sw_lon,ne_lat,ne_lon FROM config_sierras WHERE active=1'))
       .map(r => ({ name: r.name, sw: [r.sw_lat, r.sw_lon], ne: [r.ne_lat, r.ne_lon] }));
     if (SIERRAS.length === 0) console.warn('⚠ No hay sierras activas en config_sierras');
   } catch(e) {
@@ -92,7 +91,6 @@ function collectTempGpx(dir) {
 
 // ── Main (async) ──────────────────────────────────────────────────────
 (async () => {
-  loadSierrasFromDb(); // carga sierras desde config_sierras en BD
 
   if (!fs.existsSync(SRC_DIR)) {
     console.log(`⚠  No existe la carpeta origen: ${SRC_DIR}`);
@@ -112,16 +110,13 @@ function collectTempGpx(dir) {
 
   console.log(`\nImportando ${files.length} archivo(s) GPX...\n`);
 
-  const db = openDb();
-  const findByHash = db.prepare('SELECT id, name FROM tracks WHERE sha256=? LIMIT 1');
-  const setStoreCols = db.prepare('UPDATE tracks SET uid=?, sha256=?, zone=COALESCE(zone, sierra) WHERE id=?');
-  const tagForReview = db.prepare(`UPDATE tracks SET tags=? WHERE id=?`);
-  const setTimes = db.prepare('UPDATE tracks SET moving_time=?, stopped_time=? WHERE id=?');
+  const db = openSql();
+  await loadSierrasFromDb(db); // carga sierras desde config_sierras en BD
 
   // Limpiar el flag de importación reciente antes de marcar los nuevos
-  db.prepare('UPDATE tracks SET is_recent_import=0 WHERE is_recent_import=1').run();
+  await db.run('UPDATE tracks SET is_recent_import=0 WHERE is_recent_import=1');
 
-  const upsertTrack = db.prepare(`
+  const UPSERT = `
     INSERT INTO tracks
       (name,file,zone,date,distance,elevation_gain,elevation_loss,
        min_elevation,max_elevation,sw_lat,sw_lon,ne_lat,ne_lon,
@@ -143,20 +138,16 @@ function collectTempGpx(dir) {
       ibp_bicycle=COALESCE(excluded.ibp_bicycle, tracks.ibp_bicycle),
       ibp_hiking=COALESCE(excluded.ibp_hiking, tracks.ibp_hiking),
       ibp_running=COALESCE(excluded.ibp_running, tracks.ibp_running),
-      imported_at=datetime('now'), cleaned=0, clean_count=NULL, cleaned_at=NULL,
+      imported_at=${db.NOW}, cleaned=0, clean_count=NULL, cleaned_at=NULL,
       is_recent_import=1
-  `);
-  const insertRaw   = db.prepare('INSERT OR REPLACE INTO raw_points(track_id,seq,lat,lon,ele) VALUES(?,?,?,?,?)');
-  const deleteRaw   = db.prepare('DELETE FROM raw_points   WHERE track_id=?');
-  const deleteClean = db.prepare('DELETE FROM clean_points WHERE track_id=?');
-  const getTrackId  = db.prepare('SELECT id FROM tracks WHERE file=?');
+    RETURNING id
+  `;
 
-  function importTrack(track, relFile, activity, sierra, province, ccaa, ibp) {
-    let trackId;
-    withTransaction(() => {
+  async function importTrack(track, relFile, activity, sierra, province, ccaa, ibp) {
+    return db.tx(async t => {
       const parts = relFile.split('/');
       const zone   = parts.length > 3 ? parts[2] : null;
-      upsertTrack.run(
+      const row = await t.get(UPSERT, [
         track.name, relFile, zone, track.date ?? null,
         track.distance, track.elevationGain, track.elevationLoss,
         track.minElevation ?? null, track.maxElevation ?? null,
@@ -164,22 +155,15 @@ function collectTempGpx(dir) {
         track.centerLat, track.centerLon, track.points.length,
         activity ?? null, sierra ?? null, province ?? null, ccaa ?? null,
         track.url ?? null, track.circular ?? 0,
-        ibp.ibp_bicycle ?? null, ibp.ibp_hiking ?? null, ibp.ibp_running ?? null
-      );
-      const row = getTrackId.get(relFile);
-      trackId = row.id;
-      deleteRaw.run(row.id);
-      deleteClean.run(row.id);
-      for (let i = 0; i < track.points.length; i++) {
-        const p = track.points[i];
-        insertRaw.run(row.id, i, p.lat, p.lon, p.ele ?? null);
-      }
+        ibp.ibp_bicycle ?? null, ibp.ibp_hiking ?? null, ibp.ibp_running ?? null,
+      ]);
+      await t.setPoints(row.id, track.points);
+      await t.setPoints(row.id, [], { clean: true });
       if (track.waypoints && track.waypoints.length > 0) {
-        db.prepare('UPDATE tracks SET waypoints_json=? WHERE id=?')
-          .run(JSON.stringify(track.waypoints), row.id);
+        await t.run('UPDATE tracks SET waypoints_json=? WHERE id=?', [JSON.stringify(track.waypoints), row.id]);
       }
+      return row.id;
     });
-    return trackId;
   }
 
   let imported = 0, skipped = 0, reviewed = 0, errors = 0;
@@ -199,7 +183,7 @@ function collectTempGpx(dir) {
       if (content.includes('�')) content = buf.toString('latin1');
     } catch (e) { console.log(`  ✗ No se puede leer: ${e.message}`); errors++; continue; }
 
-    const dup = !FORCE && findByHash.get(hash);
+    const dup = !FORCE && await db.get('SELECT id, name FROM tracks WHERE sha256=? LIMIT 1', [hash]);
     if (dup) {
       // Byte-identical to a stored original, so the temp copy is redundant.
       if (!KEEP_SRC) { try { fs.unlinkSync(filePath); } catch {} }
@@ -247,10 +231,10 @@ function collectTempGpx(dir) {
     const ibp = computeIBP(track.distance, track.elevationGain);
     console.log(`  IBP        : h=${ibp.ibp_hiking}  b=${ibp.ibp_bicycle}  r=${ibp.ibp_running}`);
     try {
-      const newId = importTrack(track, relFile, act, sierra, province, ccaa, ibp);
-      setStoreCols.run(uid, hash, newId);
-      if (track.times) setTimes.run(track.times.moving, track.times.stopped, newId);
-      if (needsReview) tagForReview.run(JSON.stringify(['revisar']), newId);
+      const newId = await importTrack(track, relFile, act, sierra, province, ccaa, ibp);
+      await db.run('UPDATE tracks SET uid=?, sha256=?, zone=COALESCE(zone, sierra) WHERE id=?', [uid, hash, newId]);
+      if (track.times) await db.run('UPDATE tracks SET moving_time=?, stopped_time=? WHERE id=?', [track.times.moving, track.times.stopped, newId]);
+      if (needsReview) await db.run('UPDATE tracks SET tags=? WHERE id=?', [JSON.stringify(['revisar']), newId]);
       importedIds.push(newId);
       imported++;
       console.log(`  ✓ Importado (id=${newId})`);
@@ -261,11 +245,11 @@ function collectTempGpx(dir) {
         const cacheFile = require('path').join(CACHE_DIR, slug + '.json');
         const cached    = readOsmCache(cacheFile);
         if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
-          const trackRow = db.prepare('SELECT id,sw_lat,sw_lon,ne_lat,ne_lon,cleaned FROM tracks WHERE id=?').get(newId);
+          const trackRow = await db.get('SELECT id,sw_lat,sw_lon,ne_lat,ne_lon,cleaned FROM tracks WHERE id=?', [newId]);
           const fWays = filterWaysToBbox(cached.ways, trackRow);
-          const pts   = fetchTrackPts(trackRow, db, 1500);
+          const pts   = await fetchTrackPts(trackRow, db, 1500);
           if (pts.length >= 2) {
-            applyWaysToTrack(trackRow, pts, fWays, db);
+            await applyWaysToTrack(trackRow, pts, fWays, db);
             console.log(`  OSM        : ${fWays.length} vías aplicadas (caché)`);
           } else {
             console.log(`  OSM        : sin puntos GPS (no calculado)`);
@@ -292,10 +276,11 @@ function collectTempGpx(dir) {
   console.log(`  Por revisar         : ${reviewed}`);
   console.log(`  Errores             : ${errors}`);
   if (reviewed > 0) {
-    console.log(`\n⚠  ${reviewed} tracks en _TEMP_/_REVIEW_ necesitan clasificación manual.`);
+    console.log(`\n⚠  ${reviewed} tracks con la etiqueta «revisar» necesitan clasificación manual.`);
   }
   if (importedIds.length > 0) {
     console.log(`IMPORTED_IDS:${importedIds.join(',')}`);
   }
   console.log('');
-})();
+  await db.close();
+})().catch(e => { console.error('✗ ' + e.message); process.exit(1); });
