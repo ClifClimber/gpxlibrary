@@ -1,5 +1,27 @@
 # Changelog
 
+## v2.3.0 — 2026-10-25
+
+### Todas las operaciones funcionan con PostgreSQL
+- Nueva capa SQL neutra `repo/sql.js` (`openSql()`): consultas asíncronas con `?`, transacciones, marcas de tiempo (`NOW`, `NOW_TEXT`), orden byte a byte (`BIN`) y lectura/escritura de puntos GPS (filas en SQLite, geometría PostGIS en PostgreSQL)
+- Portados a ella todos los scripts: **importar** (y por tanto Wikiloc y Komoot), **IBP**, **limpiar**, **tipos de camino OSM** (enriquecer, precaché y las tres estrategias), **ubicación** (Nominatim), **URLs**, **catálogo** (`backfill-catalog-pts`, ahora con la función de `domain/`), **exportar en carpetas** y **almacén** (`migrate-store`)
+- Admin con PostgreSQL: estadísticas, caché OSM, recuento por actividad, **optimizar** (`VACUUM (ANALYZE)`) y **comprobar integridad** (geometrías válidas y que altitudes y recuentos coinciden con los puntos)
+- Verificado ejecutando cada operación en los dos motores con los mismos datos: resultados idénticos campo a campo, mismas exportaciones y mismas respuestas del servidor
+- Solo la exportación heredada a `catalog-data.js` (`/api/db/export`, que no usa ninguna página) sigue siendo exclusiva de SQLite
+
+### Copias de seguridad con los dos motores
+- Las copias son siempre un fichero SQLite comprimido (`data/backups/tracks-….db.gz`); con PostgreSQL se vuelcan con `db-copy.js`, que comprueba la copia antes de guardarla
+- Cualquier copia se puede restaurar en cualquiera de los dos motores
+- La copia diaria automática al arrancar se hace también con PostgreSQL
+
+### Otros
+- Eliminada la opción **«Borrar todo»** (diálogo del editor y endpoint `/api/tracks/delete-all`)
+- `clean-tracks --reset` recalcula la vista previa del catálogo con los puntos originales
+- `NO_OPEN=1` arranca el servidor sin abrir el navegador
+- Los mensajes «Solo disponible con SQLite» de Admin se sustituyen por el error real si lo hay
+
+---
+
 ## v2.2.0 — 2026-10-25
 
 ### Cambiar de motor de base de datos desde Admin

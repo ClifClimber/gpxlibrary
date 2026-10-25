@@ -10,19 +10,31 @@ Guía de navegación del código. Actualizar cuando cambien las estructuras clav
 gpxlibrary/
 ├── index.html          Visor principal (Leaflet, vanilla JS)
 ├── editor.html         Editor de tracks y herramientas de gestión
-├── config.html         Configuración de actividades y sierras (tema claro, mismo que editor)
 ├── track.html          Página de detalle de un track
-├── admin.html          Admin BD: stats detalladas, backups, mantenimiento
+├── admin.html          Admin: motor de BD, stats, backups, mantenimiento, actividades, sierras, parámetros, logs
+├── compare.html        Comparador de rutas (→ Unir abre /trazar?join=…)
+├── trazar.html         Dibujar / editar una copia de una ruta
 ├── shared.css          Estilos comunes: nav, .page-header, .hbtn-nav
 ├── server.js           Servidor HTTP + toda la API REST
+├── config.js           Lee .env: DB_DRIVER (sqlite|postgres), DATABASE_URL, SQLITE_PATH
+├── docker-compose.yml  PostgreSQL 17 + PostGIS 3.5 local
+├── .env                NO en git — motor activo y contraseña de PostgreSQL
 ├── catalog-data.js     AUTO-GENERADO — const CATALOG = [...]
 ├── ibp.key             API key de IBP Index (no en git)
 ├── data/               NO en git (.gitignore)
-│   ├── tracks.db       SQLite — fuente de verdad
-│   └── backups/        Copias de seguridad (tracks-YYYY-MM-DD-HH-MM-SS.db)
+│   ├── tracks.db       SQLite (cuando DB_DRIVER=sqlite)
+│   └── backups/        Copias: siempre SQLite comprimido (tracks-YYYY-MM-DDTHH-MM-SS.db.gz), restaurables en ambos motores
+│
+├── repo/               Acceso a datos con la misma API en los dos motores
+│   ├── index.js / sqlite.js / postgres.js   Repositorio usado por server.js (getRepo)
+│   ├── sql.js          openSql(): SQL async neutro para scripts y mantenimiento
+│   ├── columns.js      Listas de columnas compartidas
+│   ├── pg-migrate.js + pg/NNN_*.sql   Esquema PostgreSQL
+│   └── repo.test.js    Tests de contrato contra los dos motores
 │
 ├── scripts/
-│   ├── db.js                   openDb(), withTransaction(), schema inicial
+│   ├── db.js                   SQLite: openDb(), schema y migraciones (los scripts usan repo/sql.js)
+│   ├── db-copy.js              Copia entre motores (--to postgres|sqlite) y --verify
 │   ├── import-from-temp.js     Pipeline completo: geocodifica + clasifica + guarda en store/ + importa
 │   ├── store.js                Almacén inmutable: TracksGps/store/{uid}.gpx, sha256
 │   ├── migrate-store.js        Migra carpetas antiguas al almacén (--dry-run, --revert)
@@ -31,7 +43,9 @@ gpxlibrary/
 │   ├── build-catalog.js        GPX → catalog-data.js (sin BD, modo legacy)
 │   ├── clean-tracks.js         Elimina ruido GPS de raw_points → clean_points
 │   ├── enrich-road-types.js    Enriquece con tipo de camino/superficie (OSM Overpass)
-│   ├── enrich-tracks.js        Extrae tiempo en marcha / parado desde tiempos GPS
+│   ├── enrich-tracks.js        Provincia / CCAA / sierra / actividad (Nominatim)
+│   ├── osm-precache.js         Descarga OSM por zonas; osm-strategy-*.js y osm-shared.js
+│   ├── backfill-catalog-pts.js Rellena catalog_pts (polilínea del catálogo)
 │   ├── calc-ibp.js             Calcula IBP Index vía API ibpindex.com
 │   └── extract-urls.js         Extrae URLs de los metadatos GPX
 │
@@ -45,7 +59,9 @@ gpxlibrary/
 
 ---
 
-## Base de datos SQLite
+## Base de datos
+
+Esquema descrito en SQLite; en PostgreSQL es el mismo `tracks` salvo que los puntos van en `geom`/`ele` y `geom_clean`/`ele_clean` (PostGIS `LineString` + arrays) en lugar de `raw_points`/`clean_points`.
 
 ### `tracks` — tabla principal
 
@@ -93,7 +109,7 @@ PRIMARY KEY (track_id, seq)
 ```
 id, name, color, keywords, sort_order, active
 ```
-Los `keywords` se usan en `import-from-temp.js` para auto-clasificar. El `color` se sincroniza con `localStorage['gpx-act-colors']` al guardar desde `/config`.
+Los `keywords` se usan en `import-from-temp.js` para auto-clasificar. El `color` se sincroniza con `localStorage['gpx-act-colors']` al guardar desde Admin → Actividades.
 
 ### `config_sierras`
 
@@ -151,14 +167,16 @@ Servidor HTTP vanilla en Node.js. Todas las rutas en una única función `handle
 | GET | `/api/tracks/:id/export-gpx` | Exporta un track individual |
 | GET | `/api/db/temp-files` | Lista GPX en _TEMP_ |
 | GET | `/api/admin/stats` | Stats BD completas: tracks, raw/clean points, por actividad, tamaño, WAL, backups |
-| POST | `/api/admin/backup` | Crea backup `VACUUM INTO` en `data/backups/` |
+| POST | `/api/admin/backup` | Crea backup en `data/backups/` (SQLite: `VACUUM INTO`; PostgreSQL: volcado con `db-copy.js`) |
 | GET | `/api/admin/backups` | Lista backups disponibles |
-| POST | `/api/admin/restore/:filename` | Restaura un backup (cierra + copia + reabre) |
+| POST | `/api/admin/restore/:filename` | Restaura un backup (SQLite: sustituye el fichero; PostgreSQL: lo carga con `db-copy.js`) |
 | DELETE | `/api/admin/backups/:filename` | Elimina un backup |
-| POST | `/api/admin/vacuum` | Ejecuta VACUUM en la BD |
-| GET | `/api/admin/integrity` | Ejecuta `PRAGMA integrity_check` |
+| POST | `/api/admin/vacuum` | `VACUUM` (SQLite) / `VACUUM (ANALYZE)` (PostgreSQL) |
+| GET | `/api/admin/integrity` | `PRAGMA integrity_check` (SQLite) / geometrías y recuentos (PostgreSQL) |
+| GET | `/api/admin/db-engine` | Estado de los dos motores |
+| POST | `/api/admin/db-engine/switch` | Cambia de motor con copia y verificación (SSE) |
 | POST | `/api/db/import-temp` | Lanza import-from-temp.js (SSE) |
-| POST | `/api/db/export` | Lanza export-catalog.js (SSE) |
+| POST | `/api/db/export` | Lanza export-catalog.js (SSE, legado, solo SQLite) |
 | POST | `/api/db/calc-ibp` | Lanza calc-ibp.js (SSE) |
 | POST | `/api/db/clean` | Lanza clean-tracks.js (SSE) |
 | POST | `/api/db/enrich` | Lanza enrich-tracks.js (SSE) |
@@ -185,12 +203,12 @@ Los clientes leen el stream con `fetch + ReadableStream` y lo muestran en el log
 `localStorage` es compartida entre todas las páginas del mismo origen (`localhost:8080`).
 
 ```
-config.html  ──save──►  DB (config_activities.color)
+admin.html   ──save──►  DB (config_activities.color)
                     └──► localStorage['gpx-act-colors'][name] = color
                     └──► localStorage['gpx-act-icons'][name]  = dataUrl
 
 index.html   ──load──►  localStorage['gpx-act-colors']  (al arrancar)
-             ◄─storage event─  (cuando config.html guarda)
+             ◄─storage event─  (cuando Admin guarda)
                     └── setActivityColor(act, color, false)  → re-colorea layers + markers
                     └── actIconsCustom actualizado           → re-genera iconos de markers
 ```
@@ -215,7 +233,7 @@ function setActivityColor(act, color, save) {
 }
 ```
 
-### En `config.html`
+### En `admin.html` (Actividades)
 
 `getActIcons() / setActIcon(name, dataUrl)` — lee/escribe `localStorage['gpx-act-icons']`.  
 Al guardar una actividad, también escribe `localStorage['gpx-act-colors']`.
@@ -296,8 +314,9 @@ Un export de múltiples tracks = un solo fichero GPX con varios `<trk>`.
 
 ## Notas de desarrollo
 
-- `catalog-data.js` es auto-generado. Nunca editar a mano.
-- El visor solo funciona desde HTTP (no `file://`) por el `<script src="catalog-data.js">`.
+- `catalog-data.js` es un artefacto heredado; el visor carga `/api/catalog`.
+- El visor solo funciona desde HTTP (no `file://`) porque usa fetch/SSE.
 - `server.js` no usa Express ni ningún framework — routing manual con `pathname.match()`.
-- Los scripts en `scripts/` no tienen dependencias npm — solo Node.js stdlib + `node:sqlite` (nativo en Node ≥22).
-- Sin dependencias de producción en `package.json`.
+- Única dependencia npm: `pg`, que solo se carga con `DB_DRIVER=postgres`. El resto es stdlib + `node:sqlite` (Node ≥22).
+- Los scripts acceden a la BD con `repo/sql.js` (`openSql()`), nunca con `scripts/db.js` directamente, para funcionar en los dos motores.
+- `NO_OPEN=1` arranca el servidor sin abrir el navegador.
