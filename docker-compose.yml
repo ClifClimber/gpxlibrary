@@ -59,10 +59,12 @@ services:
       S3_ENDPOINT: http://storage:3900
       LOCK_BACKENDS: "1"
       EMBEDDED_WORKER: "0"            # los trabajos los ejecuta el servicio worker
+      LOCAL_SYNC_DIR: /sync
     ports:
       - "127.0.0.1:${APP_PORT:-8081}:8080"
     volumes:
       - appdata:/app/data
+      - ${LOCAL_SYNC_DIR:-./TracksGps/local}:/sync
     depends_on:
       db:
         condition: service_healthy
@@ -80,8 +82,10 @@ services:
     environment:
       DATABASE_HOST: db:5432
       S3_ENDPOINT: http://storage:3900
+      LOCAL_SYNC_DIR: /sync
     volumes:
       - appdata:/app/data
+      - ${LOCAL_SYNC_DIR:-./TracksGps/local}:/sync
     healthcheck:
       disable: true
     depends_on:
