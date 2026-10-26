@@ -138,7 +138,7 @@ const worker = process.env.EMBEDDED_WORKER === '0' ? null : createWorker({
       { job: job.id, ...summarize(lines, code) });
     if (code === 0) {
       invalidateCatalogCache();
-      if (IMPORT_TYPES.has(job.type)) jobQueue().enqueue('sync-local', {}).catch(() => {});
+      if (IMPORT_TYPES.has(job.type)) jobQueue().enqueue('export-folders', {}).catch(() => {});
     }
   },
 });
@@ -1126,9 +1126,8 @@ const server = http.createServer(async (req, res) => {
     return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-precache.js'), args);
   }
 
-  if (pathname === '/api/db/sync-local' && method === 'POST') {
-    const clean = searchParams.get('clean') === '1';
-    return apiRunScript(res, path.join(ROOT, 'scripts', 'sync-local.js'), clean ? ['--clean'] : []);
+  if (pathname === '/api/db/export-folders/sync' && method === 'POST') {
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'export-folders.js'), []);
   }
 
   // ── OSM settings ─────────────────────────────────────────────────

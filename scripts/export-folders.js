@@ -9,10 +9,10 @@ const { ROOT, readTrackFile, gpxText } = require('./store');
 const { applyGpxMetadata, metaFromTrack } = require('../domain');
 
 const arg = k => { const i = process.argv.indexOf(k); return i >= 0 ? process.argv[i + 1] : null; };
-const destArg = arg('--dest');
+const destArg = arg('--dest') || process.env.LOCAL_SYNC_DIR;
 const ids = (arg('--ids') || '').split(',').map(Number).filter(Boolean);
 
-if (!destArg) { console.log('✗ Falta la carpeta de destino'); process.exit(1); }
+if (!destArg) { console.log('✗ Falta la carpeta de destino (--dest o LOCAL_SYNC_DIR)'); process.exit(1); }
 const dest = path.resolve(destArg);
 const tracksDir = path.join(ROOT, 'TracksGps');
 const rel = path.relative(tracksDir, dest);

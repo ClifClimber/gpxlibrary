@@ -27,11 +27,12 @@
 - La caché del catálogo (`/api/catalog`) se invalida con `dataVersion` al terminar cualquier trabajo, incluyendo los del worker externo
 - Tests: `queue/queue.test.js` (6 escenarios)
 
-### Copia local sincronizada de GPX
-- `scripts/sync-local.js`: descarga de S3 los GPX que faltan en `LOCAL_SYNC_DIR` (relativa a ROOT o absoluta); acepta `--dir <ruta>` y `--clean` (elimina locales huérfanos)
-- La sincronización se **encola automáticamente** tras cada importación exitosa (import-from-temp, wikiloc-import, komoot-import)
-- Admin → Base de datos → **Almacén de GPX**: campo de ruta local configurable y botón «Sincronizar ahora»
+### Copia local organizada en carpetas
+- `scripts/export-folders.js` usa `LOCAL_SYNC_DIR` como destino por defecto (además de `--dest`): exporta todos los tracks a `Actividad/Zona/Nombre.gpx` con los metadatos actuales, sin tocar los originales en S3
+- La exportación se **encola automáticamente** tras cada importación exitosa (import-from-temp, wikiloc-import, komoot-import)
+- Admin → Base de datos → **Almacén de GPX**: campo de carpeta destino configurable y botón «Exportar ahora»
 - En Docker, `LOCAL_SYNC_DIR` del host se monta en `/sync` del contenedor; configurar la ruta en `.env` antes de `docker compose up`
+- `scripts/sync-local.js` eliminado (reemplazado por export-folders, que produce una estructura navegable en lugar de ficheros planos con nombre uid)
 
 ---
 
