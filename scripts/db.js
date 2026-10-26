@@ -104,6 +104,34 @@ function _migrate(db) {
   try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_uid ON tracks(uid) WHERE uid IS NOT NULL'); } catch {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_tracks_sha256 ON tracks(sha256)'); } catch {}
 
+  // Job queue (queue/): same columns as repo/pg/002_jobs.sql
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS jobs (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      type         TEXT NOT NULL,
+      payload      TEXT NOT NULL DEFAULT '{}',
+      status       TEXT NOT NULL DEFAULT 'queued',
+      attempts     INTEGER NOT NULL DEFAULT 0,
+      max_attempts INTEGER NOT NULL DEFAULT 1,
+      run_at       TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      started_at   TEXT,
+      finished_at  TEXT,
+      heartbeat_at TEXT,
+      locked_by    TEXT,
+      error        TEXT,
+      result       TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_jobs_claim ON jobs(status, run_at);
+    CREATE TABLE IF NOT EXISTS job_logs (
+      job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      seq    INTEGER NOT NULL,
+      level  TEXT NOT NULL,
+      text   TEXT NOT NULL,
+      PRIMARY KEY (job_id, seq)
+    );
+  `);
+
   // One-time: compute circular from first/last raw point for all tracks
   // Uses flat-earth approximation: cos(40°)^2 ≈ 0.41, 0.5km ≈ 0.0045 deg
   try {

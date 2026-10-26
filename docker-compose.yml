@@ -1,4 +1,5 @@
-# GPX Library completa: aplicación (app), PostgreSQL + PostGIS (db) y almacén S3 Garage para los GPX (storage).
+# GPX Library completa: aplicación (app), worker de trabajos (worker), PostgreSQL + PostGIS (db)
+# y almacén S3 Garage para los GPX (storage).
 #   node scripts/storage-setup.js → primera vez: secretos de Garage en .env, buckets y clave
 #   docker compose up -d --build  → construye la imagen y arranca todo → http://localhost:8081
 #   docker compose up -d db       → solo PostgreSQL (para ejecutar la app fuera de Docker)
@@ -59,11 +60,37 @@ services:
       DATABASE_HOST: db:5432
       S3_ENDPOINT: http://storage:3900
       LOCK_BACKENDS: "1"
+      EMBEDDED_WORKER: "0"            # los trabajos los ejecuta el servicio worker
     ports:
       - "127.0.0.1:${APP_PORT:-8081}:8080"
     volumes:
       - appdata:/app/data
     depends_on:
+      db:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+
+  # Ejecuta los trabajos en cola (importar, OSM, IBP…). Comparte el volumen appdata con app
+  # (_TEMP_, caché OSM, ajustes). Se puede escalar: docker compose up -d --scale worker=2
+  worker:
+    image: gpxlibrary-app:local
+    restart: unless-stopped
+    init: true
+    command: ["sh", "-c", "mkdir -p data/_TEMP_ && exec node worker.js"]
+    env_file: .env
+    environment:
+      DB_DRIVER: postgres
+      STORAGE_DRIVER: s3
+      DATABASE_HOST: db:5432
+      S3_ENDPOINT: http://storage:3900
+    volumes:
+      - appdata:/app/data
+    healthcheck:
+      disable: true
+    depends_on:
+      app:
+        condition: service_started
       db:
         condition: service_healthy
       storage:

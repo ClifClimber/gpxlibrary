@@ -81,19 +81,25 @@ Pure Node.js HTTP server. No framework. Routes:
 - `GET /api/geo` — returns `{provinces, ccaa, zones}` distinct values from DB
 - `GET /api/config/activities` — activity list with colors
 - `GET /api/admin/version` — `{version, name, db}` (`db` is the active engine)
-- `POST /api/db/import-temp` (SSE) — runs `import-from-temp.js`, streams log lines
-- `POST /api/db/enrich-road-types?ids=1,2,3` (SSE) — runs `enrich-road-types.js`
-- `POST /api/db/clean?ids=…` (SSE) — runs `clean-tracks.js`
-- `POST /api/import/wikiloc` (SSE) — body `{ url }`, runs `wikiloc-import.js`; requires `wikiloc_token` in `osm-settings.json`
+- `POST /api/db/import-temp` (SSE) — enqueues `import-from-temp` job, streams output
+- `POST /api/db/enrich-road-types?ids=1,2,3` (SSE) — enqueues `enrich-road-types` job
+- `POST /api/db/clean?ids=…` (SSE) — enqueues `clean-tracks` job
+- `POST /api/import/wikiloc` (SSE) — body `{ url }`, enqueues `wikiloc-import`; requires `wikiloc_token` in `osm-settings.json`
+- `GET /api/jobs` — job list (`?limit=N`, includes `worker: 'embedded'|'external'`)
+- `GET /api/jobs/:id` — single job
+- `GET /api/jobs/:id/stream` (SSE) — live or historical output of a job
+- `POST /api/jobs/:id/cancel|retry` — cancel (sets `cancelling`) or retry (new job id)
 - `GET /api/config/settings` — returns `osm-settings.json` (token values masked)
 - `PATCH /api/config/settings` — updates allowed keys (`wikiloc_token`) in `osm-settings.json`
 - `/api/admin/…` — stats, backup, restore, vacuum, integrity
+
+All long-running operations go through the job queue (`queue/`). `apiRunScript(res, scriptPath, args)` enqueues the job and relays its SSE output from the DB, so closing the browser does not stop the work. The embedded worker (`EMBEDDED_WORKER !== '0'`) starts with the server; in Docker, `EMBEDDED_WORKER=0` on `app` and the standalone `worker` service runs `node worker.js`.
 
 ### Pages
 - `/` → `index.html` + `visor.js` + `visor.css` — Leaflet map, track list, filters, elevation profile
 - `/track?id=N` → `track.html` + `track.css` — detail view with tabs (Resumen, Puntos de paso, Tipos de camino, Subidas, Tiempo hoy)
 - `/editor` → `editor.html` — CRUD list, import from `_TEMP_`, tag editing
-- `/admin` → `admin.html` — tabs: Base de datos (backup/restore/vacuum, stats), Gestión de Tracks, Actividades, Sierras / Zonas, Provincias & CCAA, Parámetros (climb thresholds + Wikiloc token), Logs, Acerca de. Tabs are deep-linkable via `#tab` (e.g. `/admin#params`).
+- `/admin` → `admin.html` — tabs: Base de datos (backup/restore/vacuum, stats), Gestión de Tracks, Actividades, Sierras / Zonas, Provincias & CCAA, Parámetros (climb thresholds + Wikiloc token), **Trabajos** (job list/view/cancel/retry), Logs, Acerca de. Tabs are deep-linkable via `#tab` (e.g. `/admin#jobs`).
 - `/trazar` → `trazar.html` — route drawing/editing (draw, drag/insert/delete vertices, trim, waypoints, join other tracks, undo). `?join=1,2` opens several tracks joined in order (used by Comparar → Unir). Optional trail snapping via BRouter (brouter.de) and elevation via Open-Meteo. Saving builds a GPX client-side, uploads it with `/api/import/upload`, runs `/api/db/import-temp`, then PATCHes activity/notes. Editing an existing track always saves a new copy — source GPX files are never rewritten.
 
 ### Visor (`visor.js`)
@@ -133,6 +139,16 @@ The visor has a globe icon button in `#panel-head` that opens an import modal. C
 
 ### OSM enrichment (`scripts/enrich-road-types.js`)
 Queries Overpass API for `highway` ways inside track bbox. Matches each GPS segment midpoint to nearest way. Stores compact fraction-based segments `{t, f0, f1}` in `road_type_seq` for the frontend to colorize.
+
+### Job queue — `queue/`
+All long-running operations run as jobs in the database so closing the browser doesn't abort them.
+
+- **`queue/index.js`** — `createQueue(db)` returns `{ enqueue, claim, heartbeat, log, complete, fail, release, markCancelled, cancel, retry, get, list, logs, activeCount, dataVersion, recoverStale, prune }`. Claim uses `SELECT … FOR UPDATE SKIP LOCKED` on Postgres (no lock on SQLite). `fail` applies exponential backoff (30 s·2^n) up to `maxAttempts`. `dataVersion()` → epoch ms of last terminal job change, used to invalidate the catalog cache.
+- **`queue/worker.js`** — `createWorker({ getQueue, onFinish, isPaused, … })` spawns `scripts/<type>.js`, flushes log lines every 300 ms, sends heartbeats every 5 s, kills child on `cancelling`. Housekeeping every 30 s: `recoverStale(90)` + `prune(30)`.
+- **`queue/jobs.js`** — `JOBS` map of type → `{ label, maxAttempts? }` for all scriptable operations; `scriptOf(type)`, `levelOf(text)`, `summarize(lines, code)`.
+- **`worker.js`** (root) — standalone worker for Docker (`EMBEDDED_WORKER=0`); migrates Postgres schema, opens the same `openSql()` instance as the server, same `onFinish` hooks. Handled by the `worker` service in `docker-compose.yml`.
+
+New job types go in `queue/jobs.js` (add to `JOBS`) and must have a matching `scripts/<type>.js` that reads `process.argv` for `--ids`/`--all`/`--url` etc. (same CLI interface already used by the existing scripts). Tests: `queue/queue.test.js`.
 
 ## Design system — `shared.css` (MANDATORY for every page)
 

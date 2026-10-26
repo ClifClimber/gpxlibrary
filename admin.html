@@ -173,6 +173,7 @@ tr.inactive td { opacity: .4; }
     <button class="seg-tab" data-tab="sierras">Sierras / Zonas</button>
     <button class="seg-tab" data-tab="geo">Provincias &amp; CCAA</button>
     <button class="seg-tab" data-tab="params">Parámetros</button>
+    <button class="seg-tab" data-tab="jobs">Trabajos</button>
     <button class="seg-tab" data-tab="logs">Logs</button>
     <button class="seg-tab" data-tab="about">Acerca de</button>
   </div>
@@ -574,6 +575,22 @@ tr.inactive td { opacity: .4; }
   </div>
 
   <!-- ── Tab: Logs ── -->
+  <div class="tab-panel" id="tab-jobs">
+    <div class="card">
+      <div class="card-head">
+        <h2>Trabajos en segundo plano</h2>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span id="jobs-worker" style="font-size:12px;color:var(--muted)"></span>
+          <button class="btn btn-ghost btn-sm" id="btn-jobs-refresh">↻</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <p class="section-desc" style="margin-top:0">Importaciones, OSM, IBP, limpieza y el resto de operaciones largas se ponen en cola y las ejecuta un worker, una tras otra. Siguen aunque cierres la página; aquí puedes ver su salida, cancelarlas o repetirlas.</p>
+        <div id="jobs-list"><div class="section-desc">Cargando…</div></div>
+      </div>
+    </div>
+  </div>
+
   <div class="tab-panel" id="tab-logs">
     <div class="card">
       <div class="card-head">
@@ -1059,7 +1076,7 @@ document.getElementById('btn-integrity').addEventListener('click', async () => {
   } finally { btn.disabled = false; btn.textContent = 'Verificar'; }
 });
 
-function streamScript(url, title, postBody, onSuccess) {
+function streamScript(url, title, postBody, onSuccess, method = 'POST') {
   const modal    = document.getElementById('log-modal');
   const body     = document.getElementById('log-modal-body');
   const closeBtn = document.getElementById('log-modal-btn');
@@ -1077,7 +1094,7 @@ function streamScript(url, title, postBody, onSuccess) {
     body.scrollTop = body.scrollHeight;
   }
 
-  const opts = { method: 'POST' };
+  const opts = { method };
   if (postBody) { opts.headers = { 'Content-Type': 'application/json' }; opts.body = JSON.stringify(postBody); }
 
   return fetch(url, opts).then(r => {
@@ -1251,6 +1268,79 @@ document.querySelectorAll('#admin-tabs .seg-tab').forEach(btn => {
 loadStats();
 loadBackups();
 loadBackupConfig();
+// ── Trabajos en segundo plano ───────────────────────────────────────
+const JOB_STATUS = {
+  queued:     ['En cola', 'badge-blue'],
+  running:    ['En marcha', 'badge-blue'],
+  cancelling: ['Cancelando', 'badge-red'],
+  done:       ['Hecho', 'badge-green'],
+  failed:     ['Fallido', 'badge-red'],
+  cancelled:  ['Cancelado', ''],
+};
+const fmtWhen = iso => iso ? new Date(iso).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+function fmtDuration(j) {
+  if (!j.startedAt) return '—';
+  const s = Math.max(0, Math.round(((j.finishedAt ? new Date(j.finishedAt) : new Date()) - new Date(j.startedAt)) / 1000));
+  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${Math.floor(s / 3600)} h ${Math.floor(s % 3600 / 60)} min`;
+}
+let jobsTimer = null;
+async function loadJobs() {
+  const box = document.getElementById('jobs-list');
+  try {
+    const d = await fetch('/api/jobs?limit=60').then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    document.getElementById('jobs-worker').textContent = d.worker === 'embedded' ? 'Worker integrado en el servidor' : 'Worker externo';
+    if (!d.jobs.length) { box.innerHTML = '<div class="section-desc">Todavía no hay trabajos.</div>'; return; }
+    box.innerHTML = `<table class="table" style="font-size:13px"><thead><tr>
+      <th>#</th><th>Trabajo</th><th>Estado</th><th>Creado</th><th class="num">Duración</th><th>Última línea</th><th></th></tr></thead><tbody>
+      ${d.jobs.map(j => {
+        const [txt, cls] = JOB_STATUS[j.status] || [j.status, ''];
+        const active = ['queued', 'running'].includes(j.status);
+        const retry = j.attempts > 1 ? ` <span style="color:var(--muted)">· intento ${j.attempts}/${j.maxAttempts}</span>` : '';
+        const last = j.error && j.status !== 'done' ? j.error : (j.lastLine || '');
+        return `<tr data-id="${j.id}">
+          <td style="color:var(--muted)">${j.id}</td>
+          <td>${esc(j.label)}${retry}</td>
+          <td><span class="badge ${cls}">${txt}</span></td>
+          <td style="white-space:nowrap">${fmtWhen(j.createdAt)}</td>
+          <td class="num" style="white-space:nowrap">${fmtDuration(j)}</td>
+          <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)" title="${esc(last)}">${esc(last)}</td>
+          <td style="white-space:nowrap;text-align:right">
+            <button class="btn btn-ghost btn-sm" data-act="view">Ver</button>
+            ${active ? '<button class="btn btn-ghost btn-sm" data-act="cancel">Cancelar</button>' : ''}
+            ${['failed', 'cancelled', 'done'].includes(j.status) ? '<button class="btn btn-ghost btn-sm" data-act="retry">Repetir</button>' : ''}
+          </td></tr>`;
+      }).join('')}</tbody></table>`;
+  } catch (e) {
+    box.innerHTML = `<div class="section-desc">No se pudieron leer los trabajos: ${esc(e.message)}</div>`;
+  }
+}
+document.getElementById('jobs-list').addEventListener('click', async e => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const id = btn.closest('tr').dataset.id, act = btn.dataset.act;
+  if (act === 'view') {
+    streamScript(`/api/jobs/${id}/stream`, `Trabajo #${id}`, null, null, 'GET').finally(loadJobs);
+    return;
+  }
+  if (act === 'cancel' && !confirm(`¿Cancelar el trabajo #${id}?`)) return;
+  btn.disabled = true;
+  const r = await fetch(`/api/jobs/${id}/${act}`, { method: 'POST' });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) alert(d.error || 'No se pudo');
+  if (act === 'retry' && d.job) streamScript(`/api/jobs/${d.job.id}/stream`, `Trabajo #${d.job.id}`, null, null, 'GET').finally(loadJobs);
+  loadJobs();
+});
+document.getElementById('btn-jobs-refresh').addEventListener('click', loadJobs);
+document.querySelector('#admin-tabs [data-tab="jobs"]').addEventListener('click', () => {
+  loadJobs();
+  clearInterval(jobsTimer);
+  jobsTimer = setInterval(() => {
+    if (!document.getElementById('tab-jobs').classList.contains('active')) return clearInterval(jobsTimer);
+    if (document.getElementById('log-modal').hidden) loadJobs();
+  }, 3000);
+});
+
 // ── Motor de base de datos y almacén de GPX ─────────────────────────
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 function statusTile(active, title, info) {

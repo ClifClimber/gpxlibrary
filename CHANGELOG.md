@@ -1,5 +1,22 @@
 # Changelog
 
+## Sin publicar
+
+### Cola de trabajos propia
+- Operaciones largas (importar, OSM, IBP, limpiar…) ya no bloquean el servidor ni mueren si cierras la página: se ponen en una **cola en la base de datos** y las ejecuta un **worker** que sigue corriendo en segundo plano
+- Tablas `jobs` + `job_logs` en SQLite y PostgreSQL (migración automática al arrancar); el worker reclama trabajos con `SELECT … FOR UPDATE SKIP LOCKED` (o su equivalente en SQLite)
+- Reintento con backoff exponencial (30 s·2^n), recuperación de trabajos huérfanos tras 90 s sin heartbeat, limpieza automática de más de 30 días
+- El worker está **integrado en el servidor** por defecto; en Docker corre como **contenedor independiente** (`worker` en `docker-compose`) con `EMBEDDED_WORKER=0` en `app`; se puede escalar: `docker compose up -d --scale worker=2`
+- `queue/index.js` — `createQueue(db)`: API completa (`enqueue`, `claim`, `heartbeat`, `log`, `complete`, `fail`, `release`, `cancel`, `retry`, `get`, `list`, `logs`, `activeCount`, `dataVersion`, `recoverStale`, `prune`)
+- `queue/worker.js` — `createWorker(opts)`: lanza el script como proceso hijo, transmite la salida línea a línea, mata en `cancelling`, housekeeping cada 30 s
+- `queue/jobs.js` — catálogo de tipos de trabajos con `label`, `maxAttempts` y `scriptOf(type)`
+- Admin → **Trabajos**: tabla de los últimos 60 trabajos con estado, duración, última línea, Ver (stream SSE en vivo o histórico), Cancelar y Repetir; auto-refresco cada 3 s mientras el panel está abierto
+- La caché del catálogo (`/api/catalog`) se invalida con `dataVersion` al terminar cualquier trabajo, incluyendo los del worker externo
+- Los cambios de motor y de almacén se bloquean mientras hay trabajos activos, con enlace al panel de Trabajos
+- Tests: `queue/queue.test.js` (6 escenarios por motor × 2 motores = 12 tests nuevos)
+
+---
+
 ## v2.5.0 — 2026-10-25
 
 ### La aplicación en Docker

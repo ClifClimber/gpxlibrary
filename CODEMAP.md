@@ -63,6 +63,14 @@ gpxlibrary/
 ├── domain/             Lógica pura (sin BD ni disco): parseo GPX, métricas, clasificación,
 │                       IBP, simplificación/limpieza y exportación GPX + tests (npm test)
 │
+├── queue/              Cola de trabajos en BD (SQLite y PostgreSQL)
+│   ├── index.js        createQueue(db): enqueue/claim/heartbeat/log/complete/fail/cancel/retry/list/logs/…
+│   ├── worker.js       createWorker(): lanza scripts como procesos hijo, heartbeat, housekeeping
+│   ├── jobs.js         Catálogo de tipos (label, maxAttempts, scriptOf)
+│   └── queue.test.js   Tests de contrato (flujo, concurrencia, reintentos, cancelar, logs, worker)
+│
+├── worker.js           Worker standalone para Docker (EMBEDDED_WORKER=0 en el contenedor app)
+│
 └── TracksGps/          NO en git (.gitignore)
     ├── store/          Originales inmutables: {uid}.gpx
     └── _TEMP_/         Zona de entrada; se vacía al importar

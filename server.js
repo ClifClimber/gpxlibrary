@@ -33,18 +33,7 @@ const ROOT = __dirname;
 let _oauthState = null; // { state, ts } — CSRF token para el flujo OAuth
 
 // ── Operations log ─────────────────────────────────────────────────
-const LOGS_DIR = path.join(ROOT, 'data', 'logs');
-try { fs.mkdirSync(LOGS_DIR, { recursive: true }); } catch {}
-
-function logFilePath(date) {
-  return path.join(LOGS_DIR, `${date || new Date().toISOString().slice(0, 10)}.log`);
-}
-
-function appendLog(level, op, msg, extra = {}) {
-  const ts  = new Date().toISOString();
-  const entry = JSON.stringify({ ts, level, op, msg, ...extra });
-  try { fs.appendFileSync(logFilePath(), entry + '\n'); } catch {}
-}
+const { LOGS_DIR, logFilePath, appendLog } = require('./scripts/applog');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -138,93 +127,114 @@ function countGpx(dir) {
   return n;
 }
 
-// ── API: ejecutar script con SSE ───────────────────────────────────
-let runningScripts = 0;
+// ── Trabajos en segundo plano (cola en la BD) ──────────────────────
+// Long operations (imports, OSM, IBP…) are queued as jobs and run by a worker: embedded here for local
+// use, or the separate `worker` service in docker-compose (EMBEDDED_WORKER=0). The pages still get the
+// same SSE stream: apiRunScript queues the job and relays its output from the database, so a closed
+// browser no longer stops an import.
+const { createQueue, TERMINAL } = require('./queue');
+const { createWorker } = require('./queue/worker');
+const { JOBS, summarize } = require('./queue/jobs');
+const jobQueue = () => createQueue(sqlDb());
 
-function apiRunScript(res, scriptPath, args = []) {
-  res.writeHead(200, {
-    'Content-Type':  'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection':    'keep-alive',
-  });
-
-  const opName = path.basename(scriptPath, '.js');
-  appendLog('info', opName, `${opName} iniciado`, { args });
-
-  const send = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  send({ type: 'start' });
-
-  const child = spawn(process.execPath, [scriptPath, ...args], {
-    cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  runningScripts++;
-  child.on('close', () => { runningScripts--; });
-
-  let buf = '', lastImported = -1, allLines = [];
-
-  function flush(chunk) {
-    buf += chunk.toString().replace(/\r(?!\n)/g, '\n');
-    const lines = buf.split('\n');
-    buf = lines.pop();
-    for (const raw of lines) {
-      const text = raw.trim();
-      if (!text) continue;
-      allLines.push(text);
-      // Throttle repeated counter lines ("Importados: N") to every 10
-      const m = text.match(/Importados:\s*(\d+)/);
-      if (m) {
-        const n = parseInt(m[1]);
-        if (n - lastImported < 10) continue;
-        lastImported = n;
-        send({ type: 'progress', text, n });
-        continue;
-      }
-      const type = text.startsWith('✗') || text.startsWith('Error') ? 'error'
-                 : text.startsWith('⚠')  ? 'warn' : 'log';
-      send({ type, text });
-    }
-  }
-
-  child.stdout.on('data', flush);
-  child.stderr.on('data', chunk => {
-    const text = chunk.toString().trim();
-    if (text) { allLines.push(text); send({ type: 'error', text }); }
-  });
-  child.on('close', code => {
-    if (buf.trim()) { allLines.push(buf.trim()); send({ type: 'log', text: buf.trim() }); }
-    send({ type: 'done', code });
-    // Build compact summary for the admin log
-    const extra = { code };
-    const mImp = allLines.join('\n').match(/Importados\s*:\s*(\d+)/);
-    const mEx  = allLines.join('\n').match(/Ya exist[^:]*:\s*(\d+)/);
-    const mRev = allLines.join('\n').match(/(?:Enviados a _REVIEW_|Por revisar)\s*:\s*(\d+)/);
-    const mErr = allLines.join('\n').match(/Errores\s*:\s*(\d+)/);
-    if (mImp || mEx || mRev || mErr) {
-      extra.importados = mImp ? +mImp[1] : 0;
-      extra.existian   = mEx  ? +mEx[1]  : 0;
-      extra.review     = mRev ? +mRev[1] : 0;
-      extra.errores    = mErr ? +mErr[1] : 0;
-    }
-    const errorLines = allLines.filter(l => l.startsWith('✗') || /^Error/.test(l));
-    if (errorLines.length) extra.detalleErrores = errorLines.slice(0, 5);
-    const osmApplied = allLines.filter(l => /OSM\s*:.*v[ií]as aplicadas/.test(l)).length;
-    const osmNoCache = allLines.filter(l => /OSM\s*:.*sin cach/i.test(l)).length;
-    const osmObs     = allLines.filter(l => /OSM\s*:.*obsoleta/i.test(l)).length;
-    if (osmApplied || osmNoCache || osmObs) {
-      extra.osm_aplicado  = osmApplied;
-      extra.osm_sin_cache = osmNoCache + osmObs;
-    }
-    appendLog(code === 0 ? 'info' : 'error', opName, `${opName} ${code === 0 ? 'completado' : 'fallido'}`, extra);
+const worker = process.env.EMBEDDED_WORKER === '0' ? null : createWorker({
+  getQueue: jobQueue,
+  isPaused: () => switchingEngine || switchingStorage,
+  onFinish: (job, code, lines) => {
+    appendLog(code === 0 ? 'info' : 'error', job.type, `${job.type} ${code === 0 ? 'completado' : code === 130 ? 'cancelado' : 'fallido'}`,
+      { job: job.id, ...summarize(lines, code) });
     if (code === 0) invalidateCatalogCache();
     checkpointWal();
+  },
+});
+
+async function apiRunScript(res, scriptPath, args = []) {
+  const type = path.basename(scriptPath, '.js');
+  try {
+    if (!JOBS[type]) throw new Error(`Tipo de trabajo desconocido: ${type}`);
+    if (switchingEngine || switchingStorage) throw new Error('Hay un cambio de motor o de almacén en curso; inténtalo en un momento');
+    const job = await jobQueue().enqueue(type, { args }, { maxAttempts: JOBS[type].maxAttempts || 1 });
+    appendLog('info', type, `${type} en cola`, { job: job.id, args });
+    return streamJob(res, job.id);
+  } catch (e) {
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+    res.write(`data: ${JSON.stringify({ type: 'error', text: '✗ ' + e.message })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'done', code: 1 })}\n\n`);
     res.end();
-  });
-  child.on('error', err => {
-    send({ type: 'error', text: err.message });
+  }
+}
+
+// SSE relay of a job: its output lines as they are stored, then `done` when it finishes.
+// Leaving the page only stops the relay, never the job.
+async function streamJob(res, id) {
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+  const send = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+  let closed = false, seq = 0, lastImported = -1, announced = false;
+  res.on('close', () => { closed = true; });
+  const relay = lines => {
+    for (const l of lines) {
+      seq = l.seq;
+      const m = l.text.match(/Importados:\s*(\d+)/);                // throttle "Importados: N" counters
+      if (m) {
+        const n = parseInt(m[1]);
+        if (n - lastImported >= 10) { lastImported = n; send({ type: 'progress', text: l.text, n }); }
+        continue;
+      }
+      send({ type: l.level, text: l.text });
+    }
+  };
+  send({ type: 'start', job: id });
+  try {
+    while (!closed) {
+      const q = jobQueue();
+      relay(await q.logs(id, seq));
+      const job = await q.get(id);
+      if (!job) { send({ type: 'error', text: '✗ El trabajo ya no existe' }); send({ type: 'done', code: 1 }); break; }
+      if (job.status === 'queued' && !job.startedAt && !announced) { announced = true; send({ type: 'log', text: `En cola (trabajo #${id})…` }); }
+      if (TERMINAL.includes(job.status)) {
+        relay(await q.logs(id, seq));                                  // lines written just before finishing
+        send({ type: 'done', code: job.status === 'done' ? 0 : 1, status: job.status });
+        break;
+      }
+      await new Promise(r => setTimeout(r, 400));
+    }
+  } catch (e) {
+    send({ type: 'error', text: '✗ ' + e.message });
     send({ type: 'done', code: 1 });
-    appendLog('error', opName, `${opName} error: ${err.message}`);
-    res.end();
-  });
+  }
+  res.end();
+}
+
+async function apiJobs(res, searchParams) {
+  try {
+    const limit = Math.min(200, parseInt(searchParams.get('limit')) || 50);
+    const jobs = (await jobQueue().list({ limit })).map(j => ({ ...j, label: JOBS[j.type]?.label || j.type }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ jobs, worker: worker ? 'embedded' : 'external' }));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+async function apiJobAction(res, id, action) {
+  try {
+    const q = jobQueue();
+    const out = action === 'cancel' ? { status: await q.cancel(id) } : { job: await q.retry(id) };
+    const fail = action === 'cancel' ? !out.status && 'El trabajo ya había terminado' : !out.job && 'Solo se puede reintentar un trabajo terminado';
+    if (fail) { res.writeHead(409, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: fail })); }
+    appendLog('info', 'jobs', `Trabajo ${id}: ${action === 'cancel' ? 'cancelación pedida' : `reintentado como ${out.job.id}`}`);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(out));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+// Jobs waiting or running: the engine/store switches wait for them
+async function busyJobs() {
+  try { return (await jobQueue().activeCount()) > 0; } catch { return false; }
 }
 
 // ── Parsear cuerpo JSON ───────────────────────────────────────────
@@ -554,8 +564,11 @@ async function buildCatalog() {
   return JSON.stringify(catalog);
 }
 
+let _catalogDataVersion = null;
 async function apiCatalog(req, res) {
   try {
+    const version = await jobQueue().dataVersion().catch(() => null);   // a job finished since → rebuild
+    if (version !== _catalogDataVersion) { _catalogDataVersion = version; _catalogCache = null; }
     if (!_catalogCache) {
       _catalogCache = await buildCatalog();
       _catalogCacheSize = Buffer.byteLength(_catalogCache);
@@ -952,7 +965,7 @@ function sqliteStatus() {
 
 async function apiEngineStatus(res) {
   try {
-    const body = { driver: repo.driver, label: ENGINE_LABEL[repo.driver], busy: switchingEngine || runningScripts > 0, locked: BACKENDS_LOCKED,
+    const body = { driver: repo.driver, label: ENGINE_LABEL[repo.driver], busy: switchingEngine || await busyJobs(), locked: BACKENDS_LOCKED,
       sqlite: sqliteStatus(), postgres: await postgresStatus() };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(body));
@@ -1003,7 +1016,7 @@ async function apiEngineSwitch(req, res) {
   if (!['sqlite', 'postgres'].includes(to)) { log('✗ Motor de destino no válido'); return finish(1); }
   if (to === repo.driver) { log(`✗ ${ENGINE_LABEL[to]} ya es el motor en uso`); return finish(1); }
   if (switchingEngine || switchingStorage) { log('✗ Ya hay un cambio en curso'); return finish(1); }
-  if (runningScripts > 0) { log('✗ Hay una importación u otro proceso en marcha: espera a que termine'); return finish(1); }
+  if (await busyJobs()) { log('✗ Hay trabajos en cola o en marcha (Admin → Trabajos): espera a que terminen'); return finish(1); }
   if (!require('./config').DATABASE_URL) { log('✗ Falta DATABASE_URL en .env'); return finish(1); }
 
   switchingEngine = true;
@@ -1075,7 +1088,7 @@ async function storeStatus(driver) {
 
 async function apiStorageStatus(res) {
   try {
-    const body = { driver: blob.driver, label: STORAGE_LABEL[blob.driver], busy: switchingStorage || runningScripts > 0, locked: BACKENDS_LOCKED,
+    const body = { driver: blob.driver, label: STORAGE_LABEL[blob.driver], busy: switchingStorage || await busyJobs(), locked: BACKENDS_LOCKED,
       local: await storeStatus('local'), s3: await storeStatus('s3') };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(body));
@@ -1097,7 +1110,7 @@ async function apiStorageSwitch(req, res) {
   if (!['local', 's3'].includes(to)) { log('✗ Almacén de destino no válido'); return finish(1); }
   if (to === blob.driver) { log(`✗ ${STORAGE_LABEL[to]} ya es el almacén en uso`); return finish(1); }
   if (switchingStorage || switchingEngine) { log('✗ Ya hay un cambio en curso'); return finish(1); }
-  if (runningScripts > 0) { log('✗ Hay una importación u otro proceso en marcha: espera a que termine'); return finish(1); }
+  if (await busyJobs()) { log('✗ Hay trabajos en cola o en marcha (Admin → Trabajos): espera a que terminen'); return finish(1); }
   if (!require('./config').S3.endpoint) { log('✗ Falta la configuración S3 en .env: ejecuta node scripts/storage-setup.js'); return finish(1); }
 
   switchingStorage = true;
@@ -1611,6 +1624,15 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/admin/db-engine' && method === 'GET') return apiEngineStatus(res);
   if (pathname === '/api/admin/db-engine/switch' && method === 'POST') return apiEngineSwitch(req, res);
   if (pathname === '/api/admin/storage' && method === 'GET') return apiStorageStatus(res);
+  if (pathname === '/api/jobs' && method === 'GET') return apiJobs(res, searchParams);
+  const jobMatch = pathname.match(/^\/api\/jobs\/(\d+)(?:\/(stream|cancel|retry))?$/);
+  if (jobMatch && jobMatch[2] === 'stream' && method === 'GET') return streamJob(res, parseInt(jobMatch[1]));
+  if (jobMatch && ['cancel', 'retry'].includes(jobMatch[2]) && method === 'POST') return apiJobAction(res, parseInt(jobMatch[1]), jobMatch[2]);
+  if (jobMatch && !jobMatch[2] && method === 'GET') {
+    const job = await jobQueue().get(parseInt(jobMatch[1]));
+    res.writeHead(job ? 200 : 404, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(job ? { ...job, label: JOBS[job.type]?.label || job.type } : { error: 'Not found' }));
+  }
   if (pathname === '/api/admin/storage/switch' && method === 'POST') return apiStorageSwitch(req, res);
 
   if (pathname === '/api/admin/version' && method === 'GET') {
@@ -1744,12 +1766,17 @@ if (!process.env.HOST) {
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.once(sig, () => {
     server.close();
-    Promise.allSettled([repo.close(), blob.close()]).finally(() => process.exit(0));
+    Promise.allSettled([worker ? worker.stop() : null]).then(() => Promise.allSettled([repo.close(), blob.close()])).finally(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();
   });
 }
 
-server.listen(PORT, HOST, () => {
+// Postgres schema migrations (e.g. the jobs table) before serving; SQLite migrates on open
+const ready = repo.driver === 'postgres' ? require('./repo/pg-migrate').migrate(repo.pool, console.log) : Promise.resolve();
+ready.catch(e => { console.error('✗ Migración de PostgreSQL: ' + e.message); process.exit(1); });
+
+ready.then(() => server.listen(PORT, HOST, () => {
+  if (worker) { worker.start(); console.log(`  Worker integrado: ${worker.id}`); }
   const url = `http://localhost:${PORT}`;
   console.log(`\n  GPX Library  →  ${url}\n`);
   appendLog('info', 'server', `Servidor iniciado en puerto ${PORT}`);
@@ -1772,4 +1799,4 @@ server.listen(PORT, HOST, () => {
       }
     } catch (e) { console.error('  ✗ Auto-backup:', e.message); }
   });
-});
+}));

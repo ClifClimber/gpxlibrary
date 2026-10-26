@@ -47,7 +47,7 @@ async function postgresFixture() {
   await admin.end();
   const url = new URL(config.DATABASE_URL); url.pathname = '/gpxlibrary_test';
   const pool = new Pool({ connectionString: url.toString() });
-  await pool.query('DROP TABLE IF EXISTS tracks, config_activities, config_sierras, schema_migrations CASCADE');
+  await pool.query('DROP TABLE IF EXISTS tracks, config_activities, config_sierras, job_logs, jobs, schema_migrations CASCADE');
   await migrate(pool);
   for (const t of SEED) {
     const [geom, ele] = lineParams(t.pts);
