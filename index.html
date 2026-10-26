@@ -55,7 +55,6 @@
     <aside id="panel" class="floating">
       <div id="panel-head">
         <div id="list-count">—</div>
-        <a href="/trazar" class="btn btn-primary btn-sm" id="btn-crear-ruta" title="Crear una ruta nueva">+ Crear ruta</a>
         <select id="sort-select" title="Ordenar">
           <option value="name">Nombre A–Z</option>
           <option value="date">Más recientes</option>
@@ -71,6 +70,7 @@
       </div>
       <div id="list-summary"></div>
       <div id="tracklist"><div class="empty-state">Cargando…</div></div>
+      <div id="tracklist-pages"></div>
     </aside>
 
     <!-- Elevation profile sheet -->
@@ -113,6 +113,12 @@
       </div>
       <div id="sel-hint">Arrastra sobre el perfil para medir un tramo</div>
     </section>
+
+    <!-- Crear ruta: chip flotante sobre el mapa, esquina superior derecha -->
+    <a href="/trazar" id="btn-crear-ruta" class="chip" title="Crear una ruta nueva">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Crear ruta
+    </a>
   </div>
 
   <!-- Popovers (positioned under their chip) -->

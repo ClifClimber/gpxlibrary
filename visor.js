@@ -148,6 +148,7 @@ let baseName = 'Claro';
 try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}
 tileLayers[baseName].addTo(map);
 map.on('baselayerchange', e => { try { localStorage.setItem('visor-base-layer', e.name); } catch {} });
+map.on('moveend zoomend', () => applyFilters());
 L.control.layers(tileLayers, null, { position:'topright', collapsed:true }).addTo(map);
 L.control.zoom({ position:'topright' }).addTo(map);
 
@@ -679,10 +680,12 @@ const tagsOk   = (t, f) => f.tags.size === 0    || (t.tags || []).some(x => f.ta
 
 function applyFilters() {
   const f = readFilters();
+  const vb = map.getBounds();
   let totalDist = 0, totalEle = 0, visCount = 0;
   items.forEach((it, i) => {
     const t = it.track;
-    const ok = (idSet.size === 0 || idSet.has(t.id)) &&
+    const inView = !t.bounds || vb.intersects(L.latLngBounds(t.bounds[0], t.bounds[1]));
+    const ok = inView && (idSet.size === 0 || idSet.has(t.id)) &&
       baseMatch(t, f) && actOk(t, f) && sierraOk(t, f) && tagsOk(t, f);
     it.visible = ok;
     if (ok) {
@@ -690,6 +693,7 @@ function applyFilters() {
     } else if (activeIdx === i) it.layer.remove();
   });
   syncClusterMarkers();
+  _listPage = 0;
   $('list-count').innerHTML = visCount === CATALOG.length
     ? `${visCount} rutas`
     : `${visCount} rutas <small>de ${CATALOG.length}</small>`;
@@ -744,20 +748,34 @@ const ROUTE_ICON = {
   line: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="4" cy="12" r="2"/><circle cx="20" cy="12" r="2"/><line x1="6.5" y1="12" x2="17.5" y2="12"/></svg>',
 };
 let _listKey = '';
+const PAGE_SIZE = 15;
+let _listPage = 0;
+
 function renderList(force) {
   const list = $('tracklist');
+  const pagesEl = $('tracklist-pages');
   const visible = items.map((it, ri) => ({ it, ri })).filter(x => x.it.visible);
   const key = sortMode + '|' + activeIdx + '|' + visible.map(x => x.ri).join(',');
   if (!force && key === _listKey) return;
   _listKey = key;
+  _listPage = Math.min(_listPage, Math.max(0, Math.ceil(visible.length / PAGE_SIZE) - 1));
   if (!visible.length) {
-    list.innerHTML = '<div class="empty-state">Ninguna ruta coincide<p>Prueba a quitar algún filtro.</p></div>';
+    list.innerHTML = '<div class="empty-state">Ninguna ruta en esta zona<p>Mueve el mapa o quita algún filtro.</p></div>';
+    pagesEl.innerHTML = '';
     return;
   }
   const cmp = SORTERS[sortMode] || SORTERS.name;
   visible.sort((a, b) => cmp(a.it.track, b.it.track));
-  list.innerHTML = visible.map(x => trackItemHtml(x.it.track, x.ri)).join('');
+  const pages = Math.ceil(visible.length / PAGE_SIZE);
+  const start = _listPage * PAGE_SIZE;
+  list.innerHTML = visible.slice(start, start + PAGE_SIZE).map(x => trackItemHtml(x.it.track, x.ri)).join('');
+  if (pages <= 1) { pagesEl.innerHTML = ''; return; }
+  pagesEl.innerHTML = Array.from({ length: pages }, (_, i) =>
+    `<button class="page-dot${i === _listPage ? ' active' : ''}" data-p="${i}">${i + 1}</button>`
+  ).join('');
 }
+
+function goToPage(p) { _listPage = p; _listKey = ''; renderList(); }
 
 const tracklistEl = $('tracklist');
 tracklistEl.addEventListener('click', e => {
@@ -771,6 +789,11 @@ tracklistEl.addEventListener('click', e => {
   }
   activateTrack(idx, true);
 });
+$('tracklist-pages').addEventListener('click', e => {
+  const btn = e.target.closest('.page-dot');
+  if (btn) goToPage(+btn.dataset.p);
+});
+
 let hoveredIdx = null;
 tracklistEl.addEventListener('mouseover', e => {
   const item = e.target.closest('.track-item');
@@ -789,7 +812,7 @@ $('sort-select').value = SORTERS[sortMode] ? sortMode : 'name';
 $('sort-select').addEventListener('change', e => {
   sortMode = e.target.value;
   try { localStorage.setItem('visor-sort', sortMode); } catch {}
-  renderList();
+  _listPage = 0; renderList();
 });
 
 // ── Cascading pill counts ────────────────────────────────────────────
