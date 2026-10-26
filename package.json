@@ -1,13 +1,12 @@
 {
   "name": "gpx-library",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "GPX Track Viewer with Leaflet",
   "scripts": {
     "start": "node server.js",
     "start-basic": "npx http-server . -p 8080 -o --cors",
     "dev": "node server.js",
     "db:import": "node scripts/import-from-temp.js",
-    "db:migrate-store": "node scripts/migrate-store.js",
     "db:export-folders": "node scripts/export-folders.js --dest",
     "db:copy-to-postgres": "node scripts/db-copy.js --to postgres",
     "db:copy-to-sqlite": "node scripts/db-copy.js --to sqlite",

@@ -2,9 +2,22 @@
 
 ## Sin publicar
 
+---
+
+## v2.6.0 — 2026-10-26
+
+### Solo PostgreSQL + S3 (eliminado SQLite y almacén local)
+- **SQLite eliminado**: el motor de base de datos es siempre PostgreSQL + PostGIS; `repo/sqlite.js`, `scripts/db.js` y toda la lógica de selección de motor han sido eliminados. Tag `v2.5-con-sqlite` preserva la versión anterior por si se necesita volver
+- **Almacén local eliminado**: los GPX originales están siempre en S3 (Garage en local, R2/AWS en producción); `blob/local.js`, `scripts/blob-copy.js` y `STORAGE_DRIVER` han sido eliminados
+- `config.js` simplificado: expone solo `DATABASE_URL`, `S3` y `LOCAL_SYNC_DIR`
+- `repo/sql.js` ahora es solo Postgres; mantiene la conversión `?` → `$N` para compatibilidad con los scripts
+- Admin → Base de datos: eliminados los cards de cambio de motor (SQLite↔Postgres) y de almacén (local↔S3); queda solo estado S3, sincronización local, estadísticas y mantenimiento
+- `scripts/migrate-store.js` eliminado (migración ya completada en todas las instalaciones)
+- 29 tests pasan
+
 ### Cola de trabajos propia
 - Operaciones largas (importar, OSM, IBP, limpiar…) ya no bloquean el servidor ni mueren si cierras la página: se ponen en una **cola en la base de datos** y las ejecuta un **worker** que sigue corriendo en segundo plano
-- Tablas `jobs` + `job_logs` en SQLite y PostgreSQL (migración automática al arrancar); el worker reclama trabajos con `SELECT … FOR UPDATE SKIP LOCKED` (o su equivalente en SQLite)
+- Tablas `jobs` + `job_logs` en PostgreSQL (migración automática al arrancar); el worker reclama trabajos con `SELECT … FOR UPDATE SKIP LOCKED`
 - Reintento con backoff exponencial (30 s·2^n), recuperación de trabajos huérfanos tras 90 s sin heartbeat, limpieza automática de más de 30 días
 - El worker está **integrado en el servidor** por defecto; en Docker corre como **contenedor independiente** (`worker` en `docker-compose`) con `EMBEDDED_WORKER=0` en `app`; se puede escalar: `docker compose up -d --scale worker=2`
 - `queue/index.js` — `createQueue(db)`: API completa (`enqueue`, `claim`, `heartbeat`, `log`, `complete`, `fail`, `release`, `cancel`, `retry`, `get`, `list`, `logs`, `activeCount`, `dataVersion`, `recoverStale`, `prune`)
@@ -12,8 +25,13 @@
 - `queue/jobs.js` — catálogo de tipos de trabajos con `label`, `maxAttempts` y `scriptOf(type)`
 - Admin → **Trabajos**: tabla de los últimos 60 trabajos con estado, duración, última línea, Ver (stream SSE en vivo o histórico), Cancelar y Repetir; auto-refresco cada 3 s mientras el panel está abierto
 - La caché del catálogo (`/api/catalog`) se invalida con `dataVersion` al terminar cualquier trabajo, incluyendo los del worker externo
-- Los cambios de motor y de almacén se bloquean mientras hay trabajos activos, con enlace al panel de Trabajos
-- Tests: `queue/queue.test.js` (6 escenarios por motor × 2 motores = 12 tests nuevos)
+- Tests: `queue/queue.test.js` (6 escenarios)
+
+### Copia local sincronizada de GPX
+- `scripts/sync-local.js`: descarga de S3 los GPX que faltan en `LOCAL_SYNC_DIR` (relativa a ROOT o absoluta); acepta `--dir <ruta>` y `--clean` (elimina locales huérfanos)
+- La sincronización se **encola automáticamente** tras cada importación exitosa (import-from-temp, wikiloc-import, komoot-import)
+- Admin → Base de datos → **Almacén de GPX**: campo de ruta local configurable y botón «Sincronizar ahora»
+- En Docker, `LOCAL_SYNC_DIR` del host se monta en `/sync` del contenedor; configurar la ruta en `.env` antes de `docker compose up`
 
 ---
 
