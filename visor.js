@@ -2,10 +2,13 @@
 'use strict';
 
 let CATALOG;
+let gCurrentUser = null;
+
 try {
-  const r = await fetch('/api/catalog');
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  CATALOG = await r.json();
+  const [catRes, meRes] = await Promise.all([fetch('/api/catalog'), fetch('/api/auth/me')]);
+  if (!catRes.ok) throw new Error(`HTTP ${catRes.status}`);
+  CATALOG = await catRes.json();
+  if (meRes.ok) gCurrentUser = await meRes.json();
 } catch (err) {
   document.getElementById('tracklist').innerHTML =
     `<div class="empty-state">⚠ No se pudo cargar el catálogo.<p>${err.message}</p></div>`;
@@ -661,6 +664,7 @@ function readFilters() {
     year:    $('year-filter').value,
     q:       norm($('text-search').value.trim()),
     ibpMin, ibpMax, ibpActive: ibpMin > 0 || ibpMax < 5,
+    onlyMine: !!($('chip-my-tracks') && !$('chip-my-tracks').hidden && $('chip-my-tracks').classList.contains('active')),
   };
 }
 
@@ -672,7 +676,8 @@ function baseMatch(t, f) {
     (!f.q || t._q.includes(f.q)) &&
     (!geoFilter || trackNearPoint(t, geoFilter.lat, geoFilter.lon, geoFilter.radius)) &&
     (!f.ibpActive || (() => { const idx = ibpLevelIdxV(ibpForTrackV(t)); return idx >= f.ibpMin && idx <= f.ibpMax; })()) &&
-    (f.rtype.size === 0 || (f.rtype.has('circular') && t.circular) || (f.rtype.has('lineal') && !t.circular));
+    (f.rtype.size === 0 || (f.rtype.has('circular') && t.circular) || (f.rtype.has('lineal') && !t.circular)) &&
+    (!f.onlyMine || (gCurrentUser && t.owner_id === gCurrentUser.sub));
 }
 const actOk    = (t, f) => f.acts.size === 0    || f.acts.has(t.activity || 'Sin clasificar');
 const sierraOk = (t, f) => f.sierras.size === 0 || f.sierras.has(t.sierra);
@@ -872,7 +877,7 @@ function countActiveFilters(f) {
   return f.acts.size + f.sierras.size + f.tags.size + f.rtype.size +
     (f.ibpActive ? 1 : 0) + (geoFilter ? 1 : 0) +
     (sliders.dist?.isActive() ? 1 : 0) + (sliders.ele?.isActive() ? 1 : 0) +
-    (f.year ? 1 : 0) + (f.q ? 1 : 0);
+    (f.year ? 1 : 0) + (f.q ? 1 : 0) + (f.onlyMine ? 1 : 0);
 }
 
 // ── Build filter UI ──────────────────────────────────────────────────
@@ -899,6 +904,16 @@ function buildFilters() {
     $('chip-sierra').hidden = false;
     $('sierra-filters').innerHTML = Object.keys(sierras).sort((a, b) => a.localeCompare(b, 'es')).map(s =>
       `<div class="cat-pill" data-sierra="${escHtml(s)}">${escHtml(s)}<span class="cat-count">${sierras[s]}</span></div>`).join('');
+  }
+
+  // Chip "Mis rutas" solo visible si el usuario está autenticado
+  if (gCurrentUser) {
+    const chipMy = $('chip-my-tracks');
+    chipMy.hidden = false;
+    chipMy.addEventListener('click', () => {
+      chipMy.classList.toggle('active');
+      applyFilters();
+    });
   }
 
   const tagMap = {};
@@ -972,6 +987,8 @@ $('clear-filters-btn').addEventListener('click', () => {
   Object.values(RESETS).forEach(fn => fn());
   $('text-search').value = '';
   $('search-clear').hidden = true;
+  const chipMy = $('chip-my-tracks');
+  if (chipMy) chipMy.classList.remove('active');
   closePopover();
   applyFilters();
 });

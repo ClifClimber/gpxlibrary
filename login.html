@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPX Library — Acceder</title>
+  <link rel="stylesheet" href="/shared.css">
+  <script src="/theme.js"></script>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); }
+    .login-card { width: min(360px, 100% - 32px); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 36px 32px; box-shadow: var(--shadow); }
+    .login-logo { font-size: 20px; font-weight: 700; color: var(--ink); margin-bottom: 28px; text-align: center; letter-spacing: -.02em; }
+    .login-logo span { color: var(--accent); }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 13px; font-weight: 500; color: var(--ink-2); margin-bottom: 5px; }
+    .field input { width: 100%; }
+    .btn-login { width: 100%; margin-top: 8px; }
+    #login-error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; min-height: 18px; }
+  </style>
+</head>
+<body>
+<div class="login-card">
+  <div class="login-logo">GPX <span>Library</span></div>
+  <form id="login-form">
+    <div class="field">
+      <label for="inp-user">Usuario o email</label>
+      <input class="input" type="text" id="inp-user" autocomplete="username" autofocus required>
+    </div>
+    <div class="field">
+      <label for="inp-pass">Contraseña</label>
+      <input class="input" type="password" id="inp-pass" autocomplete="current-password" required>
+    </div>
+    <button type="submit" class="btn btn-primary btn-login">Acceder</button>
+    <div id="login-error"></div>
+  </form>
+</div>
+<script>
+document.getElementById('login-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const err = document.getElementById('login-error');
+  err.textContent = '';
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: document.getElementById('inp-user').value.trim(), password: document.getElementById('inp-pass').value })
+    });
+    if (r.ok) {
+      const params = new URLSearchParams(location.search);
+      location.href = params.get('next') || '/';
+    } else {
+      const d = await r.json();
+      err.textContent = d.error || 'Error al iniciar sesión';
+      btn.disabled = false;
+    }
+  } catch {
+    err.textContent = 'Error de red';
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

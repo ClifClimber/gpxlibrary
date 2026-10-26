@@ -18,6 +18,7 @@ const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampl
 const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
 const { openSql } = require('./repo/sql');
+const { createToken, setCookie, clearCookie, authMiddleware, requireAuth, requireAdmin, hashPassword, checkPassword } = require('./auth');
 // Engine-neutral SQL on the active engine (shares the repository's Postgres pool; never closed here).
 const sqlDb = () => openSql({ pool: repo.pool });
 let repo = getRepo();   // reassigned when the engine is switched from Admin
@@ -48,7 +49,7 @@ const MIME = {
 
 // ── Archivos estáticos ─────────────────────────────────────────────
 // Public: the pages and styles at the root, the browser scripts listed here and assets/.
-const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js']);
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css']);
 function isPublicFile(rel) {
   if (rel.split('/').some(s => s.startsWith('.'))) return false;
   if (rel.startsWith('assets/')) return true;
@@ -496,15 +497,8 @@ function apiTempFiles(res, srcDir) {
 // Result is cached in memory and invalidated on any write.
 const MAX_CATALOG_PTS = 300;
 
-let _catalogCache = null;      // JSON string
-let _catalogCacheSize = 0;
-let _catalogEtag = '';
-
-function invalidateCatalogCache() { _catalogCache = null; }
-
-
-async function buildCatalog() {
-  const tracks = await repo.catalogTracks();
+async function buildCatalog(ownerId) {
+  const tracks = await repo.catalogTracks({ ownerId });
   const catalog = [];
   for(const t of tracks){
     if(t.sw_lat==null || t.ne_lat==null) continue;
@@ -547,28 +541,35 @@ async function buildCatalog() {
       movingTime:    t.moving_time  || null,
       stoppedTime:   t.stopped_time || null,
       circular:      !!t.circular,
+      owner_id:      t.owner_id     || null,
+      visibility:    t.visibility   || 'public',
       points,
     });
   }
   return JSON.stringify(catalog);
 }
 
+// Catalog cache: keyed by ownerId (null = public only, N = public + own private)
 let _catalogDataVersion = null;
+const _catalogCacheMap = new Map(); // ownerId → { data, etag, size }
+function invalidateCatalogCache() { _catalogDataVersion = null; _catalogCacheMap.clear(); }
+
 async function apiCatalog(req, res) {
   try {
-    const version = await jobQueue().dataVersion().catch(() => null);   // a job finished since → rebuild
-    if (version !== _catalogDataVersion) { _catalogDataVersion = version; _catalogCache = null; }
-    if (!_catalogCache) {
-      _catalogCache = await buildCatalog();
-      _catalogCacheSize = Buffer.byteLength(_catalogCache);
-      _catalogEtag = `"cat-${Date.now().toString(36)}"`;
-      console.log(`[catalog] built: ${Math.round(_catalogCacheSize/1024)}KB`);
+    const ownerId = req.user ? req.user.sub : null;
+    const version = await jobQueue().dataVersion().catch(() => null);
+    if (version !== _catalogDataVersion) { _catalogDataVersion = version; _catalogCacheMap.clear(); }
+    if (!_catalogCacheMap.has(ownerId)) {
+      const data = await buildCatalog(ownerId);
+      _catalogCacheMap.set(ownerId, { data, etag: `"cat-${ownerId}-${Date.now().toString(36)}"` });
+      console.log(`[catalog] built for user=${ownerId}: ${Math.round(Buffer.byteLength(data)/1024)}KB`);
     }
-    if (req.headers['if-none-match'] === _catalogEtag) {
-      res.writeHead(304, { ETag: _catalogEtag, 'Cache-Control': 'no-cache' }); return res.end();
+    const { data, etag } = _catalogCacheMap.get(ownerId);
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end();
     }
-    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', ETag: _catalogEtag });
-    res.end(_catalogCache);
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', ETag: etag });
+    res.end(data);
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
@@ -974,6 +975,93 @@ const server = http.createServer(async (req, res) => {
     if (!sameOrigin) { res.writeHead(403); return res.end('Cross-origin request refused'); }
   }
   if (method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+  // ── Auth ──────────────────────────────────────────────────────────
+  authMiddleware(req);
+
+  // Login page and auth endpoints are public
+  if (pathname === '/login') return serveStatic(res, path.join(ROOT, 'login.html'), req);
+
+  if (pathname === '/api/auth/login' && method === 'POST') {
+    const body = await parseBody(req);
+    const db = sqlDb();
+    const user = await db.get('SELECT id, username, email, password_hash, role, active FROM users WHERE username = ? OR email = ?', [body.username, body.username]);
+    if (!user || !user.active || !checkPassword(body.password || '', user.password_hash)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Usuario o contraseña incorrectos' }));
+    }
+    const token = createToken(user);
+    setCookie(res, token);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ id: user.id, username: user.username, role: user.role }));
+  }
+
+  if (pathname === '/api/auth/logout' && method === 'POST') {
+    clearCookie(res);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true }));
+  }
+
+  if (pathname === '/api/auth/me' && method === 'GET') {
+    if (!req.user) { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'No autenticado' })); }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ id: req.user.sub, username: req.user.username, role: req.user.role }));
+  }
+
+  // ── Admin: gestión de usuarios ────────────────────────────────────
+  if (pathname === '/api/admin/users' && method === 'GET') {
+    if (!requireAdmin(req, res)) return;
+    const db = sqlDb();
+    const users = await db.all('SELECT id, username, email, role, active, to_char(created_at AT TIME ZONE \'UTC\', \'YYYY-MM-DD\') AS created_at FROM users ORDER BY id');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(users));
+  }
+
+  if (pathname === '/api/admin/users' && method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    const body = await parseBody(req);
+    const { username, email, password, role = 'user' } = body;
+    if (!username || !email || !password) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Faltan campos obligatorios' })); }
+    const db = sqlDb();
+    try {
+      const hash = hashPassword(password);
+      const row = await db.get('INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?) RETURNING id, username, email, role', [username, email, hash, role]);
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(row));
+    } catch (e) {
+      const dup = e.message.includes('unique') || e.message.includes('duplicate');
+      res.writeHead(dup ? 409 : 500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: dup ? 'Nombre de usuario o email ya existe' : e.message }));
+    }
+  }
+
+  const userMatch = pathname.match(/^\/api\/admin\/users\/(\d+)$/);
+  if (userMatch && method === 'PATCH') {
+    if (!requireAdmin(req, res)) return;
+    const uid = parseInt(userMatch[1]);
+    const body = await parseBody(req);
+    const db = sqlDb();
+    const updates = [];
+    const vals = [];
+    if (body.active !== undefined) { updates.push('active = ?'); vals.push(body.active ? 1 : 0); }
+    if (body.role) { updates.push('role = ?'); vals.push(body.role); }
+    if (body.password) { updates.push('password_hash = ?'); vals.push(hashPassword(body.password)); }
+    if (!updates.length) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Nada que actualizar' })); }
+    vals.push(uid);
+    await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, vals);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true }));
+  }
+
+  // Protect all other routes — redirect browsers to /login, return 401 for API
+  if (!req.user) {
+    const isApi = pathname.startsWith('/api/');
+    const isStatic = isPublicFile(pathname.replace(/^\//, ''));
+    if (!isStatic) {
+      if (isApi) { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'No autenticado' })); }
+      res.writeHead(302, { Location: `/login?next=${encodeURIComponent(pathname)}` }); return res.end();
+    }
+  }
 
   if (pathname === '/api/db/stats' && method === 'GET')
     return apiStats(res);

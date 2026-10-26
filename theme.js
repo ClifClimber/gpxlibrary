@@ -14,6 +14,22 @@
   document.addEventListener('DOMContentLoaded', () => {
     const nav = document.querySelector('nav');
     if (!nav) return;
+
+    // User widget
+    fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
+      if (!me) return;
+      const wrap = document.createElement('span');
+      wrap.className = 'nav-user';
+      wrap.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)';
+      wrap.innerHTML = `<span style="color:var(--ink);font-weight:500">${me.username}</span>` +
+        `<button type="button" class="btn btn-outline btn-sm" id="nav-logout-btn">Salir</button>`;
+      nav.appendChild(wrap);
+      wrap.querySelector('#nav-logout-btn').addEventListener('click', async () => {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        location.href = '/login';
+      });
+    }).catch(() => {});
+
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'theme-toggle';

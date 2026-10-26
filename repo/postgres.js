@@ -48,8 +48,13 @@ function createPostgresRepo({ connectionString, pool: givenPool } = {}) {
       if (!r || !r.wkb) return [];
       return parseWkbLine(r.wkb).map((p, i) => ({ lat: p.lat, lon: p.lon, ele: r.ele ? r.ele[i] ?? null : null }));
     },
-    async catalogTracks() {
-      return rows(`SELECT ${selectCols(C.CATALOG_COLS)} FROM tracks ORDER BY date DESC NULLS LAST, ${BY_NAME} ASC, id`);
+    async catalogTracks({ ownerId } = {}) {
+      // Public tracks + own private tracks (if ownerId given)
+      const where = ownerId
+        ? `WHERE visibility = 'public' OR owner_id = $1`
+        : `WHERE visibility = 'public'`;
+      const params = ownerId ? [ownerId] : [];
+      return rows(`SELECT ${selectCols(C.CATALOG_COLS)} FROM tracks ${where} ORDER BY date DESC NULLS LAST, ${BY_NAME} ASC, id`, params);
     },
     async setTimes(id, moving, stopped) {
       await q('UPDATE tracks SET moving_time=$1, stopped_time=$2 WHERE id=$3', [moving, stopped, id]);

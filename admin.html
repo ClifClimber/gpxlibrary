@@ -175,6 +175,7 @@ tr.inactive td { opacity: .4; }
     <button class="seg-tab" data-tab="jobs">Trabajos</button>
     <button class="seg-tab" data-tab="logs">Logs</button>
     <button class="seg-tab" data-tab="about">Acerca de</button>
+    <button class="seg-tab" data-tab="users" id="tab-btn-users" hidden>Usuarios</button>
   </div>
 
   <!-- ── Tab: Base de datos ── -->
@@ -853,6 +854,56 @@ tr.inactive td { opacity: .4; }
       </div>
     </div>
 
+  </div>
+
+  <!-- ── Tab: Usuarios (solo admin) ── -->
+  <div class="tab-panel" id="tab-users">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <h3 class="card-title">Usuarios</h3>
+        <button class="btn btn-primary btn-sm" id="btn-add-user">+ Nuevo usuario</button>
+      </div>
+      <div class="card-body" style="padding:0">
+        <table class="table" id="users-table">
+          <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th><th>Estado</th><th>Creado</th><th></th></tr></thead>
+          <tbody id="users-tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Modal nuevo usuario -->
+    <div id="add-user-modal" class="modal-overlay" hidden>
+      <div class="modal" style="max-width:400px">
+        <div class="modal-head">
+          <h3>Nuevo usuario</h3>
+          <button class="icon-btn" id="add-user-modal-close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;padding:20px 24px">
+          <label style="font-size:13px;font-weight:500;color:var(--ink-2)">Usuario
+            <input class="input" type="text" id="nu-username" placeholder="usuario" style="margin-top:5px;width:100%">
+          </label>
+          <label style="font-size:13px;font-weight:500;color:var(--ink-2)">Email
+            <input class="input" type="email" id="nu-email" placeholder="email@ejemplo.com" style="margin-top:5px;width:100%">
+          </label>
+          <label style="font-size:13px;font-weight:500;color:var(--ink-2)">Contraseña
+            <input class="input" type="password" id="nu-password" placeholder="••••••••" style="margin-top:5px;width:100%">
+          </label>
+          <label style="font-size:13px;font-weight:500;color:var(--ink-2)">Rol
+            <select class="select" id="nu-role" style="margin-top:5px;width:100%">
+              <option value="user">Usuario</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <div id="add-user-error" style="color:var(--danger);font-size:13px;min-height:18px"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-outline" id="add-user-modal-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="add-user-submit">Crear usuario</button>
+        </div>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -2331,6 +2382,68 @@ loadActivities();
 loadSierras();
 
 })();
+</script>
+
+<script>
+// ── Usuarios (solo admin) ─────────────────────────────────────────────
+async function loadUsers() {
+  const tbody = document.getElementById('users-tbody');
+  try {
+    const r = await fetch('/api/admin/users');
+    if (!r.ok) return;
+    const users = await r.json();
+    if (!users.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Sin usuarios</td></tr>'; return; }
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td><b>${u.username}</b></td>
+        <td>${u.email}</td>
+        <td><span class="badge ${u.role === 'admin' ? '' : 'badge-muted'}">${u.role}</span></td>
+        <td><span class="badge ${u.active ? 'badge-success' : 'badge-danger'}">${u.active ? 'Activo' : 'Inactivo'}</span></td>
+        <td>${fmtDate(u.created_at)}</td>
+        <td><button class="btn btn-outline btn-sm" onclick="toggleUser(${u.id}, ${!u.active})">${u.active ? 'Desactivar' : 'Activar'}</button></td>
+      </tr>`).join('');
+  } catch (e) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger);padding:16px">${e.message}</td></tr>`; }
+}
+
+async function toggleUser(id, active) {
+  const r = await fetch(`/api/admin/users/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active }) });
+  if (r.ok) loadUsers();
+  else { const d = await r.json(); showToast(d.error || 'Error', 'danger'); }
+}
+
+document.querySelector('#admin-tabs [data-tab="users"]').addEventListener('click', loadUsers);
+
+document.getElementById('btn-add-user').addEventListener('click', () => {
+  document.getElementById('add-user-modal').hidden = false;
+  document.getElementById('nu-username').focus();
+  document.getElementById('add-user-error').textContent = '';
+});
+document.getElementById('add-user-modal-close').addEventListener('click', () => { document.getElementById('add-user-modal').hidden = true; });
+document.getElementById('add-user-modal-cancel').addEventListener('click', () => { document.getElementById('add-user-modal').hidden = true; });
+
+document.getElementById('add-user-submit').addEventListener('click', async () => {
+  const username = document.getElementById('nu-username').value.trim();
+  const email    = document.getElementById('nu-email').value.trim();
+  const password = document.getElementById('nu-password').value;
+  const role     = document.getElementById('nu-role').value;
+  const errEl    = document.getElementById('add-user-error');
+  errEl.textContent = '';
+  if (!username || !email || !password) { errEl.textContent = 'Rellena todos los campos'; return; }
+  const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, email, password, role }) });
+  const d = await r.json();
+  if (r.ok) {
+    document.getElementById('add-user-modal').hidden = true;
+    loadUsers();
+    showToast('Usuario creado');
+  } else { errEl.textContent = d.error || 'Error al crear usuario'; }
+});
+
+// Mostrar tab Usuarios solo si el usuario es admin
+fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
+  if (me && me.role === 'admin') {
+    document.getElementById('tab-btn-users').hidden = false;
+  }
+});
 </script>
 
 <script>
