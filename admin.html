@@ -1126,13 +1126,20 @@ document.getElementById('btn-ibp').addEventListener('click', function() {
   const modal = document.getElementById('dir-modal'), list = document.getElementById('dir-list'), pathInp = document.getElementById('dir-path');
   let parent = null;
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-  async function load(p) {
+  async function load(p, keepPath) {
     list.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:12px">Cargando…</div>';
     try {
       const r = await fetch('/api/fs/dirs?path=' + encodeURIComponent(p || ''));
       const d = await r.json();
-      if (d.error) throw new Error(d.error);
-      pathInp.value = d.current; parent = d.parent;
+      if (d.error) {
+        // Folder doesn't exist yet — show parent and keep the typed path in the input
+        const sep = p.includes('/') ? '/' : '\\';
+        const parentPath = p.replace(new RegExp('[^\\\\/]+[/\\\\]?$'), '').replace(/[/\\]+$/, '') || sep;
+        if (parentPath && parentPath !== p) { load(parentPath, p); return; }
+        throw new Error(d.error);
+      }
+      if (!keepPath) pathInp.value = d.current;
+      parent = d.parent;
       document.getElementById('dir-up').disabled = !parent;
       const dirs = d.dirs.filter(x => !/^\$|^System Volume Information$/i.test(x.name));
       list.innerHTML = dirs.length
@@ -1151,7 +1158,7 @@ document.getElementById('btn-ibp').addEventListener('click', function() {
   document.getElementById('dir-close').onclick = close;
   document.getElementById('dir-cancel').onclick = close;
   document.getElementById('dir-use').onclick = () => { destInp.value = pathInp.value.trim(); close(); };
-  document.getElementById('btn-export-browse').onclick = () => { modal.classList.add('open'); load(destInp.value.trim() || ''); };
+  document.getElementById('btn-export-browse').onclick = () => { const v = destInp.value.trim(); pathInp.value = v; modal.classList.add('open'); load(v || '', v || null); };
 
   document.getElementById('btn-export-folders').addEventListener('click', async function () {
     const dest = destInp.value.trim();
