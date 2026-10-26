@@ -3,7 +3,7 @@
 //   1. generates the Garage secrets and the S3 access key in .env if they are missing
 //   2. starts the `storage` container
 //   3. assigns the single-node layout, creates the buckets (app + tests) and grants the key access
-// It does not change STORAGE_DRIVER: switching the app to S3 is done with blob-copy / Admin.
+// The app always uses S3; this script just configures the local Garage instance.
 //   node scripts/storage-setup.js
 const fs = require('fs');
 const path = require('path');
@@ -40,8 +40,7 @@ function ensureEnv() {
   };
   const added = Object.keys(wanted).filter(k => !has(k));
   if (added.length) {
-    if (!/Almacén de GPX/.test(text)) text += `${text.endsWith('\n') || !text ? '' : '\n'}\n# Almacén de GPX: local (TracksGps/store, por defecto) | s3 (Garage en docker-compose, R2, AWS)\n`;
-    if (!/^STORAGE_DRIVER=/m.test(text)) text += 'STORAGE_DRIVER=local\n';
+    if (!/S3_ENDPOINT=/m.test(text)) text += `${text.endsWith('\n') || !text ? '' : '\n'}\n# Almacén de GPX en S3 (Garage en docker-compose, R2, AWS)\n`;
     for (const k of added) text += `${k}=${wanted[k]()}\n`;
     fs.writeFileSync(ENV, text);
     console.log(`✓ .env: añadidos ${added.join(', ')}`);
@@ -84,7 +83,7 @@ function main() {
     garage(['bucket', 'allow', '--read', '--write', '--owner', bucket, '--key', env.S3_ACCESS_KEY_ID]);
   }
   console.log(`\n✓ Almacén listo en ${env.S3_ENDPOINT} (bucket ${env.S3_BUCKET}).`);
-  console.log('  Para pasar los GPX: node scripts/blob-copy.js --to s3   (o Admin → Base de datos → Almacén)');
+  console.log('  Para copiar GPX existentes: node scripts/blob-copy.js --to s3   (si migrando desde almacén local)');
 }
 
 try { main(); } catch (e) { console.error('✗ ' + e.message); process.exit(1); }

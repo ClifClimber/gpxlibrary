@@ -127,16 +127,19 @@ function countGpx(dir) {
 // browser no longer stops an import.
 const { createQueue, TERMINAL } = require('./queue');
 const { createWorker } = require('./queue/worker');
-const { JOBS, summarize } = require('./queue/jobs');
+const { JOBS, IMPORT_TYPES, summarize } = require('./queue/jobs');
 const jobQueue = () => createQueue(sqlDb());
 
 const worker = process.env.EMBEDDED_WORKER === '0' ? null : createWorker({
   getQueue: jobQueue,
-  isPaused: () => switchingStorage,
+  isPaused: () => false,
   onFinish: (job, code, lines) => {
     appendLog(code === 0 ? 'info' : 'error', job.type, `${job.type} ${code === 0 ? 'completado' : code === 130 ? 'cancelado' : 'fallido'}`,
       { job: job.id, ...summarize(lines, code) });
-    if (code === 0) invalidateCatalogCache();
+    if (code === 0) {
+      invalidateCatalogCache();
+      if (IMPORT_TYPES.has(job.type)) jobQueue().enqueue('sync-local', {}).catch(() => {});
+    }
   },
 });
 
@@ -144,7 +147,6 @@ async function apiRunScript(res, scriptPath, args = []) {
   const type = path.basename(scriptPath, '.js');
   try {
     if (!JOBS[type]) throw new Error(`Tipo de trabajo desconocido: ${type}`);
-    if (switchingStorage) throw new Error('Hay un cambio de almacén en curso; inténtalo en un momento');
     const job = await jobQueue().enqueue(type, { args }, { maxAttempts: JOBS[type].maxAttempts || 1 });
     appendLog('info', type, `${type} en cola`, { job: job.id, args });
     return streamJob(res, job.id);
@@ -962,26 +964,21 @@ function setEnvVar(name, value) {
 }
 
 
-// ── GPX store: status and live switch (Admin → Base de datos → Almacén de GPX) ─────
-let switchingStorage = false;
-const STORAGE_LABEL = { local: 'Carpeta local', s3: 'S3 (Garage)' };
+// ── GPX store status (Admin → Base de datos) ────────────────────────────────────
 
-async function storeStatus(driver) {
-  if (driver === 's3' && !require('./config').S3.endpoint) return { configured: false, reachable: false };
-  let store;
+async function storeStatus() {
+  if (!require('./config').S3.endpoint) return { configured: false, reachable: false };
   try {
-    store = driver === blob.driver ? blob : createBlob({ driver });
-    await store.ping();
-    return { configured: true, reachable: true, files: (await store.list()).length, where: store.where };
+    await blob.ping();
+    return { configured: true, reachable: true, files: (await blob.list()).length, where: blob.where };
   } catch (e) {
-    return { configured: true, reachable: false, where: store?.where, error: e.message };
-  } finally { if (store && store !== blob) await store.close().catch(() => {}); }
+    return { configured: true, reachable: false, where: blob.where, error: e.message };
+  }
 }
 
 async function apiStorageStatus(res) {
   try {
-    const body = { driver: blob.driver, label: STORAGE_LABEL[blob.driver], busy: switchingStorage || await busyJobs(), locked: BACKENDS_LOCKED,
-      local: await storeStatus('local'), s3: await storeStatus('s3') };
+    const body = { s3: await storeStatus(), busy: await busyJobs(), locked: BACKENDS_LOCKED };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(body));
   } catch (e) {
@@ -990,61 +987,7 @@ async function apiStorageStatus(res) {
   }
 }
 
-async function apiStorageSwitch(req, res) {
-  const { to } = await parseBody(req).catch(() => ({}));
-  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-  const send = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const log = text => send({ type: text.startsWith('✗') ? 'error' : text.startsWith('⚠') ? 'warn' : 'log', text });
-  const finish = code => { send({ type: 'done', code }); res.end(); };
-  send({ type: 'start' });
-
-  if (BACKENDS_LOCKED) { log('✗ ' + LOCKED_MSG); return finish(1); }
-  if (!['local', 's3'].includes(to)) { log('✗ Almacén de destino no válido'); return finish(1); }
-  if (to === blob.driver) { log(`✗ ${STORAGE_LABEL[to]} ya es el almacén en uso`); return finish(1); }
-  if (switchingStorage) { log('✗ Ya hay un cambio en curso'); return finish(1); }
-  if (await busyJobs()) { log('✗ Hay trabajos en cola o en marcha (Admin → Trabajos): espera a que terminen'); return finish(1); }
-  if (!require('./config').S3.endpoint) { log('✗ Falta la configuración S3 en .env: ejecuta node scripts/storage-setup.js'); return finish(1); }
-
-  switchingStorage = true;
-  const from = blob.driver;
-  appendLog('info', 'storage', `Cambio de almacén ${from} → ${to} iniciado`);
-  try {
-    log('1/3 Comprobando el almacén S3…');
-    let s3 = await storeStatus('s3');
-    if (!s3.reachable) {
-      log(`⚠ S3 ${s3.error || 'no responde'}; intentando arrancarlo con docker compose…`);
-      const code = await runStreaming(dockerBin(), ['compose', 'up', '-d', 'storage'], l => log('   ' + l), { env: dockerEnv() });
-      if (code !== 0) throw new Error('No se pudo arrancar Docker. Abre Docker Desktop y vuelve a intentarlo.');
-      for (let i = 0; i < 20 && !s3.reachable; i++) { await new Promise(r => setTimeout(r, 1500)); s3 = await storeStatus('s3'); }
-      if (!s3.reachable) throw new Error('S3 no responde tras arrancar el contenedor');
-    }
-    log(`✓ S3 disponible (${s3.files} ficheros ahora)`);
-
-    log(`2/3 Copiando ${STORAGE_LABEL[from]} → ${STORAGE_LABEL[to]} y comprobando cada fichero…`);
-    const code = await runStreaming(process.execPath, [path.join(ROOT, 'scripts', 'blob-copy.js'), '--to', to], l => { if (!l.startsWith('…')) log('   ' + l); });
-    if (code !== 0) throw new Error(code === 2 ? 'Faltan ficheros o no coinciden en el destino; se cancela el cambio' : 'La copia ha fallado; se cancela el cambio');
-
-    log('3/3 Activando el nuevo almacén…');
-    const next = createBlob({ driver: to });
-    await next.ping();
-    const old = blob;
-    blob = next;
-    setEnvVar('STORAGE_DRIVER', to);
-    await old.close().catch(() => {});
-    appendLog('info', 'storage', `Almacén cambiado a ${to}`);
-    log(`✓ La aplicación usa ahora ${STORAGE_LABEL[to]}. Los ficheros de ${STORAGE_LABEL[from]} se conservan.`);
-    finish(0);
-  } catch (e) {
-    appendLog('error', 'storage', `Cambio de almacén ${from} → ${to} fallido: ${e.message}`);
-    log('✗ ' + e.message);
-    log(`Se mantiene ${STORAGE_LABEL[from]}`);
-    finish(1);
-  } finally { switchingStorage = false; }
-}
-
-// Operations still tied to the SQLite file (legacy catalog-data.js export).
-const SQLITE_ONLY = [/^\/api\/db\/export$/];
-const isSqliteOnly = p => SQLITE_ONLY.some(re => re.test(p));
+// ── Sincronización local (Admin → Base de datos) ────────────────────────────────
 
 // ── Enrutador ──────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
@@ -1060,10 +1003,6 @@ const server = http.createServer(async (req, res) => {
     let sameOrigin = false;
     try { sameOrigin = new URL(req.headers.origin).host === req.headers.host; } catch {}
     if (!sameOrigin) { res.writeHead(403); return res.end('Cross-origin request refused'); }
-  }
-  if (repo.driver !== 'sqlite' && isSqliteOnly(pathname)) {
-    res.writeHead(501, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ error: 'Operación solo disponible con SQLite.' }));
   }
   if (method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
@@ -1216,6 +1155,11 @@ const server = http.createServer(async (req, res) => {
     if (missingOnly) args.push('--missing-only');
     if (sierra)      { args.push('--sierra'); args.push(sierra); }
     return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-precache.js'), args);
+  }
+
+  if (pathname === '/api/db/sync-local' && method === 'POST') {
+    const clean = searchParams.get('clean') === '1';
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'sync-local.js'), clean ? ['--clean'] : []);
   }
 
   // ── OSM settings ─────────────────────────────────────────────────
@@ -1517,12 +1461,10 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(job ? 200 : 404, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify(job ? { ...job, label: JOBS[job.type]?.label || job.type } : { error: 'Not found' }));
   }
-  if (pathname === '/api/admin/storage/switch' && method === 'POST') return apiStorageSwitch(req, res);
-
   if (pathname === '/api/admin/version' && method === 'GET') {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ version: pkg.version, name: pkg.name, db: repo.driver, storage: blob.driver }));
+    res.end(JSON.stringify({ version: pkg.version, name: pkg.name, db: 'postgres' }));
     return;
   }
 

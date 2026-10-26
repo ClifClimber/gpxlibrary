@@ -55,8 +55,6 @@ services:
     init: true
     env_file: .env
     environment:
-      DB_DRIVER: postgres
-      STORAGE_DRIVER: s3
       DATABASE_HOST: db:5432
       S3_ENDPOINT: http://storage:3900
       LOCK_BACKENDS: "1"
@@ -80,8 +78,6 @@ services:
     command: ["sh", "-c", "mkdir -p data/_TEMP_ && exec node worker.js"]
     env_file: .env
     environment:
-      DB_DRIVER: postgres
-      STORAGE_DRIVER: s3
       DATABASE_HOST: db:5432
       S3_ENDPOINT: http://storage:3900
     volumes:

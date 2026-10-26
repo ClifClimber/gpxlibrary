@@ -18,7 +18,11 @@ const JOBS = {
   'export-folders':    { label: 'Exportar en carpetas' },
   'migrate-store':     { label: 'Pasar al almacén' },
   'extract-urls':      { label: 'Extraer URLs' },
+  'sync-local':        { label: 'Sincronizar copia local' },
 };
+
+// Job types that add new GPX files to S3 — automatically trigger a local sync after success
+const IMPORT_TYPES = new Set(['import-from-temp', 'wikiloc-import', 'komoot-import']);
 
 const scriptOf = type => (JOBS[type] ? path.join(SCRIPTS_DIR, `${type}.js`) : null);
 
@@ -49,4 +53,4 @@ function summarize(lines, code) {
   return extra;
 }
 
-module.exports = { JOBS, scriptOf, levelOf, summarize };
+module.exports = { JOBS, IMPORT_TYPES, scriptOf, levelOf, summarize };

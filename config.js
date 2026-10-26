@@ -22,16 +22,11 @@ function withHost(url, host) {
   return u.toString();
 }
 
-const STORAGE_DRIVER =(process.env.STORAGE_DRIVER || 'local').toLowerCase();
-if (!['local', 's3'].includes(STORAGE_DRIVER)) throw new Error(`STORAGE_DRIVER no válido: ${STORAGE_DRIVER} (local | s3)`);
-
 module.exports = {
   ROOT,
   // DATABASE_HOST (host:port) replaces the host of DATABASE_URL, e.g. `db:5432` inside docker-compose
   DATABASE_URL: withHost(process.env.DATABASE_URL || '', process.env.DATABASE_HOST),
-  // Original GPX files: local folder or an S3-compatible bucket (Garage, R2, AWS)
-  STORAGE_DRIVER,
-  STORE_DIR: process.env.STORE_DIR || path.join(ROOT, 'TracksGps', 'store'),
+  // Original GPX files are always in S3 (Garage locally, R2/AWS in production)
   S3: {
     endpoint: process.env.S3_ENDPOINT || '',
     region: process.env.S3_REGION || 'garage',
@@ -40,4 +35,6 @@ module.exports = {
     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
     prefix: process.env.S3_PREFIX || '',
   },
+  // Local mirror folder for GPX files (sync-local job). Relative paths resolve from ROOT.
+  LOCAL_SYNC_DIR: process.env.LOCAL_SYNC_DIR || path.join(ROOT, 'TracksGps', 'local'),
 };

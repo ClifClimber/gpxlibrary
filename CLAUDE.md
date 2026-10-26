@@ -8,22 +8,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Import new files from TracksGps/_TEMP_/ into the store (classifies, geocodes, skips duplicates)
 node scripts/import-from-temp.js [--force]
 
-# Tests: pure domain logic + repository and store contract tests (SQLite/Postgres, local/S3)
+# Tests: pure domain logic + repository and store contract tests (Postgres; S3 skipped if unreachable)
 # (Postgres tests use a separate gpxlibrary_test database and are skipped if it is unreachable)
 npm test
 
-# Local PostgreSQL + PostGIS (Docker Desktop); credentials in .env
+# Local PostgreSQL + PostGIS + S3 (Garage), all via Docker Desktop; credentials in .env
 docker compose up -d
 
-# Local S3 store (Garage): first-time setup, copy GPX files local ↔ S3 with sha256 check
+# Local S3 store (Garage): first-time setup (idempotent)
 node scripts/storage-setup.js
-node scripts/blob-copy.js --to s3|local
-node scripts/blob-copy.js --verify [--on s3|local]
 
-# Copy all data between engines, then compare them query by query
-node scripts/db-copy.js --to postgres [--replace]
+# Sync S3 GPX files to a local mirror folder (LOCAL_SYNC_DIR in .env)
+node scripts/sync-local.js [--dir <path>] [--clean]
+
+# Backup: export Postgres → gzipped SQLite; restore: import SQLite → Postgres
 node scripts/db-copy.js --to sqlite [--sqlite data/otra.db] [--replace]
-node scripts/db-copy.js --verify
+node scripts/db-copy.js --to postgres [--replace]
 
 # Clean/smooth raw GPS points
 node scripts/clean-tracks.js [--ids 1,2,3] [--all]
@@ -45,23 +45,21 @@ The viewer works only via HTTP server, not `file://`, because it uses fetch/SSE 
 ### Domain — `domain/`
 Pure functions with no database, filesystem or network access (phase 1 of the cloud plan): `gpx-parse` (GPX text → name/date/url/points/waypoints), `metrics` (distance, elevation with 8 m noise threshold, bounds, circular, moving/stopped time), `classify` (activity inference, sierra by bbox, Nominatim parsing), `ibp`, `simplify` (even sampling, catalog polyline, GPS cleaning filters) and `gpx-export` (build GPX, apply metadata). Scripts and `server.js` must import from `./domain` instead of re-implementing these; tests live in `domain/*.test.js`.
 
-### Data access — `repo/` (two interchangeable engines)
-`config.js` loads `.env` (no dependency) and exposes `DB_DRIVER` (`sqlite` default | `postgres`), `DATABASE_URL` and `SQLITE_PATH`. `repo/index.js#getRepo()` returns the engine-specific implementation (`repo/sqlite.js`, `repo/postgres.js`) with the same async API (`listTracks`, `getTrack`, `getPoints`, `catalogTracks`, `updateTrack`, `bulkUpdate`, `moveTrack`, `deleteTrack`, `tags`, `geo`, `recentIds`, config CRUD…). Both must return rows with identical keys, values and order: column lists live in `repo/columns.js`, Postgres orders names with `COLLATE "C"` and dates with `NULLS LAST`, and every ordering ends with `id`. New queries go into **both** implementations plus `repo/repo.test.js`. Postgres schema: `repo/pg/NNN_*.sql`, applied by `repo/pg-migrate.js`; points are a PostGIS `LineString` (`geom`/`geom_clean`) plus `ele`/`ele_clean` arrays. Scripts and admin maintenance use `repo/sql.js#openSql()` instead: engine-neutral async `all/get/run/exec/tx` with `?` placeholders, `db.NOW`/`db.NOW_TEXT` for timestamps, `db.BIN` after text ORDER BY terms (byte order on both engines; use the expression, not an alias), `CAST(COUNT(*) AS INTEGER)` for counts, and `getPoints`/`setPoints` for GPS points — never `scripts/db.js` directly. The server gets one bound to the live engine with `sqlDb()`. Backups are always a gzipped SQLite file (under Postgres, dumped and restored through `db-copy.js`), so they restore into either engine; vacuum/integrity have Postgres variants. Only the legacy `/api/db/export` (catalog-data.js) remains in `SQLITE_ONLY` (501 under Postgres). The engine can be switched live from Admin → Base de datos → «Motor de base de datos» (`GET /api/admin/db-engine`, `POST /api/admin/db-engine/switch` SSE): it starts the Docker container if needed, copies current → target with `scripts/db-copy.js` (SQLite target is written to a temp file and swapped in only after verification, with a backup first), then swaps `repo` in-process and rewrites `DB_DRIVER` in `.env`. Refused while a script is running. Only npm dependency: `pg`, loaded only with `DB_DRIVER=postgres`.
+### Data access — `repo/` (PostgreSQL only)
+`config.js` loads `.env` (no dependency) and exposes `DATABASE_URL`, `S3` config and `LOCAL_SYNC_DIR`. `repo/index.js#createRepo()` returns `repo/postgres.js` (requires `DATABASE_URL`). Async API: `listTracks`, `getTrack`, `getPoints`, `catalogTracks`, `updateTrack`, `bulkUpdate`, `moveTrack`, `deleteTrack`, `tags`, `geo`, `recentIds`, config CRUD… Column lists in `repo/columns.js`; names sorted with `COLLATE "C"`, dates with `NULLS LAST`, every ordering ends with `id`. Postgres schema: `repo/pg/NNN_*.sql`, applied by `repo/pg-migrate.js` at startup; points are a PostGIS `LineString` (`geom`/`geom_clean`) plus `ele`/`ele_clean` arrays. Scripts and admin maintenance use `repo/sql.js#openSql()`: Postgres-only async `all/get/run/exec/tx` with `?` placeholders auto-converted to `$N`, `db.NOW`/`db.NOW_TEXT` for timestamps, `db.BIN` after text ORDER BY terms, `CAST(COUNT(*) AS INTEGER)` for counts, `getPoints`/`setPoints` for GPS points. Server gets one via `sqlDb()`. Backups: `db-copy.js --to sqlite` dumps Postgres → gzipped SQLite (for archiving), `--to postgres` restores. Only npm dependency: `pg`.
 
-### GPX store — `blob/` (local folder or S3)
-`STORAGE_DRIVER` (`local` default | `s3`) selects where the original GPX bytes live: `blob/local.js` (`TracksGps/store`, `STORE_DIR`) or `blob/s3.js` (minimal S3 client, AWS SigV4 on `node:http`, path-style, no dependencies; works with Garage, R2, AWS; `S3_*` vars). Same async API: `put` (never overwrites), `get` (null if missing), `exists`, `del`, `list`, `ping`. Keys are `{uid}.gpx`; the DB `file` column keeps `TracksGps/store/{uid}.gpx` and `scripts/store.js#keyOfFile()` derives the key. Code must go through `scripts/store.js` (`putFile`, `readTrackFile`, `deleteTrackFile`, `gpxText`) — never read `path.join(ROOT, track.file)` directly. The server holds `let blob` (swappable like `repo`). Local Garage: `docker compose` service `storage` (`dxflrs/garage`, config `db/garage.toml`, secrets in `.env`); `node scripts/storage-setup.js` generates the secrets/keys and creates the layout and the `gpxlibrary` + `gpxlibrary-test` buckets (idempotent). `scripts/blob-copy.js --to s3|local` copies missing files and verifies every one against the DB `sha256` (`--verify [--on …]` only checks). Switch live from Admin → Base de datos → «Almacén de GPX» (`GET /api/admin/storage`, `POST /api/admin/storage/switch` SSE): copy + verify, swap `blob`, rewrite `STORAGE_DRIVER`; the previous store is kept. `blob/blob.test.js` runs the same contract on both (S3 skipped if unreachable). DB backups do not include the GPX files.
+### GPX store — `blob/` (always S3)
+`blob/s3.js` — minimal S3 client, AWS SigV4 on `node:http`, path-style, no dependencies; works with Garage, R2, AWS (`S3_*` vars). API: `put` (never overwrites), `get` (null if missing), `exists`, `del`, `list`, `ping`. Keys are flat: `{uid}.gpx`. `blob/index.js` exposes `getBlob()` (shared instance) and `createBlob({ s3 })` (for tests/scripts). Code must go through `scripts/store.js` (`putFile`, `readTrackFile`, `deleteTrackFile`, `gpxText`) — never `path.join(ROOT, track.file)` directly. Local Garage: `docker compose` service `storage` (`dxflrs/garage`, config `db/garage.toml`, secrets in `.env`); `node scripts/storage-setup.js` configures the layout and buckets (idempotent). Local mirror: `scripts/sync-local.js [--dir <path>] [--clean]` downloads S3 files missing locally; auto-triggered as a background job after each import. Status via `GET /api/admin/storage`. `blob/blob.test.js` (S3, skipped if unreachable). DB backups do not include the GPX files.
 
 ### Docker deployment
-`Dockerfile` + compose service `app` (`docker compose up -d --build`, port `APP_PORT` default 8081). The container is stateless: compose forces `DB_DRIVER=postgres`, `STORAGE_DRIVER=s3`, `DATABASE_HOST=db:5432` (`config.js` rewrites the host of `DATABASE_URL`) and `S3_ENDPOINT=http://storage:3900`, and sets `LOCK_BACKENDS=1` so Admin cannot switch engine/store. Everything else the app writes lives in the `appdata` volume at `/app/data`; `osm-settings.json`, `ibp.key` and `TracksGps/_TEMP_` are symlinks into it. `HOST` sets the listen address (default loopback). `scripts/docker.js` locates the docker CLI (all-users or per-user Docker Desktop).
+`Dockerfile` + compose service `app` (`docker compose up -d --build`, port `APP_PORT` default 8081) + `worker` service (same image, runs `node worker.js`). Compose sets `DATABASE_HOST=db:5432` (`config.js` rewrites the host of `DATABASE_URL`), `S3_ENDPOINT=http://storage:3900` and `LOCK_BACKENDS=1`. Everything else the app writes lives in the `appdata` volume at `/app/data`; `osm-settings.json`, `ibp.key` and `TracksGps/_TEMP_` are symlinks into it. `HOST` sets the listen address (default loopback). `scripts/docker.js` locates the docker CLI.
 
 Static files are an allow-list (`isPublicFile()` in `server.js`): root `*.html`/`*.css`, the browser scripts in `PUBLIC_JS` and `assets/`. A new front-end script must be added to `PUBLIC_JS`. No CORS headers; non-GET requests with a foreign `Origin` get 403.
 
-Node.js HTTP server (`server.js`); SQLite at `data/tracks.db` (auto-created, `node:sqlite` requires Node v22+) or PostgreSQL via `repo/`.
+Node.js HTTP server (`server.js`); PostgreSQL via `repo/postgres.js`. Requires Node v22+ for `node:sqlite` (used only in `db-copy.js` backup/restore).
 
-### DB — `scripts/db.js`
-Singleton (`openDb()`) using `node:sqlite` (DatabaseSync). `_migrate()` uses `ALTER TABLE … ADD COLUMN` for non-breaking schema evolution. DB path: `data/tracks.db`.
-
-Key tables: `tracks`, `raw_points`, `clean_points`, `config_activities`, `config_sierras`.
+### DB tables
+Key tables: `tracks`, `raw_points`, `clean_points`, `config_activities`, `config_sierras`, `jobs`, `job_logs`.
 
 Important `tracks` columns: `activity`, `sierra`, `province`, `ccaa`, `tags` (JSON array), `road_types` (JSON obj), `surface_types` (JSON obj), `road_type_seq` (JSON array of `{t,f0,f1}` fraction segments), `waypoints_json` (JSON array of `{lat,lon,ele,name,sym,desc}`), `ibp_bicycle/hiking/running`, `circular`, `is_recent_import`.
 
@@ -80,7 +78,7 @@ Pure Node.js HTTP server. No framework. Routes:
 - `DELETE /api/tracks/:id`
 - `GET /api/geo` — returns `{provinces, ccaa, zones}` distinct values from DB
 - `GET /api/config/activities` — activity list with colors
-- `GET /api/admin/version` — `{version, name, db}` (`db` is the active engine)
+- `GET /api/admin/version` — `{version, name, db}` (`db` is always `'postgres'`)
 - `POST /api/db/import-temp` (SSE) — enqueues `import-from-temp` job, streams output
 - `POST /api/db/enrich-road-types?ids=1,2,3` (SSE) — enqueues `enrich-road-types` job
 - `POST /api/db/clean?ids=…` (SSE) — enqueues `clean-tracks` job
@@ -89,8 +87,9 @@ Pure Node.js HTTP server. No framework. Routes:
 - `GET /api/jobs/:id` — single job
 - `GET /api/jobs/:id/stream` (SSE) — live or historical output of a job
 - `POST /api/jobs/:id/cancel|retry` — cancel (sets `cancelling`) or retry (new job id)
+- `POST /api/db/sync-local` (SSE) — enqueues `sync-local` job (mirrors S3 → `LOCAL_SYNC_DIR`); auto-triggered after each successful import
 - `GET /api/config/settings` — returns `osm-settings.json` (token values masked)
-- `PATCH /api/config/settings` — updates allowed keys (`wikiloc_token`) in `osm-settings.json`
+- `PATCH /api/config/settings` — updates allowed keys (`wikiloc_token`, `local_sync_dir`) in `osm-settings.json`
 - `/api/admin/…` — stats, backup, restore, vacuum, integrity
 
 All long-running operations go through the job queue (`queue/`). `apiRunScript(res, scriptPath, args)` enqueues the job and relays its SSE output from the DB, so closing the browser does not stop the work. The embedded worker (`EMBEDDED_WORKER !== '0'`) starts with the server; in Docker, `EMBEDDED_WORKER=0` on `app` and the standalone `worker` service runs `node worker.js`.

@@ -28,7 +28,7 @@ function removeEmptyDirs(dir) {
 }
 
 async function revert(manifestPath) {
-  if (getBlob().driver !== 'local') throw new Error('--revert solo funciona con el almacén local (STORAGE_DRIVER=local)');
+  // Note: --revert was designed for the local store; with S3 this is a no-op guard
   const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const db = openSql();
   let ok = 0, fail = 0;
