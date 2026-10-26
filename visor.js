@@ -224,7 +224,7 @@ const items = CATALOG.map((track, i) => {
 });
 
 const cluster = L.markerClusterGroup({
-  showCoverageOnHover: false, maxClusterRadius: 44, spiderfyOnMaxZoom: true, chunkedLoading: true,
+  showCoverageOnHover: false, maxClusterRadius: 44, disableClusteringAtZoom: 12, spiderfyOnMaxZoom: true, chunkedLoading: true,
   iconCreateFunction: c => {
     const n = c.getChildCount();
     const sz = n < 10 ? 34 : n < 50 ? 40 : 46;
