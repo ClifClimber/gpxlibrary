@@ -1435,6 +1435,30 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Read/write LOCAL_SYNC_DIR in the host .env (mounted as /app/.env.host)
+  const ENV_HOST = path.join(ROOT, '.env.host');
+  function readEnvHost() { try { return fs.readFileSync(ENV_HOST, 'utf8'); } catch { return ''; } }
+  function getEnvHostVar(k) { const m = readEnvHost().match(new RegExp(`^${k}\\s*=\\s*(.*)$`, 'm')); return m ? m[1].trim().replace(/^(['"])(.*)\1$/, '$2') : null; }
+  function setEnvHostVar(k, v) {
+    let txt = readEnvHost();
+    const re = new RegExp(`^${k}\\s*=.*$`, 'm');
+    txt = re.test(txt) ? txt.replace(re, `${k}=${v}`) : (txt.trimEnd() + '\n' + `${k}=${v}\n`);
+    fs.writeFileSync(ENV_HOST, txt, 'utf8');
+  }
+  if (pathname === '/api/admin/env-config' && method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ local_sync_dir: getEnvHostVar('LOCAL_SYNC_DIR'), env_writable: fs.existsSync(ENV_HOST) }));
+    return;
+  }
+  if (pathname === '/api/admin/env-config' && method === 'PATCH') {
+    const body = await readBody(req);
+    if (!fs.existsSync(ENV_HOST)) { res.writeHead(503, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: '.env.host no montado' })); }
+    if (typeof body.local_sync_dir === 'string' && body.local_sync_dir.trim()) setEnvHostVar('LOCAL_SYNC_DIR', body.local_sync_dir.trim());
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
   if (pathname === '/api/admin/stats' && method === 'GET')
     return apiAdminStats(res);
   if (pathname === '/api/admin/backup' && method === 'POST')

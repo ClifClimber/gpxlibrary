@@ -65,6 +65,7 @@ services:
     volumes:
       - appdata:/app/data
       - ${LOCAL_SYNC_DIR:-./TracksGps/local}:/sync
+      - ./.env:/app/.env.host:rw
     depends_on:
       db:
         condition: service_healthy
@@ -86,6 +87,7 @@ services:
     volumes:
       - appdata:/app/data
       - ${LOCAL_SYNC_DIR:-./TracksGps/local}:/sync
+      - ./.env:/app/.env.host:rw
     healthcheck:
       disable: true
     depends_on:

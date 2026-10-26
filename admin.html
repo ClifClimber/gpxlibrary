@@ -314,7 +314,16 @@ tr.inactive td { opacity: .4; }
               </div>
             </div>
             <p>Crea una copia de toda la biblioteca como <code>Actividad/Sierra/Nombre.gpx</code> con el nombre y los datos actuales. Los originales en S3 no se modifican. <b>Se actualiza automáticamente tras cada importación.</b></p>
-            <p class="section-desc" style="margin-top:8px">Destino: carpeta <code>LOCAL_SYNC_DIR</code> de <code>.env</code> (montada como <code>/sync</code> en Docker). Para cambiarla edita <code>.env</code> y reinicia con <code>docker compose up -d</code>.</p>
+            <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <label style="font-size:13px;color:var(--ink-2);white-space:nowrap">Carpeta destino:</label>
+              <input class="input" id="inp-sync-dir" style="flex:1;min-width:180px;font-size:13px" placeholder="D:\Rutas\GPX">
+              <button class="btn btn-ghost btn-sm" id="btn-save-sync-dir">Guardar en .env</button>
+            </div>
+            <div id="sync-dir-notice" style="display:none;margin-top:8px;font-size:12px;color:var(--ink-2)">
+              ✓ .env actualizado. Para que el cambio tenga efecto reinicia Docker:
+              <code style="background:var(--soft);padding:1px 5px;border-radius:3px">docker compose up -d</code>
+              <button class="btn btn-sm" id="btn-copy-restart" style="margin-left:4px;height:22px;font-size:11px">Copiar</button>
+            </div>
           </div>
 
         </div>
@@ -1098,6 +1107,31 @@ document.getElementById('btn-ibp').addEventListener('click', function() {
 });
 
 // ── Exportar en carpetas ─────────────────────────────────────────────
+(async function () {
+  const inpDir = document.getElementById('inp-sync-dir');
+  const notice = document.getElementById('sync-dir-notice');
+  try {
+    const d = await fetch('/api/admin/env-config').then(r => r.json());
+    if (d.local_sync_dir) inpDir.value = d.local_sync_dir;
+    if (!d.env_writable) inpDir.placeholder = '(.env no montado — añade .env:/app/.env.host en docker-compose)';
+  } catch {}
+
+  document.getElementById('btn-save-sync-dir').addEventListener('click', async function () {
+    const val = inpDir.value.trim();
+    if (!val) { inpDir.focus(); return; }
+    this.disabled = true;
+    try {
+      const r = await fetch('/api/admin/env-config', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ local_sync_dir: val }) });
+      if (r.ok) { notice.style.display = ''; toast('Guardado en .env'); }
+      else { const e = await r.json(); toast(e.error || 'Error al guardar', 'error'); }
+    } finally { this.disabled = false; }
+  });
+
+  document.getElementById('btn-copy-restart').addEventListener('click', () => {
+    navigator.clipboard.writeText('docker compose up -d').then(() => toast('Copiado'));
+  });
+})();
+
 document.getElementById('btn-export-folders').addEventListener('click', function () {
   this.disabled = true;
   streamScript('/api/db/export-folders/sync', 'Exportar en carpetas', {}, () => {})
