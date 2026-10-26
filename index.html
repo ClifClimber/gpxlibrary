@@ -48,6 +48,10 @@
         <span class="chip-lbl" id="chip-geo-lbl"></span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <span class="chips-sep"></span>
+      <a href="/trazar" class="chip chip-toggle" id="chip-crear-ruta" title="Crear una ruta nueva">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Crear ruta
+      </a>
       <button class="chip chip-clear" id="clear-filters-btn" hidden>Limpiar todo</button>
     </div>
 
@@ -114,11 +118,6 @@
       <div id="sel-hint">Arrastra sobre el perfil para medir un tramo</div>
     </section>
 
-    <!-- Crear ruta: chip flotante sobre el mapa, esquina superior derecha -->
-    <a href="/trazar" id="btn-crear-ruta" class="chip" title="Crear una ruta nueva">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Crear ruta
-    </a>
   </div>
 
   <!-- Popovers (positioned under their chip) -->

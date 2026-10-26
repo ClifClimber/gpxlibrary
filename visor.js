@@ -770,9 +770,17 @@ function renderList(force) {
   const start = _listPage * PAGE_SIZE;
   list.innerHTML = visible.slice(start, start + PAGE_SIZE).map(x => trackItemHtml(x.it.track, x.ri)).join('');
   if (pages <= 1) { pagesEl.innerHTML = ''; return; }
-  pagesEl.innerHTML = Array.from({ length: pages }, (_, i) =>
-    `<button class="page-dot${i === _listPage ? ' active' : ''}" data-p="${i}">${i + 1}</button>`
-  ).join('');
+  // Build: 1 2 3 … N  (show neighbours of current page + first/last)
+  const show = new Set([0, pages - 1, _listPage, _listPage - 1, _listPage + 1].filter(n => n >= 0 && n < pages));
+  const btns = [];
+  for (let i = 0; i < pages; i++) {
+    if (show.has(i)) {
+      btns.push(`<button class="page-btn${i === _listPage ? ' active' : ''}" data-p="${i}">${i + 1}</button>`);
+    } else if (btns.at(-1) !== '<span class="page-btn page-ellipsis">…</span>') {
+      btns.push('<span class="page-btn page-ellipsis">…</span>');
+    }
+  }
+  pagesEl.innerHTML = btns.join('');
 }
 
 function goToPage(p) { _listPage = p; _listKey = ''; renderList(); }
@@ -790,7 +798,7 @@ tracklistEl.addEventListener('click', e => {
   activateTrack(idx, true);
 });
 $('tracklist-pages').addEventListener('click', e => {
-  const btn = e.target.closest('.page-dot');
+  const btn = e.target.closest('.page-btn[data-p]');
   if (btn) goToPage(+btn.dataset.p);
 });
 

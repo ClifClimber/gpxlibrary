@@ -212,38 +212,25 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 /* ── Leaflet (posición bajo la barra de chips) ───────────────────── */
 .leaflet-top.leaflet-right { top: calc(var(--bar-h) + var(--gap) + 10px); right: 2px; }
 
-/* ── Crear ruta: chip flotante sobre el mapa ─────────────────────── */
-#btn-crear-ruta {
-  position: absolute;
-  top: calc(var(--bar-h) + var(--gap) + 9px);
-  right: calc(36px + var(--gap) * 2);  /* junto a los controles de zoom */
-  z-index: 800;
-  background: var(--solid); color: var(--on-solid);
-  border: none; text-decoration: none;
-  display: flex; align-items: center; gap: 5px;
-  padding: 5px 11px; border-radius: var(--radius-full);
-  font-size: 13px; font-weight: 600;
-  box-shadow: var(--shadow);
-  white-space: nowrap;
-}
-#btn-crear-ruta:hover { filter: brightness(1.1); }
+/* ── Chip "Crear ruta" — igual que chip-toggle ────────────────────── */
+#chip-crear-ruta { text-decoration: none; }
 
 /* ── Paginación de la lista ──────────────────────────────────────── */
 #tracklist-pages {
   display: flex; justify-content: center; align-items: center;
-  gap: 5px; padding: 6px 0 4px;
-  flex-wrap: wrap;
+  gap: 2px; padding: 5px 8px 4px;
+  font-size: 13px; border-top: 1px solid var(--line);
 }
-.page-dot {
-  width: 26px; height: 26px; border-radius: 50%;
-  border: 1.5px solid var(--line);
-  background: transparent; color: var(--ink-2);
-  font-size: 11px; font-weight: 600; cursor: pointer;
+.page-btn {
+  min-width: 26px; height: 26px; padding: 0 4px; border-radius: var(--radius);
+  border: none; background: transparent; color: var(--ink-2);
+  font-size: 13px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: background .12s, color .12s;
+  transition: background .1s, color .1s;
 }
-.page-dot.active { background: var(--solid); color: var(--on-solid); border-color: var(--solid); }
-.page-dot:hover:not(.active) { background: var(--accent-soft); }
+.page-btn.active { background: var(--solid); color: var(--on-solid); font-weight: 700; }
+.page-btn:hover:not(.active):not(.page-ellipsis) { background: var(--accent-soft); }
+.page-ellipsis { cursor: default; color: var(--muted); }
 
 /* ── Activity markers ────────────────────────────────────────────── */
 .act-marker-wrap { background: transparent !important; border: none !important; box-shadow: none !important; }
