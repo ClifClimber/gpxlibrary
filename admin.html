@@ -186,15 +186,6 @@ tr.inactive td { opacity: .4; }
       <div class="card-body">
         <div id="storage-status"><div class="section-desc">Cargando…</div></div>
         <p class="section-desc" style="margin-top:12px">Los GPX originales viven en S3 (Garage en Docker; Cloudflare R2 o AWS en producción) y nunca se modifican. Las copias de seguridad de la base de datos no incluyen los GPX.</p>
-        <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
-          <p class="section-desc" style="margin-bottom:10px"><b>Copia local en carpetas</b> — exporta todos los tracks a <code>Actividad/Zona/Nombre.gpx</code> con los metadatos actuales. Se actualiza automáticamente tras cada importación.</p>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <label style="font-size:13px;color:var(--ink-2)">Carpeta destino:</label>
-            <input class="input" id="local-sync-dir" type="text" style="flex:1;min-width:200px;font-size:13px" placeholder="ruta/a/carpeta/local">
-            <button class="btn btn-ghost btn-sm" id="btn-save-sync-dir">Guardar ruta</button>
-            <button class="btn btn-primary btn-sm" id="btn-sync-local">↓ Exportar ahora</button>
-          </div>
-        </div>
       </div>
     </div>
     <div class="card">
@@ -322,7 +313,7 @@ tr.inactive td { opacity: .4; }
                 <button class="btn btn-primary btn-sm" id="btn-export-folders">Exportar</button>
               </div>
             </div>
-            <p>Crea una copia de toda la biblioteca organizada como <code>Actividad/Sierra/Nombre.gpx</code> en la carpeta que elijas, con el nombre y los datos actuales de cada ruta. Los originales del almacén no se tocan y no se sobrescribe nada en el destino.</p>
+            <p>Crea una copia de toda la biblioteca organizada como <code>Actividad/Sierra/Nombre.gpx</code> en la carpeta que elijas, con el nombre y los datos actuales de cada ruta. Los originales del almacén no se tocan y no se sobrescribe nada en el destino. <b>La carpeta configurada aquí se actualiza automáticamente tras cada importación.</b></p>
             <div style="display:flex;gap:6px;margin-top:8px">
               <input class="input" id="export-dest" placeholder="Carpeta de destino, p. ej. D:\Rutas GPX" style="height:32px">
               <button class="btn btn-sm" id="btn-export-browse" style="height:32px">Elegir…</button>
@@ -1127,7 +1118,11 @@ document.getElementById('btn-ibp').addEventListener('click', function() {
 // ── Exportar en carpetas ─────────────────────────────────────────────
 (function () {
   const destInp = document.getElementById('export-dest');
-  try { destInp.value = localStorage.getItem('export-dest') || ''; } catch {}
+  // Pre-fill from server settings (local_sync_dir), fall back to last-used localStorage value
+  fetch('/api/config/settings').then(r => r.json()).then(s => {
+    if (s.local_sync_dir) destInp.value = s.local_sync_dir;
+    else { try { destInp.value = localStorage.getItem('export-dest') || ''; } catch {} }
+  }).catch(() => { try { destInp.value = localStorage.getItem('export-dest') || ''; } catch {} });
   const modal = document.getElementById('dir-modal'), list = document.getElementById('dir-list'), pathInp = document.getElementById('dir-path');
   let parent = null;
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -1158,10 +1153,12 @@ document.getElementById('btn-ibp').addEventListener('click', function() {
   document.getElementById('dir-use').onclick = () => { destInp.value = pathInp.value.trim(); close(); };
   document.getElementById('btn-export-browse').onclick = () => { modal.classList.add('open'); load(destInp.value.trim() || ''); };
 
-  document.getElementById('btn-export-folders').addEventListener('click', function () {
+  document.getElementById('btn-export-folders').addEventListener('click', async function () {
     const dest = destInp.value.trim();
-    if (!dest) { destInp.focus(); toast('Elige una carpeta de destino', true); return; }
+    if (!dest) { destInp.focus(); toast('Elige una carpeta de destino', 'error'); return; }
     try { localStorage.setItem('export-dest', dest); } catch {}
+    // Save as the auto-sync folder
+    await fetch('/api/config/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ local_sync_dir: dest }) }).catch(() => {});
     this.disabled = true;
     streamScript('/api/export/folders', 'Exportar en carpetas', { dest })
       .finally(() => { this.disabled = false; });
@@ -1334,33 +1331,7 @@ async function loadStorage() {
   }
 }
 
-async function loadSyncDir() {
-  try {
-    const s = await fetch('/api/config/settings').then(r => r.json());
-    const el = document.getElementById('local-sync-dir');
-    if (el && s.local_sync_dir) el.value = s.local_sync_dir;
-  } catch {}
-}
-
-document.getElementById('btn-save-sync-dir').addEventListener('click', async function () {
-  const dir = document.getElementById('local-sync-dir').value.trim();
-  if (!dir) return;
-  this.disabled = true;
-  try {
-    const r = await fetch('/api/config/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ local_sync_dir: dir }) });
-    if (r.ok) toast('Ruta guardada');
-    else toast('Error al guardar la ruta', 'error');
-  } finally { this.disabled = false; }
-});
-
-document.getElementById('btn-sync-local').addEventListener('click', function () {
-  this.disabled = true;
-  streamScript('/api/db/export-folders/sync', 'Exportar tracks en carpetas', {}, () => {})
-    .finally(() => { this.disabled = false; });
-});
-
 loadStorage();
-loadSyncDir();
 
 // Load version info for About tab
 fetch('/api/admin/version').then(r => r.json()).then(d => {
