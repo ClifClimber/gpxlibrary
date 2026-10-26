@@ -310,14 +310,11 @@ tr.inactive td { opacity: .4; }
             <div class="op-head">
               <h3>Exportar en carpetas</h3>
               <div class="op-btns">
-                <button class="btn btn-primary btn-sm" id="btn-export-folders">Exportar</button>
+                <button class="btn btn-primary btn-sm" id="btn-export-folders">↓ Exportar ahora</button>
               </div>
             </div>
-            <p>Crea una copia de toda la biblioteca organizada como <code>Actividad/Sierra/Nombre.gpx</code> en la carpeta que elijas, con el nombre y los datos actuales de cada ruta. Los originales del almacén no se tocan y no se sobrescribe nada en el destino. <b>La carpeta configurada aquí se actualiza automáticamente tras cada importación.</b></p>
-            <div style="display:flex;gap:6px;margin-top:8px">
-              <input class="input" id="export-dest" placeholder="Carpeta de destino, p. ej. D:\Rutas GPX" style="height:32px">
-              <button class="btn btn-sm" id="btn-export-browse" style="height:32px">Elegir…</button>
-            </div>
+            <p>Crea una copia de toda la biblioteca como <code>Actividad/Sierra/Nombre.gpx</code> con el nombre y los datos actuales. Los originales en S3 no se modifican. <b>Se actualiza automáticamente tras cada importación.</b></p>
+            <p class="section-desc" style="margin-top:8px">Destino: carpeta <code>LOCAL_SYNC_DIR</code> de <code>.env</code> (montada como <code>/sync</code> en Docker). Para cambiarla edita <code>.env</code> y reinicia con <code>docker compose up -d</code>.</p>
           </div>
 
         </div>
@@ -877,21 +874,6 @@ tr.inactive td { opacity: .4; }
 </div>
 
 
-<div class="modal-overlay" id="dir-modal">
-  <div class="modal" style="width:min(520px,100%)">
-    <div class="modal-head"><h3>Elegir carpeta de destino</h3><button class="icon-btn" id="dir-close" title="Cerrar">✕</button></div>
-    <div class="modal-body">
-      <div style="display:flex;gap:6px;margin-bottom:8px">
-        <button class="btn btn-sm" id="dir-up" title="Carpeta superior">↑ Subir</button>
-        <input class="input" id="dir-path" style="height:30px;font-size:12px">
-        <button class="btn btn-sm" id="dir-go">Ir</button>
-      </div>
-      <div id="dir-list" style="max-height:320px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius-sm)"></div>
-      <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Si la carpeta no existe se creará al exportar: puedes escribir un nombre nuevo al final de la ruta.</p>
-    </div>
-    <div class="modal-foot"><button class="btn" id="dir-cancel">Cancelar</button><button class="btn btn-primary" id="dir-use">Usar esta carpeta</button></div>
-  </div>
-</div>
 <div id="toast"></div>
 
 <script>
@@ -1116,61 +1098,11 @@ document.getElementById('btn-ibp').addEventListener('click', function() {
 });
 
 // ── Exportar en carpetas ─────────────────────────────────────────────
-(function () {
-  const destInp = document.getElementById('export-dest');
-  // Pre-fill from server settings (local_sync_dir), fall back to last-used localStorage value
-  fetch('/api/config/settings').then(r => r.json()).then(s => {
-    if (s.local_sync_dir) destInp.value = s.local_sync_dir;
-    else { try { destInp.value = localStorage.getItem('export-dest') || ''; } catch {} }
-  }).catch(() => { try { destInp.value = localStorage.getItem('export-dest') || ''; } catch {} });
-  const modal = document.getElementById('dir-modal'), list = document.getElementById('dir-list'), pathInp = document.getElementById('dir-path');
-  let parent = null;
-  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-  async function load(p, keepPath) {
-    list.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:12px">Cargando…</div>';
-    try {
-      const r = await fetch('/api/fs/dirs?path=' + encodeURIComponent(p || ''));
-      const d = await r.json();
-      if (d.error) {
-        // Folder doesn't exist yet — show parent and keep the typed path in the input
-        const sep = p.includes('/') ? '/' : '\\';
-        const parentPath = p.replace(new RegExp('[^\\\\/]+[/\\\\]?$'), '').replace(/[/\\]+$/, '') || sep;
-        if (parentPath && parentPath !== p) { load(parentPath, p); return; }
-        throw new Error(d.error);
-      }
-      if (!keepPath) pathInp.value = d.current;
-      parent = d.parent;
-      document.getElementById('dir-up').disabled = !parent;
-      const dirs = d.dirs.filter(x => !/^\$|^System Volume Information$/i.test(x.name));
-      list.innerHTML = dirs.length
-        ? dirs.map(x => `<div class="dir-item" data-p="${esc(x.path)}" style="padding:7px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--line)">📁 ${esc(x.name)}</div>`).join('')
-        : '<div style="padding:12px;color:var(--muted);font-size:12px">Sin subcarpetas</div>';
-    } catch (e) {
-      list.innerHTML = `<div style="padding:12px;color:var(--danger);font-size:12px">${esc(e.message)}</div>`;
-    }
-  }
-  list.addEventListener('click', e => { const el = e.target.closest('.dir-item'); if (el) load(el.dataset.p); });
-  list.addEventListener('mouseover', e => { const el = e.target.closest('.dir-item'); list.querySelectorAll('.dir-item').forEach(x => x.style.background = x === el ? 'var(--soft)' : ''); });
-  document.getElementById('dir-up').onclick = () => parent && load(parent);
-  document.getElementById('dir-go').onclick = () => load(pathInp.value.trim());
-  pathInp.addEventListener('keydown', e => { if (e.key === 'Enter') load(pathInp.value.trim()); });
-  const close = () => modal.classList.remove('open');
-  document.getElementById('dir-close').onclick = close;
-  document.getElementById('dir-cancel').onclick = close;
-  document.getElementById('dir-use').onclick = () => { destInp.value = pathInp.value.trim(); close(); };
-  document.getElementById('btn-export-browse').onclick = () => { const v = destInp.value.trim(); pathInp.value = v; modal.classList.add('open'); load(v || '', v || null); };
-
-  document.getElementById('btn-export-folders').addEventListener('click', async function () {
-    const dest = destInp.value.trim();
-    if (!dest) { destInp.focus(); toast('Elige una carpeta de destino', 'error'); return; }
-    try { localStorage.setItem('export-dest', dest); } catch {}
-    // Save as the auto-sync folder
-    await fetch('/api/config/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ local_sync_dir: dest }) }).catch(() => {});
-    this.disabled = true;
-    streamScript('/api/export/folders', 'Exportar en carpetas', { dest })
-      .finally(() => { this.disabled = false; });
-  });
-})();
+document.getElementById('btn-export-folders').addEventListener('click', function () {
+  this.disabled = true;
+  streamScript('/api/db/export-folders/sync', 'Exportar en carpetas', {}, () => {})
+    .finally(() => { this.disabled = false; });
+});
 
 
 
