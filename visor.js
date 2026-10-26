@@ -195,7 +195,6 @@ let activeIdx = null;
 let sliders = {};
 let geoFilter = null;   // {lat, lon, radius, name}
 let geoCircle = null;
-let vpFilterActive = false;
 let idSet = new Set();   // filter to specific IDs (from ?ids= URL param)
 let sortMode = 'name';
 try { sortMode = localStorage.getItem('visor-sort') || 'name'; } catch {}
@@ -680,13 +679,11 @@ const tagsOk   = (t, f) => f.tags.size === 0    || (t.tags || []).some(x => f.ta
 
 function applyFilters() {
   const f = readFilters();
-  const vb = vpFilterActive ? map.getBounds() : null;
   let totalDist = 0, totalEle = 0, visCount = 0;
   items.forEach((it, i) => {
     const t = it.track;
     const ok = (idSet.size === 0 || idSet.has(t.id)) &&
-      baseMatch(t, f) && actOk(t, f) && sierraOk(t, f) && tagsOk(t, f) &&
-      (!vb || vb.intersects(L.latLngBounds(t.bounds[0], t.bounds[1])));
+      baseMatch(t, f) && actOk(t, f) && sierraOk(t, f) && tagsOk(t, f);
     it.visible = ok;
     if (ok) {
       visCount++; totalDist += t.distance || 0; totalEle += t.elevationGain || 0;
@@ -844,7 +841,7 @@ function countActiveFilters(f) {
   return f.acts.size + f.sierras.size + f.tags.size + f.rtype.size +
     (f.ibpActive ? 1 : 0) + (geoFilter ? 1 : 0) +
     (sliders.dist?.isActive() ? 1 : 0) + (sliders.ele?.isActive() ? 1 : 0) +
-    (f.year ? 1 : 0) + (f.q ? 1 : 0) + (vpFilterActive ? 1 : 0);
+    (f.year ? 1 : 0) + (f.q ? 1 : 0);
 }
 
 // ── Build filter UI ──────────────────────────────────────────────────
@@ -944,7 +941,6 @@ $('clear-filters-btn').addEventListener('click', () => {
   Object.values(RESETS).forEach(fn => fn());
   $('text-search').value = '';
   $('search-clear').hidden = true;
-  if (vpFilterActive) { vpFilterActive = false; $('vp-filter-btn').classList.remove('active'); }
   closePopover();
   applyFilters();
 });
@@ -978,12 +974,6 @@ document.addEventListener('mousedown', e => {
 });
 $('chips').addEventListener('scroll', () => { if (openPop) positionPopover(openPop.pop, openPop.chip); });
 
-$('vp-filter-btn').addEventListener('click', () => {
-  vpFilterActive = !vpFilterActive;
-  $('vp-filter-btn').classList.toggle('active', vpFilterActive);
-  applyFilters();
-});
-map.on('moveend', () => { if (vpFilterActive) applyFilters(); });
 
 // ── Unified search: routes + places ──────────────────────────────────
 const searchInp = $('text-search');

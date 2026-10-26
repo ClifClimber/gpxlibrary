@@ -48,10 +48,6 @@
         <span class="chip-lbl" id="chip-geo-lbl"></span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <span class="chips-sep"></span>
-      <button class="chip chip-toggle" id="vp-filter-btn" title="Mostrar solo las rutas visibles en el mapa">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-        Solo zona visible
-      </button>
       <button class="chip chip-clear" id="clear-filters-btn" hidden>Limpiar todo</button>
     </div>
 
@@ -59,6 +55,7 @@
     <aside id="panel" class="floating">
       <div id="panel-head">
         <div id="list-count">—</div>
+        <a href="/trazar" class="btn btn-primary btn-sm" id="btn-crear-ruta" title="Crear una ruta nueva">+ Crear ruta</a>
         <select id="sort-select" title="Ordenar">
           <option value="name">Nombre A–Z</option>
           <option value="date">Más recientes</option>
