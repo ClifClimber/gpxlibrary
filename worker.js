@@ -11,8 +11,8 @@ const { appendLog } = require('./scripts/applog');
 
 (async () => {
   const repo = createRepo();
-  if (repo.driver === 'postgres') await migrate(repo.pool);
-  const queue = createQueue(openSql({ driver: repo.driver, pool: repo.pool }));
+  await migrate(repo.pool);
+  const queue = createQueue(openSql({ pool: repo.pool }));
   const worker = createWorker({
     getQueue: () => queue,
     onFinish: (job, code, lines) => {

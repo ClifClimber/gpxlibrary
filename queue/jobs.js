@@ -18,7 +18,6 @@ const JOBS = {
   'export-folders':    { label: 'Exportar en carpetas' },
   'migrate-store':     { label: 'Pasar al almacén' },
   'extract-urls':      { label: 'Extraer URLs' },
-  'export-catalog':    { label: 'Exportar catalog-data.js' },
 };
 
 const scriptOf = type => (JOBS[type] ? path.join(SCRIPTS_DIR, `${type}.js`) : null);

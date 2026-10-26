@@ -1,9 +1,8 @@
 'use strict';
-// Engine-neutral async SQL access for scripts and maintenance code.
-// Write portable SQL with `?` placeholders; use `db.NOW` for timestamp columns, `db.NOW_TEXT` for
-// text columns that hold SQLite-style 'YYYY-MM-DD HH:MM:SS' dates, `db.BIN` after a text ORDER BY
-// term for the same byte order on both engines, and
-// getPoints / setPoints for GPS points (rows in SQLite, a PostGIS geometry in Postgres).
+// Async SQL access for scripts and maintenance code. Always PostgreSQL.
+// Write portable SQL with `?` placeholders; use `db.NOW` for timestamp columns,
+// `db.NOW_TEXT` for 'YYYY-MM-DD HH:MM:SS' text columns, `db.BIN` after a text ORDER BY term
+// for byte-order sorting, and getPoints / setPoints for GPS points (PostGIS geometry).
 const config = require('../config');
 
 function toPgPlaceholders(sql) {
@@ -15,39 +14,7 @@ function toPgPlaceholders(sql) {
   return out;
 }
 
-function sqliteSql() {
-  const { openDb, closeDb } = require('../scripts/db');
-  const raw = () => openDb();
-  const api = {
-    driver: 'sqlite',
-    NOW: "datetime('now')",
-    NOW_TEXT: "datetime('now')",
-    BIN: '',
-    async all(sql, params = []) { return raw().prepare(sql).all(...params); },
-    async get(sql, params = []) { return raw().prepare(sql).get(...params) ?? null; },
-    async run(sql, params = []) { const r = raw().prepare(sql).run(...params); return { changes: Number(r.changes), lastId: Number(r.lastInsertRowid) }; },
-    async exec(sql) { raw().exec(sql); },
-    async tx(fn) {
-      raw().exec('BEGIN');
-      try { const r = await fn(api); raw().exec('COMMIT'); return r; }
-      catch (e) { try { raw().exec('ROLLBACK'); } catch {} throw e; }
-    },
-    async getPoints(id, { clean = false } = {}) {
-      return raw().prepare(`SELECT lat, lon, ele FROM ${clean ? 'clean_points' : 'raw_points'} WHERE track_id=? ORDER BY seq`).all(id)
-        .map(p => ({ lat: p.lat, lon: p.lon, ele: p.ele }));
-    },
-    async setPoints(id, points, { clean = false } = {}) {
-      const table = clean ? 'clean_points' : 'raw_points';
-      raw().prepare(`DELETE FROM ${table} WHERE track_id=?`).run(id);
-      const ins = raw().prepare(`INSERT INTO ${table}(track_id,seq,lat,lon,ele) VALUES(?,?,?,?,?)`);
-      (points || []).forEach((p, i) => ins.run(id, i, p.lat, p.lon, p.ele ?? null));
-    },
-    async close() { closeDb(); },
-  };
-  return api;
-}
-
-function postgresSql(pool) {
+function openSql({ pool } = {}) {
   const { Pool } = require('pg');
   const { parseWkbLine, lineParams } = require('./postgres');
   const ownPool = !pool;
@@ -87,11 +54,6 @@ function postgresSql(pool) {
     return api;
   };
   return make(pool);
-}
-
-/** Opens the engine selected by DB_DRIVER (or the one given). */
-function openSql({ driver = config.DB_DRIVER, pool } = {}) {
-  return driver === 'postgres' ? postgresSql(pool) : sqliteSql();
 }
 
 module.exports = { openSql, toPgPlaceholders };

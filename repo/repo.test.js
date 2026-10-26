@@ -1,18 +1,9 @@
 'use strict';
-// Contract tests: the same assertions run against every available engine.
-// SQLite uses a temporary file; Postgres uses a separate database (gpxlibrary_test) and is
-// skipped when DATABASE_URL is not reachable.
-const os = require('os');
-const path = require('path');
-const fs = require('fs');
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gpxrepo-'));
-process.env.SQLITE_PATH = path.join(tmpDir, 'test.db');
-
+// Contract tests for the PostgreSQL repository.
+// Uses a separate database (gpxlibrary_test) and is skipped when DATABASE_URL is not reachable.
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const config = require('../config');
-const { openDb } = require('../scripts/db');
-const { createSqliteRepo } = require('./sqlite');
 const { createPostgresRepo, lineParams } = require('./postgres');
 const { migrate } = require('./pg-migrate');
 
@@ -24,18 +15,6 @@ const SEED = [
   { id: 3, name: 'Álamo', file: 'TracksGps/store/c.gpx', date: '2024-01-02', activity: 'MTB', sierra: null, province: null, ccaa: null, tags: '["agua"]', imported_at: '2024-05-02 10:00:00', sw_lat: 41, sw_lon: -4.1, ne_lat: 41.1, ne_lon: -4, pts: PTS_B },
 ];
 const COLS = ['id', 'name', 'file', 'date', 'activity', 'sierra', 'province', 'ccaa', 'tags', 'imported_at', 'sw_lat', 'sw_lon', 'ne_lat', 'ne_lon', 'raw_count'];
-
-async function sqliteFixture() {
-  const db = openDb();
-  db.exec('DELETE FROM tracks; DELETE FROM raw_points; DELETE FROM config_activities; DELETE FROM config_sierras;');
-  const ins = db.prepare(`INSERT INTO tracks (${COLS.join(',')}) VALUES (${COLS.map(() => '?').join(',')})`);
-  const pt = db.prepare('INSERT INTO raw_points (track_id,seq,lat,lon,ele) VALUES (?,?,?,?,?)');
-  for (const t of SEED) {
-    ins.run(...COLS.map(c => (c === 'raw_count' ? t.pts.length : t[c])));
-    t.pts.forEach((p, i) => pt.run(t.id, i, p.lat, p.lon, p.ele));
-  }
-  return createSqliteRepo();
-}
 
 async function postgresFixture() {
   if (!config.DATABASE_URL) return null;
@@ -57,79 +36,75 @@ async function postgresFixture() {
   return createPostgresRepo({ pool });
 }
 
-const ENGINES = [['sqlite', sqliteFixture], ['postgres', postgresFixture]];
+describe('postgres', () => {
+  let repo;
+  before(async () => { repo = await postgresFixture(); });
+  after(async () => { if (repo) { await repo.close(); if (repo.pool) await repo.pool.end(); } });
+  const it = (title, fn) => test(title, async t => { if (!repo) return t.skip('postgres no disponible'); await fn(); });
 
-for (const [name, fixture] of ENGINES) {
-  describe(name, () => {
-    let repo;
-    before(async () => { repo = await fixture(); });
-    after(async () => { if (repo) { await repo.close(); if (repo.pool) await repo.pool.end(); } });
-    const it = (title, fn) => test(title, async t => { if (!repo) return t.skip(`${name} no disponible`); await fn(); });
-
-    it('listTracks: newest import first, then byte-wise name, then id', async () => {
-      const rows = await repo.listTracks();
-      assert.deepEqual(rows.map(r => r.id), [2, 3, 1]);   // byte order: 'alfa' (0x61) before 'Álamo' (0xC3)
-      assert.equal(rows[0].imported_at, '2024-05-02 10:00:00');
-    });
-
-    it('catalogTracks: newest date first, undated last', async () => {
-      assert.deepEqual((await repo.catalogTracks()).map(r => r.id), [1, 3, 2]);
-    });
-
-    it('getTrack and getPoints round-trip coordinates and missing elevation exactly', async () => {
-      const t = await repo.getTrack(1);
-      assert.equal(t.name, 'Bravo');
-      assert.equal(t.tags, '["peña","agua"]');
-      assert.deepEqual(await repo.getPoints(1), PTS_A);
-      assert.deepEqual(await repo.getPoints(1, { clean: true }), []);
-      assert.equal(await repo.getTrack(999), null);
-    });
-
-    it('updateTrack changes only editable fields and keeps zone in sync with sierra', async () => {
-      assert.equal(await repo.updateTrack(3, { name: 'Nuevo', sierra: 'Gredos', file: 'x', bogus: 1 }), 1);
-      const t = await repo.getTrack(3);
-      assert.equal(t.name, 'Nuevo');
-      assert.equal(t.sierra, 'Gredos');
-      assert.equal(t.zone, 'Gredos');
-      assert.equal(t.file, 'TracksGps/store/c.gpx');
-      assert.equal(await repo.updateTrack(3, { bogus: 1 }), 0);
-    });
-
-    it('bulkUpdate with notes appended', async () => {
-      await repo.bulkUpdate([1, 2], { activity: 'Gravel', notes: 'uno' }, true);
-      await repo.bulkUpdate([1], { notes: 'dos' }, true);
-      assert.equal((await repo.getTrack(1)).notes, 'uno\ndos');
-      assert.equal((await repo.getTrack(2)).activity, 'Gravel');
-    });
-
-    it('moveTrack, tags, geo and recentIds', async () => {
-      assert.equal(await repo.moveTrack(2, 'Trail Running', null), 1);
-      assert.equal((await repo.getTrack(2)).activity, 'Trail Running');
-      assert.equal(await repo.moveTrack(999, 'X', null), 0);
-      assert.deepEqual(await repo.tags(), ['agua', 'peña']);
-      assert.deepEqual(await repo.geo(), { provinces: ['Madrid', 'Ávila'], ccaa: ['Castilla y León', 'Comunidad de Madrid'], zones: ['Gredos', 'Pedriza', 'Álamo'] });
-      assert.deepEqual(await repo.recentIds(), []);
-      await repo.setTimes(1, 3600, 60);
-      const t = await repo.getTrack(1);
-      assert.deepEqual([t.moving_time, t.stopped_time], [3600, 60]);
-    });
-
-    it('config CRUD with the same defaults', async () => {
-      const a = await repo.createConfig('config_activities', { name: 'Kayak' });
-      assert.deepEqual({ ...a, id: undefined }, { id: undefined, name: 'Kayak', color: null, keywords: '', sort_order: 99, active: 1 });
-      const u = await repo.updateConfig('config_activities', a.id, { name: 'Kayak', color: '#123456', active: 0 });
-      assert.deepEqual([u.color, u.sort_order, u.active], ['#123456', 0, 0]);
-      await repo.createConfig('config_sierras', { name: 'Gredos', sw_lat: 40, sw_lon: -5.5, ne_lat: 40.4, ne_lon: -4.9 });
-      assert.deepEqual((await repo.listConfig('config_sierras')).map(r => r.name), ['Gredos']);
-      await repo.deleteConfig('config_activities', a.id);
-      assert.deepEqual(await repo.listConfig('config_activities'), []);
-      await assert.rejects(repo.listConfig('tracks'));
-    });
-
-    it('deleteTrack returns the stored file and removes the row', async () => {
-      assert.equal(await repo.deleteTrack(3), 'TracksGps/store/c.gpx');
-      assert.equal(await repo.getTrack(3), null);
-      assert.equal(await repo.deleteTrack(3), null);
-    });
+  it('listTracks: newest import first, then byte-wise name, then id', async () => {
+    const rows = await repo.listTracks();
+    assert.deepEqual(rows.map(r => r.id), [2, 3, 1]);   // byte order: 'alfa' (0x61) before 'Álamo' (0xC3)
+    assert.equal(rows[0].imported_at, '2024-05-02 10:00:00');
   });
-}
+
+  it('catalogTracks: newest date first, undated last', async () => {
+    assert.deepEqual((await repo.catalogTracks()).map(r => r.id), [1, 3, 2]);
+  });
+
+  it('getTrack and getPoints round-trip coordinates and missing elevation exactly', async () => {
+    const t = await repo.getTrack(1);
+    assert.equal(t.name, 'Bravo');
+    assert.equal(t.tags, '["peña","agua"]');
+    assert.deepEqual(await repo.getPoints(1), PTS_A);
+    assert.deepEqual(await repo.getPoints(1, { clean: true }), []);
+    assert.equal(await repo.getTrack(999), null);
+  });
+
+  it('updateTrack changes only editable fields and keeps zone in sync with sierra', async () => {
+    assert.equal(await repo.updateTrack(3, { name: 'Nuevo', sierra: 'Gredos', file: 'x', bogus: 1 }), 1);
+    const t = await repo.getTrack(3);
+    assert.equal(t.name, 'Nuevo');
+    assert.equal(t.sierra, 'Gredos');
+    assert.equal(t.zone, 'Gredos');
+    assert.equal(t.file, 'TracksGps/store/c.gpx');
+    assert.equal(await repo.updateTrack(3, { bogus: 1 }), 0);
+  });
+
+  it('bulkUpdate with notes appended', async () => {
+    await repo.bulkUpdate([1, 2], { activity: 'Gravel', notes: 'uno' }, true);
+    await repo.bulkUpdate([1], { notes: 'dos' }, true);
+    assert.equal((await repo.getTrack(1)).notes, 'uno\ndos');
+    assert.equal((await repo.getTrack(2)).activity, 'Gravel');
+  });
+
+  it('moveTrack, tags, geo and recentIds', async () => {
+    assert.equal(await repo.moveTrack(2, 'Trail Running', null), 1);
+    assert.equal((await repo.getTrack(2)).activity, 'Trail Running');
+    assert.equal(await repo.moveTrack(999, 'X', null), 0);
+    assert.deepEqual(await repo.tags(), ['agua', 'peña']);
+    assert.deepEqual(await repo.geo(), { provinces: ['Madrid', 'Ávila'], ccaa: ['Castilla y León', 'Comunidad de Madrid'], zones: ['Gredos', 'Pedriza', 'Álamo'] });
+    assert.deepEqual(await repo.recentIds(), []);
+    await repo.setTimes(1, 3600, 60);
+    const t = await repo.getTrack(1);
+    assert.deepEqual([t.moving_time, t.stopped_time], [3600, 60]);
+  });
+
+  it('config CRUD with the same defaults', async () => {
+    const a = await repo.createConfig('config_activities', { name: 'Kayak' });
+    assert.deepEqual({ ...a, id: undefined }, { id: undefined, name: 'Kayak', color: null, keywords: '', sort_order: 99, active: 1 });
+    const u = await repo.updateConfig('config_activities', a.id, { name: 'Kayak', color: '#123456', active: 0 });
+    assert.deepEqual([u.color, u.sort_order, u.active], ['#123456', 0, 0]);
+    await repo.createConfig('config_sierras', { name: 'Gredos', sw_lat: 40, sw_lon: -5.5, ne_lat: 40.4, ne_lon: -4.9 });
+    assert.deepEqual((await repo.listConfig('config_sierras')).map(r => r.name), ['Gredos']);
+    await repo.deleteConfig('config_activities', a.id);
+    assert.deepEqual(await repo.listConfig('config_activities'), []);
+    await assert.rejects(repo.listConfig('tracks'));
+  });
+
+  it('deleteTrack returns the stored file and removes the row', async () => {
+    assert.equal(await repo.deleteTrack(3), 'TracksGps/store/c.gpx');
+    assert.equal(await repo.getTrack(3), null);
+    assert.equal(await repo.deleteTrack(3), null);
+  });
+});

@@ -15,9 +15,6 @@ if (fs.existsSync(envFile)) {
   }
 }
 
-const DB_DRIVER = (process.env.DB_DRIVER || 'sqlite').toLowerCase();
-if (!['sqlite', 'postgres'].includes(DB_DRIVER)) throw new Error(`DB_DRIVER no válido: ${DB_DRIVER} (sqlite | postgres)`);
-
 function withHost(url, host) {
   if (!url || !host) return url;
   const u = new URL(url);
@@ -30,10 +27,8 @@ if (!['local', 's3'].includes(STORAGE_DRIVER)) throw new Error(`STORAGE_DRIVER n
 
 module.exports = {
   ROOT,
-  DB_DRIVER,
   // DATABASE_HOST (host:port) replaces the host of DATABASE_URL, e.g. `db:5432` inside docker-compose
   DATABASE_URL: withHost(process.env.DATABASE_URL || '', process.env.DATABASE_HOST),
-  SQLITE_PATH: process.env.SQLITE_PATH || path.join(ROOT, 'data', 'tracks.db'),
   // Original GPX files: local folder or an S3-compatible bucket (Garage, R2, AWS)
   STORAGE_DRIVER,
   STORE_DIR: process.env.STORE_DIR || path.join(ROOT, 'TracksGps', 'store'),

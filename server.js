@@ -14,13 +14,12 @@ const path   = require('path');
 const zlib   = require('zlib');
 const { pipeline } = require('stream/promises');
 const { spawn } = require('child_process');
-const { openDb, closeDb, withTransaction, DB_PATH } = require('./scripts/db');
 const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampleEvenly } = require('./domain');
 const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
 const { openSql } = require('./repo/sql');
 // Engine-neutral SQL on the active engine (shares the repository's Postgres pool; never closed here).
-const sqlDb = () => openSql({ driver: repo.driver, pool: repo.pool });
+const sqlDb = () => openSql({ pool: repo.pool });
 let repo = getRepo();   // reassigned when the engine is switched from Admin
 const { downloadName, readTrackFile, deleteTrackFile, gpxText } = require('./scripts/store');
 const { createBlob } = require('./blob');
@@ -79,13 +78,12 @@ function serveStatic(res, filePath, req) {
 // Summary, per-activity breakdown and storage size, identical on both engines.
 async function dbSummary() {
   const db = sqlDb();
-  const pg = db.driver === 'postgres';
-  const lastImport = pg ? "to_char(MAX(imported_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')" : 'MAX(imported_at)';
   const sums = `CAST(SUM(raw_count) AS INTEGER) AS rawPoints,
         CAST(SUM(CASE WHEN cleaned=1 THEN clean_count ELSE 0 END) AS INTEGER) AS cleanPoints`;
   const summary = await db.get(`
       SELECT CAST(COUNT(*) AS INTEGER) AS tracks, ${sums},
-        CAST(SUM(cleaned) AS INTEGER) AS cleanedTracks, ${lastImport} AS lastImport
+        CAST(SUM(cleaned) AS INTEGER) AS cleanedTracks,
+        to_char(MAX(imported_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS lastImport
       FROM tracks`);
   const cats = await db.all(`
       SELECT activity AS category, CAST(COUNT(*) AS INTEGER) AS count, ${sums},
@@ -93,14 +91,9 @@ async function dbSummary() {
       FROM tracks
       GROUP BY activity ORDER BY count DESC, activity ${db.BIN}`);
   // Postgres folds unquoted aliases to lower case
-  const fix = r => pg ? Object.fromEntries(Object.entries(r).map(([k, v]) => [{ rawpoints: 'rawPoints', cleanpoints: 'cleanPoints', cleanedtracks: 'cleanedTracks', lastimport: 'lastImport' }[k] || k, v])) : r;
-  let dbSize = 0, walSize = 0;
-  if (pg) dbSize = Number((await db.get('SELECT pg_database_size(current_database()) AS n')).n);
-  else {
-    dbSize  = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
-    walSize = fs.existsSync(DB_PATH + '-wal') ? fs.statSync(DB_PATH + '-wal').size : 0;
-  }
-  return { summary: fix(summary), cats: cats.map(fix), dbSize, walSize };
+  const fix = r => Object.fromEntries(Object.entries(r).map(([k, v]) => [{ rawpoints: 'rawPoints', cleanpoints: 'cleanPoints', cleanedtracks: 'cleanedTracks', lastimport: 'lastImport' }[k] || k, v]));
+  const dbSize = Number((await db.get('SELECT pg_database_size(current_database()) AS n')).n);
+  return { summary: fix(summary), cats: cats.map(fix), dbSize, walSize: 0 };
 }
 
 async function apiStats(res) {
@@ -139,12 +132,11 @@ const jobQueue = () => createQueue(sqlDb());
 
 const worker = process.env.EMBEDDED_WORKER === '0' ? null : createWorker({
   getQueue: jobQueue,
-  isPaused: () => switchingEngine || switchingStorage,
+  isPaused: () => switchingStorage,
   onFinish: (job, code, lines) => {
     appendLog(code === 0 ? 'info' : 'error', job.type, `${job.type} ${code === 0 ? 'completado' : code === 130 ? 'cancelado' : 'fallido'}`,
       { job: job.id, ...summarize(lines, code) });
     if (code === 0) invalidateCatalogCache();
-    checkpointWal();
   },
 });
 
@@ -152,7 +144,7 @@ async function apiRunScript(res, scriptPath, args = []) {
   const type = path.basename(scriptPath, '.js');
   try {
     if (!JOBS[type]) throw new Error(`Tipo de trabajo desconocido: ${type}`);
-    if (switchingEngine || switchingStorage) throw new Error('Hay un cambio de motor o de almacén en curso; inténtalo en un momento');
+    if (switchingStorage) throw new Error('Hay un cambio de almacén en curso; inténtalo en un momento');
     const job = await jobQueue().enqueue(type, { args }, { maxAttempts: JOBS[type].maxAttempts || 1 });
     appendLog('info', type, `${type} en cola`, { job: job.id, args });
     return streamJob(res, job.id);
@@ -508,11 +500,6 @@ let _catalogEtag = '';
 
 function invalidateCatalogCache() { _catalogCache = null; }
 
-function checkpointWal() {
-  if (repo.driver !== 'sqlite') return;
-  try { openDb().exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch (e) { console.error('[wal] checkpoint:', e.message); }
-}
-
 
 async function buildCatalog() {
   const tracks = await repo.catalogTracks();
@@ -746,8 +733,8 @@ async function apiConfigProvinces(res) {
 }
 
 // ── Admin API ─────────────────────────────────────────────────────
-const BACKUPS_DIR        = path.join(path.dirname(DB_PATH), 'backups');
-const BACKUP_CONFIG_PATH = path.join(path.dirname(DB_PATH), 'backup-config.json');
+const BACKUPS_DIR        = path.join(ROOT, 'data', 'backups');
+const BACKUP_CONFIG_PATH = path.join(ROOT, 'data', 'backup-config.json');
 
 function readBackupConfig() {
   try { return JSON.parse(fs.readFileSync(BACKUP_CONFIG_PATH, 'utf8')); } catch { return { maxKeep: 10 }; }
@@ -779,13 +766,10 @@ async function createBackupFile() {
   const ts      = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const tmpPath = path.join(BACKUPS_DIR, `tracks-${ts}.db`);
   const gz      = tmpPath + '.gz';
-  if (repo.driver === 'sqlite') openDb().exec(`VACUUM INTO '${tmpPath.replace(/'/g, "''")}'`);
-  else {
-    const out = [];
-    const code = await runStreaming(process.execPath,
-      [path.join(ROOT, 'scripts', 'db-copy.js'), '--to', 'sqlite', '--sqlite', tmpPath, '--replace'], l => out.push(l));
-    if (code !== 0) throw new Error('Volcado de PostgreSQL fallido: ' + out.slice(-3).join(' · '));
-  }
+  const out = [];
+  const code = await runStreaming(process.execPath,
+    [path.join(ROOT, 'scripts', 'db-copy.js'), '--to', 'sqlite', '--sqlite', tmpPath, '--replace'], l => out.push(l));
+  if (code !== 0) throw new Error('Volcado de PostgreSQL fallido: ' + out.slice(-3).join(' · '));
   await pipeline(fs.createReadStream(tmpPath), zlib.createGzip({ level: 6 }), fs.createWriteStream(gz));
   fs.unlinkSync(tmpPath);
   return gz;
@@ -796,7 +780,7 @@ async function apiAdminStats(res) {
     const { summary, cats, dbSize, walSize } = await dbSummary();
     const backups = listBackupFiles();
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ...summary, cats, dbSize, walSize, gpxCount: summary.tracks, backups, driver: repo.driver }));
+    res.end(JSON.stringify({ ...summary, cats, dbSize, gpxCount: summary.tracks, backups, driver: 'postgres' }));
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
@@ -835,30 +819,17 @@ async function apiAdminRestore(res, filename) {
     if (!src.startsWith(BACKUPS_DIR) || !fs.existsSync(src)) {
       res.writeHead(404); res.end('Backup not found'); return;
     }
-    if (repo.driver === 'postgres') {
-      // Unpack the SQLite backup next to the others and load it into Postgres with db-copy
-      const tmp = path.join(BACKUPS_DIR, `restore-${Date.now()}.tmp.db`);
-      const rm = () => { for (const ext of ['', '-wal', '-shm']) { try { fs.unlinkSync(tmp + ext); } catch {} } };
-      try {
-        if (filename.endsWith('.gz')) await pipeline(fs.createReadStream(src), zlib.createGunzip(), fs.createWriteStream(tmp));
-        else fs.copyFileSync(src, tmp);
-        const out = [];
-        const code = await runStreaming(process.execPath, [path.join(ROOT, 'scripts', 'db-copy.js'), '--to', 'postgres', '--replace'],
-          l => out.push(l), { env: { ...process.env, SQLITE_PATH: tmp } });
-        if (code !== 0) throw new Error('Carga en PostgreSQL fallida: ' + out.slice(-3).join(' · '));
-      } finally { rm(); }
-    } else {
-      closeDb();
-      if (filename.endsWith('.gz')) {
-        const tmp = DB_PATH + '.restore-tmp';
-        await pipeline(fs.createReadStream(src), zlib.createGunzip(), fs.createWriteStream(tmp));
-        fs.renameSync(tmp, DB_PATH);
-      } else {
-        fs.copyFileSync(src, DB_PATH);
-      }
-      for (const ext of ['-wal', '-shm']) { try { fs.unlinkSync(DB_PATH + ext); } catch {} }
-      openDb();
-    }
+    // Unpack the SQLite backup and load it into Postgres with db-copy
+    const tmp = path.join(BACKUPS_DIR, `restore-${Date.now()}.tmp.db`);
+    const rm = () => { for (const ext of ['', '-wal', '-shm']) { try { fs.unlinkSync(tmp + ext); } catch {} } };
+    try {
+      if (filename.endsWith('.gz')) await pipeline(fs.createReadStream(src), zlib.createGunzip(), fs.createWriteStream(tmp));
+      else fs.copyFileSync(src, tmp);
+      const out = [];
+      const code = await runStreaming(process.execPath, [path.join(ROOT, 'scripts', 'db-copy.js'), '--to', 'postgres', '--replace'],
+        l => out.push(l), { env: { ...process.env, SQLITE_PATH: tmp } });
+      if (code !== 0) throw new Error('Carga en PostgreSQL fallida: ' + out.slice(-3).join(' · '));
+    } finally { rm(); }
     invalidateCatalogCache();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
@@ -886,8 +857,7 @@ function apiAdminDeleteBackup(res, filename) {
 
 async function apiAdminVacuum(res) {
   try {
-    if (repo.driver === 'postgres') await repo.pool.query('VACUUM (ANALYZE) tracks, config_activities, config_sierras');
-    else openDb().exec('VACUUM');
+    await repo.pool.query('VACUUM (ANALYZE) tracks, config_activities, config_sierras');
     const { dbSize } = await dbSummary();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, dbSize }));
@@ -917,9 +887,7 @@ async function pgIntegrity() {
 
 async function apiAdminIntegrity(res) {
   try {
-    const result = repo.driver === 'postgres'
-      ? await pgIntegrity()
-      : openDb().prepare('PRAGMA integrity_check').all().map(r => r.integrity_check);
+    const result = await pgIntegrity();
     const ok = result.length === 1 && result[0] === 'ok';
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok, result }));
@@ -929,12 +897,10 @@ async function apiAdminIntegrity(res) {
   }
 }
 
-// ── Database engine: status and live switch (Admin → Base de datos) ─────
-let switchingEngine = false;
+// ── Database engine status (Admin → Base de datos) ─────────────────────
 // In a deployment (docker-compose) engine and store are fixed by its environment, not by Admin.
 const BACKENDS_LOCKED = !!process.env.LOCK_BACKENDS;
 const LOCKED_MSG = 'Fijado por el despliegue (docker-compose): cámbialo en su configuración';
-const ENGINE_LABEL = { sqlite: 'SQLite', postgres: 'PostgreSQL + PostGIS' };
 
 async function postgresStatus() {
   const config = require('./config');
@@ -954,19 +920,10 @@ async function postgresStatus() {
   } finally { await pool.end().catch(() => {}); }
 }
 
-function sqliteStatus() {
-  if (switchingEngine) return { busy: true };  // never reopen the file while it is being replaced
-  try {
-    const n = openDb().prepare('SELECT count(*) AS n FROM tracks').get().n;
-    if (repo.driver !== 'sqlite') closeDb();
-    return { tracks: n, file: path.relative(ROOT, DB_PATH) };
-  } catch (e) { return { error: e.message }; }
-}
-
 async function apiEngineStatus(res) {
   try {
-    const body = { driver: repo.driver, label: ENGINE_LABEL[repo.driver], busy: switchingEngine || await busyJobs(), locked: BACKENDS_LOCKED,
-      sqlite: sqliteStatus(), postgres: await postgresStatus() };
+    const body = { driver: 'postgres', label: 'PostgreSQL + PostGIS', busy: await busyJobs(), locked: BACKENDS_LOCKED,
+      postgres: await postgresStatus() };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(body));
   } catch (e) {
@@ -1004,71 +961,6 @@ function setEnvVar(name, value) {
   process.env[name] = value;
 }
 
-async function apiEngineSwitch(req, res) {
-  const { to } = await parseBody(req).catch(() => ({}));
-  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-  const send = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const log = text => send({ type: text.startsWith('✗') ? 'error' : text.startsWith('⚠') ? 'warn' : 'log', text });
-  const finish = code => { send({ type: 'done', code }); res.end(); };
-  send({ type: 'start' });
-
-  if (BACKENDS_LOCKED) { log('✗ ' + LOCKED_MSG); return finish(1); }
-  if (!['sqlite', 'postgres'].includes(to)) { log('✗ Motor de destino no válido'); return finish(1); }
-  if (to === repo.driver) { log(`✗ ${ENGINE_LABEL[to]} ya es el motor en uso`); return finish(1); }
-  if (switchingEngine || switchingStorage) { log('✗ Ya hay un cambio en curso'); return finish(1); }
-  if (await busyJobs()) { log('✗ Hay trabajos en cola o en marcha (Admin → Trabajos): espera a que terminen'); return finish(1); }
-  if (!require('./config').DATABASE_URL) { log('✗ Falta DATABASE_URL en .env'); return finish(1); }
-
-  switchingEngine = true;
-  const from = repo.driver;
-  appendLog('info', 'db-engine', `Cambio de motor ${from} → ${to} iniciado`);
-  try {
-    log(`1/4 Comprobando PostgreSQL…`);
-    let pg = await postgresStatus();
-    if (!pg.reachable) {
-      log(`⚠ PostgreSQL ${pg.error || 'no responde'}; intentando arrancarlo con docker compose…`);
-      const code = await runStreaming(dockerBin(), ['compose', 'up', '-d', 'db'], l => log('   ' + l), { env: dockerEnv() });
-      if (code !== 0) throw new Error('No se pudo arrancar Docker. Abre Docker Desktop y vuelve a intentarlo.');
-      for (let i = 0; i < 30 && !pg.reachable; i++) { await new Promise(r => setTimeout(r, 2000)); pg = await postgresStatus(); }
-      if (!pg.reachable) throw new Error('PostgreSQL no responde tras arrancar el contenedor');
-    }
-    log(`✓ PostgreSQL disponible (${pg.tracks ?? 0} rutas ahora)`);
-
-    if (to === 'sqlite') {
-      log('2/4 Copia de seguridad de la base SQLite actual…');
-      const gz = await createBackupFile();
-      closeDb();
-      log(`✓ ${path.basename(gz)}`);
-    } else {
-      log('2/4 Preparando PostgreSQL (se sustituirán sus datos por los actuales de SQLite)…');
-      checkpointWal();
-    }
-
-    log(`3/4 Copiando ${ENGINE_LABEL[from]} → ${ENGINE_LABEL[to]} y comprobando…`);
-    const args = to === 'postgres'
-      ? [path.join(ROOT, 'scripts', 'db-copy.js'), '--to', 'postgres', '--replace']
-      : [path.join(ROOT, 'scripts', 'db-copy.js'), '--to', 'sqlite', '--sqlite', DB_PATH, '--replace'];
-    const code = await runStreaming(process.execPath, args, l => { if (!l.startsWith('…')) log('   ' + l); });
-    if (code !== 0) throw new Error(code === 2 ? 'Los motores no coinciden tras la copia; se cancela el cambio' : 'La copia ha fallado; se cancela el cambio');
-
-    log('4/4 Activando el nuevo motor…');
-    const next = createRepo({ driver: to });
-    if (to === 'postgres') await next.pool.query('SELECT 1');
-    const old = repo;
-    repo = next;
-    setEnvVar('DB_DRIVER', to);
-    invalidateCatalogCache();
-    await old.close().catch(() => {});
-    appendLog('info', 'db-engine', `Motor cambiado a ${to}`);
-    log(`✓ La aplicación usa ahora ${ENGINE_LABEL[to]}`);
-    finish(0);
-  } catch (e) {
-    appendLog('error', 'db-engine', `Cambio de motor ${from} → ${to} fallido: ${e.message}`);
-    log('✗ ' + e.message);
-    log(`Se mantiene ${ENGINE_LABEL[from]}`);
-    finish(1);
-  } finally { switchingEngine = false; }
-}
 
 // ── GPX store: status and live switch (Admin → Base de datos → Almacén de GPX) ─────
 let switchingStorage = false;
@@ -1109,7 +1001,7 @@ async function apiStorageSwitch(req, res) {
   if (BACKENDS_LOCKED) { log('✗ ' + LOCKED_MSG); return finish(1); }
   if (!['local', 's3'].includes(to)) { log('✗ Almacén de destino no válido'); return finish(1); }
   if (to === blob.driver) { log(`✗ ${STORAGE_LABEL[to]} ya es el almacén en uso`); return finish(1); }
-  if (switchingStorage || switchingEngine) { log('✗ Ya hay un cambio en curso'); return finish(1); }
+  if (switchingStorage) { log('✗ Ya hay un cambio en curso'); return finish(1); }
   if (await busyJobs()) { log('✗ Hay trabajos en cola o en marcha (Admin → Trabajos): espera a que terminen'); return finish(1); }
   if (!require('./config').S3.endpoint) { log('✗ Falta la configuración S3 en .env: ejecuta node scripts/storage-setup.js'); return finish(1); }
 
@@ -1178,13 +1070,6 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/db/stats' && method === 'GET')
     return apiStats(res);
 
-
-  if (pathname === '/api/db/export' && method === 'POST') {
-    const opts = await parseBody(req);
-    const args = [];
-    if (opts.maxPoints) args.push('--max-points', String(parseInt(opts.maxPoints)));
-    return apiRunScript(res, path.join(ROOT,'scripts','export-catalog.js'), args);
-  }
 
   if (pathname === '/api/db/clean' && method === 'POST') {
     const opts = await parseBody(req);
@@ -1622,7 +1507,6 @@ const server = http.createServer(async (req, res) => {
     return serveStatic(res, path.join(ROOT, 'admin.html'), req);
 
   if (pathname === '/api/admin/db-engine' && method === 'GET') return apiEngineStatus(res);
-  if (pathname === '/api/admin/db-engine/switch' && method === 'POST') return apiEngineSwitch(req, res);
   if (pathname === '/api/admin/storage' && method === 'GET') return apiStorageStatus(res);
   if (pathname === '/api/jobs' && method === 'GET') return apiJobs(res, searchParams);
   const jobMatch = pathname.match(/^\/api\/jobs\/(\d+)(?:\/(stream|cancel|retry))?$/);
@@ -1771,8 +1655,8 @@ for (const sig of ['SIGTERM', 'SIGINT']) {
   });
 }
 
-// Postgres schema migrations (e.g. the jobs table) before serving; SQLite migrates on open
-const ready = repo.driver === 'postgres' ? require('./repo/pg-migrate').migrate(repo.pool, console.log) : Promise.resolve();
+// Run schema migrations before serving
+const ready = require('./repo/pg-migrate').migrate(repo.pool, console.log);
 ready.catch(e => { console.error('✗ Migración de PostgreSQL: ' + e.message); process.exit(1); });
 
 ready.then(() => server.listen(PORT, HOST, () => {
@@ -1785,7 +1669,6 @@ ready.then(() => server.listen(PORT, HOST, () => {
   if (!process.env.NO_OPEN) exec(open);
   // Daily auto-backup on startup if none exists for today
   setImmediate(async () => {
-    checkpointWal();
     try {
       const today = new Date().toISOString().slice(0, 10);
       fs.mkdirSync(BACKUPS_DIR, { recursive: true });

@@ -1,9 +1,8 @@
 'use strict';
-// Job queue stored in the application database (tables `jobs` and `job_logs`), with the same API on
-// SQLite and PostgreSQL through repo/sql.js. Workers claim jobs atomically — FOR UPDATE SKIP LOCKED in
-// Postgres, a single UPDATE … RETURNING in SQLite — retry them with exponential backoff and recover
-// the ones whose worker stopped sending heartbeats.
-// Own implementation while SQLite is supported; when it is dropped, swap it for pg-boss behind this API.
+// Job queue stored in PostgreSQL (tables `jobs` and `job_logs`). Workers claim jobs atomically with
+// FOR UPDATE SKIP LOCKED, retry them with exponential backoff and recover the ones whose worker stopped
+// sending heartbeats.
+// Replace with pg-boss by swapping createQueue behind this same API when the time comes.
 const { openSql } = require('../repo/sql');
 
 const TERMINAL = ['done', 'failed', 'cancelled'];
@@ -11,8 +10,7 @@ const STALE_SECONDS = 90;          // a running job without heartbeat for this l
 const BACKOFF_SECONDS = 30;        // first retry delay; doubles on each attempt
 
 function createQueue(db = openSql()) {
-  const pg = db.driver === 'postgres';
-  const shift = secs => (pg ? `now() + make_interval(secs => ${Number(secs)})` : `datetime('now', '${secs >= 0 ? '+' : ''}${Number(secs)} seconds')`);
+  const shift = secs => `now() + make_interval(secs => ${Number(secs)})`;
   const iso = v => (v == null ? null : v instanceof Date ? v.toISOString().slice(0, 19) + 'Z' : String(v).replace(' ', 'T').slice(0, 19) + 'Z');
   const json = v => { try { return v ? JSON.parse(v) : null; } catch { return null; } };
   const job = r => r && {
@@ -40,7 +38,7 @@ function createQueue(db = openSql()) {
         `UPDATE jobs SET status = 'running', locked_by = ?, attempts = attempts + 1,
                 started_at = ${db.NOW}, heartbeat_at = ${db.NOW}, error = NULL
          WHERE id = (SELECT id FROM jobs WHERE status = 'queued' AND run_at <= ${db.NOW}
-                     ORDER BY run_at, id LIMIT 1${pg ? ' FOR UPDATE SKIP LOCKED' : ''})
+                     ORDER BY run_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
          RETURNING *`, [workerId]));
     },
 
