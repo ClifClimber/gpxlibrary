@@ -614,7 +614,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.5.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.5.1</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">25 octubre 2026</div>
         </div>
       </div>
@@ -633,8 +633,25 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.5.0</span>
+            <span class="cl-version">v2.5.1</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">26 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Sistema multiusuario — fase 2</b>: autenticación propia sin dependencias externas (JWT HMAC-SHA256 + PBKDF2), cookie <code>gpx_session</code> httpOnly 7 días</li>
+            <li>Todas las rutas están protegidas: sin sesión redirige a <code>/login</code>; las peticiones API devuelven 401</li>
+            <li><b>Registro cerrado</b>: el admin crea usuarios desde Admin → Usuarios; no hay registro público. Primer admin: <code>node scripts/create-admin.js &lt;user&gt; &lt;email&gt; &lt;pass&gt;</code></li>
+            <li><b>Roles</b>: <code>admin</code> ve el tab Usuarios en Admin y puede crear/desactivar cuentas; <code>user</code> solo accede a sus propias rutas y a las públicas</li>
+            <li><b>Visibilidad de tracks</b>: columna <code>visibility</code> en BD (<code>public</code> por defecto); los tracks privados solo los ve su propietario</li>
+            <li><b>Chip "Mis rutas"</b> en el visor: filtra para ver solo los tracks del usuario autenticado</li>
+            <li><b>Nav</b>: muestra el nombre del usuario actual y botón "Salir" en todas las páginas</li>
+            <li>Exportar en carpetas (<code>LOCAL_SYNC_DIR</code>) sigue igual; ya no existe <code>sync-local</code>, lo sustituye <code>export-folders</code> como auto-sincronización tras cada importación</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.5.0</span>
             <span class="cl-date">25 oct 2026</span>
           </div>
           <ul class="cl-list">
