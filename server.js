@@ -899,40 +899,9 @@ async function apiAdminIntegrity(res) {
   }
 }
 
-// ── Database engine status (Admin → Base de datos) ─────────────────────
-// In a deployment (docker-compose) engine and store are fixed by its environment, not by Admin.
+// ── Deployment lock (Admin cannot change engine/store in docker-compose) ───────
 const BACKENDS_LOCKED = !!process.env.LOCK_BACKENDS;
 const LOCKED_MSG = 'Fijado por el despliegue (docker-compose): cámbialo en su configuración';
-
-async function postgresStatus() {
-  const config = require('./config');
-  if (!config.DATABASE_URL) return { configured: false, reachable: false };
-  if (repo.driver === 'postgres') {
-    const r = await repo.pool.query("SELECT count(*)::int AS n FROM tracks");
-    return { configured: true, reachable: true, tracks: r.rows[0].n };
-  }
-  const { Pool } = require('pg');
-  const pool = new Pool({ connectionString: config.DATABASE_URL, connectionTimeoutMillis: 2500 });
-  try {
-    const has = (await pool.query("SELECT to_regclass('public.tracks') IS NOT NULL AS ok")).rows[0].ok;
-    const tracks = has ? (await pool.query('SELECT count(*)::int AS n FROM tracks')).rows[0].n : 0;
-    return { configured: true, reachable: true, tracks };
-  } catch (e) {
-    return { configured: true, reachable: false, error: e.code === 'ECONNREFUSED' ? 'no responde (¿Docker parado?)' : e.message };
-  } finally { await pool.end().catch(() => {}); }
-}
-
-async function apiEngineStatus(res) {
-  try {
-    const body = { driver: 'postgres', label: 'PostgreSQL + PostGIS', busy: await busyJobs(), locked: BACKENDS_LOCKED,
-      postgres: await postgresStatus() };
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(body));
-  } catch (e) {
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: e.message }));
-  }
-}
 
 // Runs a command and streams its output lines; resolves with the exit code.
 function runStreaming(cmd, args, onLine, opts = {}) {
@@ -1450,7 +1419,6 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/admin' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'admin.html'), req);
 
-  if (pathname === '/api/admin/db-engine' && method === 'GET') return apiEngineStatus(res);
   if (pathname === '/api/admin/storage' && method === 'GET') return apiStorageStatus(res);
   if (pathname === '/api/jobs' && method === 'GET') return apiJobs(res, searchParams);
   const jobMatch = pathname.match(/^\/api\/jobs\/(\d+)(?:\/(stream|cancel|retry))?$/);

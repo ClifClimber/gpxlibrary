@@ -180,18 +180,6 @@ tr.inactive td { opacity: .4; }
 
   <!-- ── Tab: Base de datos ── -->
   <div class="tab-panel active" id="tab-bd">
-    <div class="card" id="engine-card" style="margin-bottom:16px">
-      <div class="card-head">
-        <h2>Motor de base de datos</h2>
-        <button class="btn btn-primary btn-sm" id="btn-engine-switch" disabled>Cambiar…</button>
-      </div>
-      <div class="card-body">
-        <div id="engine-status" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div class="section-desc">Cargando…</div>
-        </div>
-        <p class="section-desc" style="margin-top:12px">Al cambiar de motor se copian los datos del motor actual al nuevo, se comprueba que los dos coinciden consulta a consulta y solo entonces se activa; si algo no cuadra se mantiene el actual. Antes de sustituir SQLite se hace una copia de seguridad. Todas las operaciones funcionan con los dos motores; las copias de seguridad son siempre un fichero SQLite comprimido, que se puede restaurar en cualquiera de ellos.</p>
-      </div>
-    </div>
     <div class="card" id="storage-card" style="margin-bottom:16px">
       <div class="card-head">
         <h2>Almacén de GPX (S3)</h2>
@@ -323,17 +311,6 @@ tr.inactive td { opacity: .4; }
               </div>
             </div>
             <p>Calcula el índice de dificultad IBP para los tracks que aún no lo tienen, usando la distancia, desnivel y tipo de actividad.</p>
-          </div>
-
-          <div class="op-item">
-            <div class="op-head">
-              <h3>Almacén de ficheros</h3>
-              <div class="op-btns">
-                <button class="btn btn-ghost btn-sm" id="btn-store-dry">Simular</button>
-                <button class="btn btn-ghost btn-sm" id="btn-store-migrate">Migrar</button>
-              </div>
-            </div>
-            <p>Los GPX originales se guardan sin modificar en <code>TracksGps/store/&lt;id&gt;.gpx</code>; el nombre, la actividad y la zona viven en la BD y se aplican al descargar. «Migrar» mueve al almacén los ficheros que aún estén en carpetas por actividad y deja un manifiesto en <code>data/migrations/</code> para poder revertirlo.</p>
           </div>
 
           <div class="op-item">
@@ -1189,17 +1166,6 @@ document.getElementById('btn-ibp').addEventListener('click', function() {
   });
 })();
 
-document.getElementById('btn-store-dry').addEventListener('click', function() {
-  this.disabled = true;
-  streamScript('/api/db/migrate-store?dry=1', 'Almacén: simulación')
-    .finally(() => { this.disabled = false; });
-});
-document.getElementById('btn-store-migrate').addEventListener('click', function() {
-  if (!confirm('¿Mover los GPX al almacén inmutable? Se guarda un manifiesto para poder revertirlo.')) return;
-  this.disabled = true;
-  streamScript('/api/db/migrate-store', 'Almacén: migración')
-    .finally(() => { this.disabled = false; loadStats(); });
-});
 
 
 document.getElementById('btn-clean').addEventListener('click', function() {
@@ -1351,38 +1317,6 @@ function statusTile(active, title, info) {
     <div style="display:flex;align-items:center;gap:8px;font-weight:600">${esc(title)}${active ? '<span class="badge badge-blue">En uso</span>' : ''}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px">${info}</div></div>`;
 }
-let engineState = null;
-async function loadEngine() {
-  const box = document.getElementById('engine-status'), btn = document.getElementById('btn-engine-switch');
-  try {
-    const d = engineState = await fetch('/api/admin/db-engine').then(r => r.json());
-    if (d.error) throw new Error(d.error);
-    const tile = (key, title, info) => statusTile(d.driver === key, title, info);
-    const sq = d.sqlite.error ? `⚠ ${esc(d.sqlite.error)}` : d.sqlite.busy ? 'Ocupado' : `${d.sqlite.tracks} rutas · ${esc(d.sqlite.file)}`;
-    const pg = !d.postgres.configured ? 'Sin configurar (DATABASE_URL en .env)'
-      : d.postgres.reachable ? `${d.postgres.tracks} rutas · Docker (127.0.0.1)` : `⚠ ${esc(d.postgres.error || 'no responde')} · se intentará arrancar al cambiar`;
-    box.innerHTML = tile('sqlite', 'SQLite', sq) + tile('postgres', 'PostgreSQL + PostGIS', pg);
-    const to = d.driver === 'sqlite' ? 'postgres' : 'sqlite';
-    btn.textContent = `Cambiar a ${to === 'postgres' ? 'PostgreSQL' : 'SQLite'}`;
-    btn.dataset.to = to;
-    btn.disabled = d.busy || d.locked || !d.postgres.configured;
-    btn.title = d.locked ? 'Fijado por el despliegue (docker-compose)' : d.busy ? 'Hay un proceso en marcha' : '';
-  } catch (e) {
-    box.innerHTML = `<div class="section-desc">No se pudo consultar el motor: ${e.message}</div>`;
-  }
-}
-document.getElementById('btn-engine-switch').addEventListener('click', function () {
-  const to = this.dataset.to, from = engineState?.driver;
-  const name = { sqlite: 'SQLite', postgres: 'PostgreSQL' };
-  const msg = to === 'postgres'
-    ? `¿Cambiar a PostgreSQL?\n\nLos datos actuales de SQLite se copiarán a PostgreSQL (sustituyendo lo que tenga) y se comprobará que coinciden. SQLite no se modifica.`
-    : `¿Volver a SQLite?\n\nSe hará una copia de seguridad de la base SQLite y se sustituirá por los datos actuales de PostgreSQL, tras comprobar que coinciden.`;
-  if (!confirm(msg)) return;
-  this.disabled = true;
-  streamScript('/api/admin/db-engine/switch', `Cambiar de ${name[from]} a ${name[to]}`, { to }, () => setTimeout(() => location.reload(), 1200))
-    .finally(() => loadEngine());
-});
-loadEngine();
 
 async function loadStorage() {
   const box = document.getElementById('storage-status');
