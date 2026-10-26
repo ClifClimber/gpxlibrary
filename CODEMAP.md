@@ -45,10 +45,8 @@ gpxlibrary/
 │   ├── db-copy.js              Copia entre motores (--to postgres|sqlite) y --verify
 │   ├── import-from-temp.js     Pipeline completo: geocodifica + clasifica + guarda en store/ + importa
 │   ├── store.js                Almacén inmutable: clave {uid}.gpx, putFile/readTrackFile/deleteTrackFile, sha256
-│   ├── blob-copy.js            Copia GPX local ↔ S3 comprobando sha256 (--verify)
 │   ├── storage-setup.js        Configura Garage: secretos en .env, buckets y clave
 │   ├── docker.js               Localiza docker (instalación global o por usuario)
-│   ├── migrate-store.js        Migra carpetas antiguas al almacén (--dry-run, --revert)
 │   ├── export-folders.js       Copia Actividad/Sierra/Nombre.gpx en una carpeta elegida
 │   ├── export-catalog.js       BD → catalog-data.js (con simplificación de puntos)
 │   ├── build-catalog.js        GPX → catalog-data.js (sin BD, modo legacy)

@@ -160,7 +160,6 @@ New pages start from `docs/page-template.html` and must be added to the `<nav>` 
 ## GPX conventions
 - Originals live in the immutable store (key `{uid}.gpx` in `blob/`: local `TracksGps/store/` or S3). Never rename, move or rewrite them; name/activity/zone/notes/url live only in the DB and are applied on the fly when downloading (`applyGpxMetadata()` in `domain/gpx-export.js`).
 - A browsable `Actividad/Sierra/Nombre.gpx` copy is produced on demand: Admin → Gestión de Tracks → «Exportar en carpetas» (`scripts/export-folders.js`, refuses destinations inside `TracksGps`) or the ZIP «tree» layout.
-- `scripts/migrate-store.js [--dry-run] [--revert <manifest>]` moves legacy folder files into the store and writes a revert manifest to `data/migrations/`.
 - Files with `YYYY-MM-DD` filename prefix get that date if no `<time>` tag is present.
 - Files with only `<wpt>` (no `<trkpt>`) are skipped by the import scripts.
 - `<wpt>` waypoints are parsed (lat/lon/ele/name/sym/desc) and stored as `waypoints_json`.

@@ -1492,9 +1492,6 @@ const server = http.createServer(async (req, res) => {
     if (Array.isArray(body.ids) && body.ids.length) args.push('--ids', body.ids.map(Number).filter(Boolean).join(','));
     return apiRunScript(res, path.join(ROOT, 'scripts', 'export-folders.js'), args);
   }
-  if (pathname === '/api/db/migrate-store' && method === 'POST') {
-    return apiRunScript(res, path.join(ROOT, 'scripts', 'migrate-store.js'), searchParams.get('dry') === '1' ? ['--dry-run'] : []);
-  }
 
   if (pathname === '/api/db/extract-urls' && method === 'POST') {
     const force = searchParams.get('force') === '1';

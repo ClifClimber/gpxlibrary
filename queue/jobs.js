@@ -16,7 +16,6 @@ const JOBS = {
   'osm-precache':      { label: 'Precaché OSM por zonas', maxAttempts: 3 },
   'calc-ibp':          { label: 'Calcular IBP' },
   'export-folders':    { label: 'Exportar en carpetas' },
-  'migrate-store':     { label: 'Pasar al almacén' },
   'extract-urls':      { label: 'Extraer URLs' },
   'sync-local':        { label: 'Sincronizar copia local' },
 };
