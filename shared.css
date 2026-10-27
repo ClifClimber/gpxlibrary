@@ -105,6 +105,11 @@ nav .logo { font-weight: 700; font-size: 15px; margin-right: 14px; letter-spacin
 nav a { color: #94a3b8; text-decoration: none; padding: 6px 12px; border-radius: 999px; font-weight: 500; transition: background .12s, color .12s; }
 nav a:hover { color: #f8fafc; background: rgba(255,255,255,.06); }
 nav a.active, nav a[style*="f8fafc"] { color: #f8fafc; background: rgba(255,255,255,.12); }
+nav .nav-sep { flex: 1; }
+nav .nav-user { margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 4px 10px !important; border-radius: 999px; }
+nav .nav-user .nav-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.15); }
+nav .nav-user .nav-uname { font-size: 12px; font-weight: 500; color: #94a3b8; }
+nav .nav-user:hover .nav-uname { color: #f8fafc; }
 
 /* ── Página de contenido (páginas sin mapa) ──────────────────────── */
 .page { max-width: 1040px; margin: 0 auto; padding: 24px 20px 48px; display: flex; flex-direction: column; gap: 16px; }

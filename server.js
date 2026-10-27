@@ -35,6 +35,8 @@ let _oauthState = null; // { state, ts } — CSRF token para el flujo OAuth
 // ── Operations log ─────────────────────────────────────────────────
 const { LOGS_DIR, logFilePath, appendLog } = require('./scripts/applog');
 
+const J = { 'Content-Type': 'application/json' };
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js':   'application/javascript',
@@ -52,7 +54,7 @@ const MIME = {
 
 // ── Archivos estáticos ─────────────────────────────────────────────
 // Public: the pages and styles at the root, the browser scripts listed here and assets/.
-const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css']);
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js']);
 function isPublicFile(rel) {
   if (rel.split('/').some(s => s.startsWith('.'))) return false;
   if (rel.startsWith('assets/')) return true;
@@ -1055,6 +1057,239 @@ const server = http.createServer(async (req, res) => {
     await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, vals);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ ok: true }));
+  }
+
+  // ── Perfil del usuario autenticado ───────────────────────────────
+  if (pathname === '/perfil') return serveStatic(res, path.join(ROOT, 'perfil.html'), req);
+
+  if (pathname === '/api/profile/me' && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const db = sqlDb();
+    const u = await db.get(
+      'SELECT id, username, email, display_name, bio, avatar_key, role, to_char(created_at AT TIME ZONE \'UTC\', \'YYYY-MM-DD\') AS created_at FROM users WHERE id = ?',
+      [req.user.sub]);
+    if (!u) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Usuario no encontrado' })); }
+    const avatarUrl = u.avatar_key ? `/api/profile/avatar/${encodeURIComponent(u.avatar_key)}` : null;
+    res.writeHead(200, J);
+    return res.end(JSON.stringify({ ...u, avatar_url: avatarUrl }));
+  }
+
+  if (pathname === '/api/profile/me' && method === 'PATCH') {
+    if (!requireAuth(req, res)) return;
+    const body = await parseBody(req);
+    const db = sqlDb();
+    const updates = []; const vals = [];
+    if (body.display_name !== undefined) { updates.push('display_name = ?'); vals.push(body.display_name || null); }
+    if (body.bio !== undefined)          { updates.push('bio = ?');          vals.push(body.bio || null); }
+    if (!updates.length) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Nada que actualizar' })); }
+    updates.push('updated_at = NOW()'); vals.push(req.user.sub);
+    await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, vals);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+  }
+
+  if (pathname === '/api/profile/password' && method === 'POST') {
+    if (!requireAuth(req, res)) return;
+    const body = await parseBody(req);
+    const { current, next } = body;
+    if (!current || !next || next.length < 6) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Contraseña inválida (mínimo 6 caracteres)' })); }
+    const db = sqlDb();
+    const u = await db.get('SELECT password_hash FROM users WHERE id = ?', [req.user.sub]);
+    if (!u || !checkPassword(current, u.password_hash)) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Contraseña actual incorrecta' })); }
+    await db.run('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?', [hashPassword(next), req.user.sub]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+  }
+
+  if (pathname === '/api/profile/avatar' && method === 'POST') {
+    if (!requireAuth(req, res)) return;
+    const body = await parseBody(req);
+    const { data: b64, mime: mimeType } = body;
+    if (!b64 || !mimeType) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Faltan datos de imagen' })); }
+    const ext = mimeType === 'image/png' ? '.png' : mimeType === 'image/webp' ? '.webp' : '.jpg';
+    const buf = Buffer.from(b64, 'base64');
+    if (buf.length > 2 * 1024 * 1024) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'La imagen no puede superar 2 MB' })); }
+    const db = sqlDb();
+    const u = await db.get('SELECT avatar_key FROM users WHERE id = ?', [req.user.sub]);
+    if (u && u.avatar_key) { try { await blob.del(u.avatar_key); } catch {} }
+    const newKey = `avatars/${req.user.sub}-${Date.now()}${ext}`;
+    await blob.put(newKey, buf);
+    await db.run('UPDATE users SET avatar_key = ?, updated_at = NOW() WHERE id = ?', [newKey, req.user.sub]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, avatar_url: `/api/profile/avatar/${encodeURIComponent(newKey)}` }));
+  }
+
+  const avatarMatch = pathname.match(/^\/api\/profile\/avatar\/(.+)$/);
+  if (avatarMatch && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const key = decodeURIComponent(avatarMatch[1]);
+    const buf = await blob.get(key).catch(() => null);
+    if (!buf) { res.writeHead(404); return res.end('Not found'); }
+    const ext = path.extname(key).toLowerCase();
+    const ct = MIME[ext] || 'image/jpeg';
+    res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'max-age=86400' });
+    return res.end(buf);
+  }
+
+  if (pathname === '/api/profile/tracks' && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const db = sqlDb();
+    const tracks = await db.all(
+      `SELECT id, name, activity, sierra, date, distance, elevation_gain, tags, visibility, planned,
+              to_char(imported_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS imported_at
+       FROM tracks WHERE owner_id = ? ORDER BY date DESC NULLS LAST, name COLLATE "C" ASC, id`,
+      [req.user.sub]);
+    res.writeHead(200, J); return res.end(JSON.stringify(tracks));
+  }
+
+  const profileTrackMatch = pathname.match(/^\/api\/profile\/tracks\/(\d+)\/visibility$/);
+  if (profileTrackMatch && method === 'PATCH') {
+    if (!requireAuth(req, res)) return;
+    const tid = parseInt(profileTrackMatch[1]);
+    const body = await parseBody(req);
+    const vis = body.visibility === 'private' ? 'private' : 'public';
+    const db = sqlDb();
+    const t = await db.get('SELECT owner_id FROM tracks WHERE id = ?', [tid]);
+    if (!t) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+    if (t.owner_id !== req.user.sub && req.user.role !== 'admin') { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
+    await db.run('UPDATE tracks SET visibility = ? WHERE id = ?', [vis, tid]);
+    invalidateCatalogCache();
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+  }
+
+  const profileTrackPlanMatch = pathname.match(/^\/api\/profile\/tracks\/(\d+)\/planned$/);
+  if (profileTrackPlanMatch && method === 'PATCH') {
+    if (!requireAuth(req, res)) return;
+    const tid = parseInt(profileTrackPlanMatch[1]);
+    const body = await parseBody(req);
+    const db = sqlDb();
+    const t = await db.get('SELECT owner_id FROM tracks WHERE id = ?', [tid]);
+    if (!t) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+    if (t.owner_id !== req.user.sub && req.user.role !== 'admin') { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
+    await db.run('UPDATE tracks SET planned = ? WHERE id = ?', [body.planned ? 1 : 0, tid]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+  }
+
+  if (pathname === '/api/profile/stats' && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const db = sqlDb();
+    const totals = await db.get(
+      `SELECT CAST(COUNT(*) AS INTEGER) AS total_tracks,
+              ROUND(CAST(SUM(distance) AS NUMERIC), 1) AS total_km,
+              CAST(SUM(elevation_gain) AS INTEGER) AS total_gain,
+              CAST(SUM(CASE WHEN circular=1 THEN 1 ELSE 0 END) AS INTEGER) AS circular
+       FROM tracks WHERE owner_id = ?`, [req.user.sub]);
+    const byActivity = await db.all(
+      `SELECT activity, CAST(COUNT(*) AS INTEGER) AS count,
+              ROUND(CAST(SUM(distance) AS NUMERIC), 1) AS km,
+              CAST(SUM(elevation_gain) AS INTEGER) AS gain
+       FROM tracks WHERE owner_id = ? AND activity IS NOT NULL
+       GROUP BY activity ORDER BY count DESC`, [req.user.sub]);
+    const byYear = await db.all(
+      `SELECT CAST(left(date, 4) AS INTEGER) AS year,
+              CAST(COUNT(*) AS INTEGER) AS count,
+              ROUND(CAST(SUM(distance) AS NUMERIC), 1) AS km
+       FROM tracks WHERE owner_id = ? AND date IS NOT NULL AND length(date) >= 4
+       GROUP BY year ORDER BY year DESC`, [req.user.sub]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ totals, byActivity, byYear }));
+  }
+
+  // ── Listas de rutas del usuario ───────────────────────────────────
+  if (pathname === '/api/lists' && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const db = sqlDb();
+    const lists = await db.all(
+      `SELECT l.id, l.name, l.description,
+              to_char(l.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS created_at,
+              CAST(COUNT(lt.track_id) AS INTEGER) AS track_count
+       FROM user_lists l LEFT JOIN user_list_tracks lt ON lt.list_id = l.id
+       WHERE l.owner_id = ? GROUP BY l.id ORDER BY l.created_at DESC`, [req.user.sub]);
+    res.writeHead(200, J); return res.end(JSON.stringify(lists));
+  }
+
+  if (pathname === '/api/lists' && method === 'POST') {
+    if (!requireAuth(req, res)) return;
+    const body = await parseBody(req);
+    if (!body.name) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'El nombre es obligatorio' })); }
+    const db = sqlDb();
+    const row = await db.get(
+      'INSERT INTO user_lists (owner_id, name, description) VALUES (?, ?, ?) RETURNING id, name, description',
+      [req.user.sub, body.name, body.description || null]);
+    res.writeHead(201, J); return res.end(JSON.stringify({ ...row, track_count: 0 }));
+  }
+
+  const listMatch = pathname.match(/^\/api\/lists\/(\d+)$/);
+  if (listMatch && method === 'PATCH') {
+    if (!requireAuth(req, res)) return;
+    const lid = parseInt(listMatch[1]);
+    const body = await parseBody(req);
+    const db = sqlDb();
+    const l = await db.get('SELECT owner_id FROM user_lists WHERE id = ?', [lid]);
+    if (!l) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Lista no encontrada' })); }
+    if (l.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
+    const updates = []; const vals = [];
+    if (body.name !== undefined)        { updates.push('name = ?');        vals.push(body.name); }
+    if (body.description !== undefined) { updates.push('description = ?'); vals.push(body.description || null); }
+    if (!updates.length) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Nada que actualizar' })); }
+    vals.push(lid);
+    await db.run(`UPDATE user_lists SET ${updates.join(', ')} WHERE id = ?`, vals);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+  }
+
+  if (listMatch && method === 'DELETE') {
+    if (!requireAuth(req, res)) return;
+    const lid = parseInt(listMatch[1]);
+    const db = sqlDb();
+    const l = await db.get('SELECT owner_id FROM user_lists WHERE id = ?', [lid]);
+    if (!l) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Lista no encontrada' })); }
+    if (l.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
+    await db.run('DELETE FROM user_lists WHERE id = ?', [lid]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+  }
+
+  const listTracksMatch = pathname.match(/^\/api\/lists\/(\d+)\/tracks$/);
+  if (listTracksMatch && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const lid = parseInt(listTracksMatch[1]);
+    const db = sqlDb();
+    const l = await db.get('SELECT owner_id FROM user_lists WHERE id = ?', [lid]);
+    if (!l) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Lista no encontrada' })); }
+    if (l.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
+    const tracks = await db.all(
+      `SELECT t.id, t.name, t.activity, t.sierra, t.date, t.distance, t.elevation_gain, lt.position
+       FROM user_list_tracks lt JOIN tracks t ON t.id = lt.track_id
+       WHERE lt.list_id = ? ORDER BY lt.position ASC, t.name COLLATE "C" ASC`, [lid]);
+    res.writeHead(200, J); return res.end(JSON.stringify(tracks));
+  }
+
+  if (listTracksMatch && method === 'POST') {
+    if (!requireAuth(req, res)) return;
+    const lid = parseInt(listTracksMatch[1]);
+    const body = await parseBody(req);
+    const trackId = parseInt(body.track_id);
+    if (!trackId) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'track_id requerido' })); }
+    const db = sqlDb();
+    const l = await db.get('SELECT owner_id FROM user_lists WHERE id = ?', [lid]);
+    if (!l) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Lista no encontrada' })); }
+    if (l.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
+    const maxPos = await db.get('SELECT COALESCE(MAX(position),0)+1 AS pos FROM user_list_tracks WHERE list_id = ?', [lid]);
+    try {
+      await db.run('INSERT INTO user_list_tracks (list_id, track_id, position) VALUES (?, ?, ?)', [lid, trackId, maxPos.pos]);
+      res.writeHead(201, J); return res.end(JSON.stringify({ ok: true }));
+    } catch (e) {
+      if (e.message.includes('duplicate') || e.message.includes('unique')) { res.writeHead(409, J); return res.end(JSON.stringify({ error: 'La ruta ya está en la lista' })); }
+      throw e;
+    }
+  }
+
+  const listTrackMatch = pathname.match(/^\/api\/lists\/(\d+)\/tracks\/(\d+)$/);
+  if (listTrackMatch && method === 'DELETE') {
+    if (!requireAuth(req, res)) return;
+    const lid = parseInt(listTrackMatch[1]);
+    const tid = parseInt(listTrackMatch[2]);
+    const db = sqlDb();
+    const l = await db.get('SELECT owner_id FROM user_lists WHERE id = ?', [lid]);
+    if (!l) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Lista no encontrada' })); }
+    if (l.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
+    await db.run('DELETE FROM user_list_tracks WHERE list_id = ? AND track_id = ?', [lid, tid]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
   }
 
   // Protect all other routes — redirect browsers to /login, return 401 for API

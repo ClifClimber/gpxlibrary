@@ -154,6 +154,7 @@ tr.inactive td { opacity: .4; }
   <a href="/editor">Catálogo</a>
   <a href="/compare">Comparar</a>
   <a href="/admin" style="color:#f8fafc">Admin</a>
+  <a href="/perfil" id="nav-perfil" class="nav-user" title="Mi perfil"></a>
 </nav>
 
 <main class="page">
@@ -614,8 +615,8 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.5.1</div>
-          <div style="font-size:11px;color:var(--muted)" id="about-date">25 octubre 2026</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.6.0</div>
+          <div style="font-size:11px;color:var(--muted)" id="about-date">27 octubre 2026</div>
         </div>
       </div>
       <div style="border-top:1px solid var(--line);padding:14px 24px;display:flex;gap:24px;flex-wrap:wrap">
@@ -633,8 +634,26 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.5.1</span>
+            <span class="cl-version">v2.6.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">27 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Página de perfil de usuario (<code>/perfil</code>)</b>: nueva página con 5 pestañas — Mi perfil, Mis rutas, Mis listas, Planeadas y Estadísticas</li>
+            <li><b>Avatar</b>: subida de foto de perfil desde el navegador; se almacena en S3 (Garage)</li>
+            <li><b>Mis rutas</b>: lista completa de las rutas del usuario con toggle de visibilidad (pública/privada) y buscador</li>
+            <li><b>Mis listas</b>: creación y gestión de colecciones de rutas; añadir/quitar rutas desde el perfil</li>
+            <li><b>Planeadas</b>: rutas marcadas como planificadas (campo <code>planned</code> en BD); se pueden marcar como realizadas</li>
+            <li><b>Estadísticas</b>: totales de km, desnivel y rutas; gráficos de barras por actividad y por año</li>
+            <li><b>Nav</b>: enlace «Mi perfil» en todas las páginas con avatar + nombre de usuario</li>
+            <li><b>BD</b>: migración 004 — columnas <code>display_name</code>, <code>avatar_key</code>, <code>bio</code>, <code>updated_at</code> en users; tablas <code>user_lists</code> y <code>user_list_tracks</code>; columna <code>planned</code> en tracks</li>
+            <li><b>Visor</b>: filtro de etiquetas integrado en "Más filtros"; selector de propietario en el chip "Mis rutas"; fotos de actividad (Gravel, Montañismo, Esquí Travesía); panel redimensionable</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.5.1</span>
             <span class="cl-date">26 oct 2026</span>
           </div>
           <ul class="cl-list">
@@ -645,7 +664,6 @@ tr.inactive td { opacity: .4; }
             <li><b>Visibilidad de tracks</b>: columna <code>visibility</code> en BD (<code>public</code> por defecto); los tracks privados solo los ve su propietario</li>
             <li><b>Chip "Mis rutas"</b> en el visor: filtra para ver solo los tracks del usuario autenticado</li>
             <li><b>Nav</b>: muestra el nombre del usuario actual y botón "Salir" en todas las páginas</li>
-            <li>Exportar en carpetas (<code>LOCAL_SYNC_DIR</code>) sigue igual; ya no existe <code>sync-local</code>, lo sustituye <code>export-folders</code> como auto-sincronización tras cada importación</li>
           </ul>
         </div>
 

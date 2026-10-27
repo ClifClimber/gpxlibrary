@@ -15,19 +15,16 @@
     const nav = document.querySelector('nav');
     if (!nav) return;
 
-    // User widget
+    // User widget — populates #nav-perfil link with avatar + username
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
       if (!me) return;
-      const wrap = document.createElement('span');
-      wrap.className = 'nav-user';
-      wrap.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)';
-      wrap.innerHTML = `<span style="color:var(--ink);font-weight:500">${me.username}</span>` +
-        `<button type="button" class="btn btn-outline btn-sm" id="nav-logout-btn">Salir</button>`;
-      nav.appendChild(wrap);
-      wrap.querySelector('#nav-logout-btn').addEventListener('click', async () => {
-        await fetch('/api/auth/logout', { method: 'POST' });
-        location.href = '/login';
-      });
+      const link = nav.querySelector('#nav-perfil');
+      if (link) {
+        const avatarHtml = me.avatar_url
+          ? `<img class="nav-avatar" src="${me.avatar_url}" alt="" onerror="this.style.display='none'">`
+          : `<svg class="nav-avatar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="padding:4px;box-sizing:border-box"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`;
+        link.innerHTML = avatarHtml + `<span class="nav-uname">${me.username}</span>`;
+      }
     }).catch(() => {});
 
     const btn = document.createElement('button');

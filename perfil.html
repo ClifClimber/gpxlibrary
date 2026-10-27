@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi perfil — GPX Library</title>
+<link rel="stylesheet" href="/shared.css">
+<script src="/theme.js"></script>
+<style>
+/* ── Perfil page layout ─────────────────────────────────────── */
+.perfil-page { max-width: 900px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* Header with avatar */
+.perfil-header {
+  display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap;
+  padding: 28px 28px 24px; margin-bottom: 0;
+  background: var(--surface); border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: var(--shadow);
+}
+.avatar-wrap {
+  position: relative; flex-shrink: 0;
+  width: 88px; height: 88px;
+}
+.avatar-img {
+  width: 88px; height: 88px; border-radius: 50%; object-fit: cover;
+  background: var(--soft); border: 3px solid var(--line);
+  display: block;
+}
+.avatar-placeholder {
+  width: 88px; height: 88px; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border: 3px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+}
+.avatar-edit-btn {
+  position: absolute; bottom: 2px; right: 2px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent); color: #fff; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  transition: background .15s;
+}
+.avatar-edit-btn:hover { background: var(--accent-dark, #1d4ed8); }
+#avatar-input { display: none; }
+
+.perfil-identity { flex: 1; min-width: 0; }
+.perfil-displayname { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.perfil-username { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.perfil-bio { font-size: 13px; color: var(--ink-2); margin-top: 6px; max-width: 480px; }
+.perfil-role-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-top: 6px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+
+/* Tabs */
+.tab-bar {
+  display: flex; gap: 0; background: var(--surface);
+  border-top: 1px solid var(--line); box-shadow: var(--shadow);
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+.tab-btn {
+  flex: 0 0 auto; padding: 0 20px; height: 44px;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--muted); transition: color .12s, border-color .12s;
+  white-space: nowrap;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn:hover:not(.active) { color: var(--ink); }
+
+.tab-panel { display: none; padding: 24px 0; }
+.tab-panel.active { display: block; }
+
+/* Cards */
+.pf-card {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 20px 24px; margin-bottom: 16px;
+}
+.pf-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+
+/* Form */
+.pf-field { margin-bottom: 14px; }
+.pf-field label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 5px; }
+.pf-field .input { width: 100%; box-sizing: border-box; max-width: 420px; }
+.pf-field textarea.input { resize: vertical; min-height: 80px; }
+.pf-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.pf-msg { font-size: 12px; padding: 4px 0; }
+.pf-msg.ok  { color: var(--success); }
+.pf-msg.err { color: var(--danger); }
+
+/* My routes table */
+.routes-table { width: 100%; border-collapse: collapse; }
+.routes-table th { font-size: 11px; font-weight: 600; color: var(--muted); text-align: left; padding: 0 10px 8px; border-bottom: 1px solid var(--line); }
+.routes-table td { padding: 9px 10px; border-bottom: 1px solid var(--soft); vertical-align: middle; font-size: 13px; }
+.routes-table tr:last-child td { border-bottom: none; }
+.routes-table tr:hover td { background: var(--soft); }
+.rt-name { font-weight: 500; max-width: 260px; }
+.rt-name a { color: var(--ink); text-decoration: none; }
+.rt-name a:hover { color: var(--accent); }
+.rt-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.rt-badge { display: inline-flex; align-items: center; font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 999px; cursor: pointer; border: none; transition: background .12s; }
+.rt-badge.pub  { background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); }
+.rt-badge.priv { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
+.rt-badge:hover.pub  { background: color-mix(in srgb, var(--success) 25%, transparent); }
+.rt-badge:hover.priv { background: color-mix(in srgb, var(--muted) 25%, transparent); }
+
+/* Lists */
+.lists-grid { display: flex; flex-direction: column; gap: 10px; }
+.list-card { background: var(--soft); border-radius: var(--radius-md); padding: 14px 16px; cursor: pointer; transition: background .12s; }
+.list-card:hover { background: color-mix(in srgb, var(--accent) 8%, var(--soft)); }
+.list-card-head { display: flex; align-items: center; gap: 10px; }
+.list-card-name { font-weight: 600; font-size: 14px; flex: 1; }
+.list-card-count { font-size: 12px; color: var(--muted); }
+.list-card-desc { font-size: 12px; color: var(--ink-2); margin-top: 4px; }
+.list-detail { display: none; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.list-detail.open { display: block; }
+
+/* Stats */
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.stat-box { background: var(--soft); border-radius: var(--radius-md); padding: 14px 16px; }
+.stat-box .stat-val { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.stat-box .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+.bar-chart { display: flex; flex-direction: column; gap: 6px; }
+.bar-row { display: flex; align-items: center; gap: 8px; }
+.bar-label { width: 120px; font-size: 12px; color: var(--ink-2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track { flex: 1; height: 14px; background: var(--soft); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; background: var(--accent); transition: width .4s; }
+.bar-val { width: 60px; font-size: 12px; color: var(--muted); }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 36px 0; color: var(--muted); font-size: 13px; }
+.empty-state svg { display: block; margin: 0 auto 10px; opacity: .35; }
+
+/* Responsive */
+@media (max-width: 600px) {
+  .perfil-header { padding: 18px 16px; gap: 16px; }
+  .pf-card { padding: 16px; }
+  .bar-label { width: 80px; }
+}
+</style>
+</head>
+<body>
+<nav>
+  <span class="logo">GPX Library</span>
+  <a href="/">Visor</a>
+  <a href="/editor">Catálogo</a>
+  <a href="/compare">Comparar</a>
+  <a href="/admin">Admin</a>
+  <a href="/perfil" id="nav-perfil" class="nav-user" style="color:#f8fafc" title="Mi perfil"></a>
+</nav>
+
+<main class="perfil-page">
+
+  <!-- Profile header -->
+  <div class="perfil-header">
+    <div class="avatar-wrap" id="avatar-wrap">
+      <div class="avatar-placeholder" id="avatar-placeholder">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      </div>
+      <button class="avatar-edit-btn" id="avatar-edit-btn" title="Cambiar foto de perfil">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+      </button>
+      <input type="file" id="avatar-input" accept="image/jpeg,image/png,image/webp">
+    </div>
+    <div class="perfil-identity">
+      <div class="perfil-displayname" id="ph-displayname">—</div>
+      <div class="perfil-username" id="ph-username"></div>
+      <div class="perfil-bio" id="ph-bio" hidden></div>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="perfil">Mi perfil</button>
+    <button class="tab-btn" data-tab="rutas">Mis rutas</button>
+    <button class="tab-btn" data-tab="listas">Mis listas</button>
+    <button class="tab-btn" data-tab="planeadas">Planeadas</button>
+    <button class="tab-btn" data-tab="stats">Estadísticas</button>
+  </div>
+
+  <!-- ── Tab: Perfil ── -->
+  <div class="tab-panel active" id="tab-perfil">
+
+    <div class="pf-card">
+      <h3>Información personal</h3>
+      <div class="pf-field">
+        <label>Nombre visible</label>
+        <input type="text" class="input" id="inp-displayname" placeholder="Tu nombre o apodo" maxlength="80">
+      </div>
+      <div class="pf-field">
+        <label>Descripción</label>
+        <textarea class="input" id="inp-bio" placeholder="Cuéntanos algo sobre ti…" maxlength="400"></textarea>
+      </div>
+      <div class="pf-actions">
+        <button class="btn" id="btn-save-profile">Guardar</button>
+        <span class="pf-msg" id="msg-profile"></span>
+      </div>
+    </div>
+
+    <div class="pf-card">
+      <h3>Cambiar contraseña</h3>
+      <div class="pf-field">
+        <label>Contraseña actual</label>
+        <input type="password" class="input" id="inp-cur-pwd" autocomplete="current-password">
+      </div>
+      <div class="pf-field">
+        <label>Contraseña nueva</label>
+        <input type="password" class="input" id="inp-new-pwd" autocomplete="new-password" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="pf-field">
+        <label>Confirmar contraseña nueva</label>
+        <input type="password" class="input" id="inp-conf-pwd" autocomplete="new-password">
+      </div>
+      <div class="pf-actions">
+        <button class="btn" id="btn-save-pwd">Cambiar contraseña</button>
+        <span class="pf-msg" id="msg-pwd"></span>
+      </div>
+    </div>
+
+    <div class="pf-card">
+      <h3>Cuenta</h3>
+      <div class="pf-field">
+        <label>Nombre de usuario</label>
+        <input type="text" class="input" id="inp-username" disabled style="opacity:.7">
+      </div>
+      <div class="pf-field">
+        <label>Email</label>
+        <input type="text" class="input" id="inp-email" disabled style="opacity:.7">
+      </div>
+      <div class="pf-field">
+        <label>Miembro desde</label>
+        <input type="text" class="input" id="inp-created" disabled style="opacity:.7">
+      </div>
+    </div>
+
+    <div class="pf-card" style="text-align:right">
+      <button class="btn btn-danger btn-outline" id="btn-logout">Cerrar sesión</button>
+    </div>
+
+  </div>
+
+  <!-- ── Tab: Mis rutas ── -->
+  <div class="tab-panel" id="tab-rutas">
+    <div class="pf-card" style="padding:0; overflow:hidden">
+      <div style="padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px">
+        <span id="rutas-count" style="font-weight:600;font-size:14px">—</span>
+        <span style="font-size:12px;color:var(--muted)">rutas</span>
+        <input type="text" class="input" id="rutas-search" placeholder="Buscar…" style="margin-left:auto;max-width:200px;height:30px;font-size:12px">
+      </div>
+      <div style="overflow-x:auto">
+        <table class="routes-table">
+          <thead>
+            <tr>
+              <th>Ruta</th>
+              <th>Actividad</th>
+              <th style="text-align:right">km</th>
+              <th style="text-align:right">↑m</th>
+              <th>Visibilidad</th>
+            </tr>
+          </thead>
+          <tbody id="rutas-tbody"></tbody>
+        </table>
+      </div>
+      <div id="rutas-empty" class="empty-state" hidden>
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        Aún no tienes rutas guardadas.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Mis listas ── -->
+  <div class="tab-panel" id="tab-listas">
+    <div class="pf-card">
+      <h3>Nueva lista</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div style="flex:1;min-width:180px">
+          <label style="display:block;font-size:12px;font-weight:500;color:var(--muted);margin-bottom:5px">Nombre</label>
+          <input type="text" class="input" id="inp-list-name" placeholder="Ej. Rutas favoritas" maxlength="80">
+        </div>
+        <div style="flex:2;min-width:220px">
+          <label style="display:block;font-size:12px;font-weight:500;color:var(--muted);margin-bottom:5px">Descripción (opcional)</label>
+          <input type="text" class="input" id="inp-list-desc" placeholder="…" maxlength="200">
+        </div>
+        <button class="btn" id="btn-create-list">Crear lista</button>
+        <span class="pf-msg" id="msg-list"></span>
+      </div>
+    </div>
+    <div class="lists-grid" id="lists-grid">
+      <div class="empty-state" id="lists-empty" hidden>
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+        Aún no tienes listas. ¡Crea una!
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Planeadas ── -->
+  <div class="tab-panel" id="tab-planeadas">
+    <div class="pf-card" style="padding:0; overflow:hidden">
+      <div style="padding:16px 20px 14px; border-bottom:1px solid var(--line)">
+        <span style="font-size:13px;color:var(--muted)">Rutas marcadas como planeadas (creadas en el planificador pero no realizadas aún)</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="routes-table">
+          <thead>
+            <tr>
+              <th>Ruta</th>
+              <th>Actividad</th>
+              <th style="text-align:right">km</th>
+              <th style="text-align:right">↑m</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="planeadas-tbody"></tbody>
+        </table>
+      </div>
+      <div id="planeadas-empty" class="empty-state" hidden>
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        No tienes rutas planeadas.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Estadísticas ── -->
+  <div class="tab-panel" id="tab-stats">
+    <div class="stats-row" id="stats-totals"></div>
+    <div class="pf-card">
+      <h3>Por actividad</h3>
+      <div class="bar-chart" id="chart-activity"></div>
+    </div>
+    <div class="pf-card">
+      <h3>Por año</h3>
+      <div class="bar-chart" id="chart-year"></div>
+    </div>
+  </div>
+
+</main>
+
+<script src="/perfil.js"></script>
+</body>
+</html>
