@@ -193,8 +193,6 @@ tr.inactive td { opacity: .4; }
     <button class="seg-tab" data-tab="users">Usuarios</button>
     <button class="seg-tab" data-tab="tracks">Gestión de Tracks</button>
     <button class="seg-tab" data-tab="activities">Actividades</button>
-    <button class="seg-tab" data-tab="sierras">Sierras / Zonas</button>
-    <button class="seg-tab" data-tab="geo">Provincias &amp; CCAA</button>
     <button class="seg-tab" data-tab="params">Parámetros</button>
     <button class="seg-tab" data-tab="jobs">Trabajos</button>
     <button class="seg-tab" data-tab="logs">Logs</button>
@@ -473,40 +471,6 @@ tr.inactive td { opacity: .4; }
   </div>
 
   <!-- ── Sierras ── -->
-  <div class="tab-panel card panel-card" id="tab-sierras">
-    <div class="section-header">
-      <h2>Sierras / Zonas geográficas</h2>
-      <button class="btn btn-primary" id="btn-add-sierra">+ Nueva sierra</button>
-    </div>
-    <p class="section-desc">Bounding boxes de respaldo para la clasificación geográfica cuando Nominatim no devuelve un nombre de sierra. Coordenadas en grados decimales.</p>
-    <div id="sie-loading" style="color:var(--text2);padding:20px">Cargando…</div>
-    <table class="table cfg-table" id="sie-table" style="display:none">
-      <thead>
-        <tr>
-          <th>Nombre</th>
-          <th>SO lat</th>
-          <th>SO lon</th>
-          <th>NE lat</th>
-          <th>NE lon</th>
-          <th style="width:70px">Activa</th>
-          <th style="width:110px"></th>
-        </tr>
-      </thead>
-      <tbody id="sie-tbody"></tbody>
-    </table>
-  </div>
-
-  <!-- ── Geo ── -->
-  <div class="tab-panel card panel-card" id="tab-geo">
-    <div class="section-header"><h2>Provincias en la BD</h2></div>
-    <p class="section-desc">Provincias detectadas en los tracks (via Nominatim). Solo lectura — se actualizan al importar.</p>
-    <div id="geo-provinces" class="chip-grid" style="margin-bottom:24px"></div>
-    <div class="section-header"><h2>Comunidades Autónomas en la BD</h2></div>
-    <div id="geo-ccaa" class="chip-grid" style="margin-bottom:24px"></div>
-    <div class="section-header"><h2>Sierras en uso</h2></div>
-    <div id="geo-zones" class="chip-grid" style="margin-bottom:12px"></div>
-  </div>
-
   <!-- ── Parámetros ── -->
   <div class="tab-panel card panel-card" id="tab-params">
     <div class="section-header"><h2>Wikiloc</h2></div>
@@ -584,6 +548,9 @@ tr.inactive td { opacity: .4; }
         <h2>Trabajos en segundo plano</h2>
         <div style="display:flex;gap:6px;align-items:center">
           <span id="jobs-worker" style="font-size:12px;color:var(--muted)"></span>
+          <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px">Purgar &gt;
+            <input class="input input-sm" type="number" id="jobs-prune-days" value="7" min="0" style="width:56px"> días</label>
+          <button class="btn btn-ghost btn-sm" id="btn-jobs-prune">Purgar</button>
           <button class="btn btn-ghost btn-sm" id="btn-jobs-refresh">↻</button>
         </div>
       </div>
@@ -637,7 +604,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.6.3</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.6.4</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">27 octubre 2026</div>
         </div>
       </div>
@@ -656,8 +623,23 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.6.3</span>
+            <span class="cl-version">v2.6.4</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">27 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Copia de seguridad arreglada</b>: el volcado respeta <code>DATABASE_HOST</code> (fallaba en Docker con «connect ECONNREFUSED»); además se registra en el log</li>
+            <li><b>Usuarios</b>: los modales de crear/editar/borrar ahora se abren correctamente; quitada la columna Km</li>
+            <li>Admin: eliminadas las pestañas <b>Sierras / Zonas</b> y <b>Provincias &amp; CCAA</b> (la clasificación por sierras sigue funcionando en la importación)</li>
+            <li><b>Trabajos</b>: botón para purgar los terminados de más de N días y columna con el usuario que lanzó cada trabajo</li>
+            <li><b>Catálogo</b> abierto a todos: cada usuario ve y gestiona solo sus rutas (editar/borrar/exportar), el administrador las de todos; para el usuario se oculta la columna Dueño y las acciones de admin</li>
+            <li><b>Detalle de ruta</b>: botón «Añadir a lista» para guardar la ruta en cualquiera de tus listas (o crear una nueva)</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.6.3</span>
             <span class="cl-date">27 oct 2026</span>
           </div>
           <ul class="cl-list">
@@ -982,9 +964,9 @@ tr.inactive td { opacity: .4; }
         <table class="table" id="users-table">
           <thead><tr>
             <th>Usuario</th><th>Email</th><th>Rol</th><th>Estado</th>
-            <th class="num">Rutas</th><th class="num">Km</th><th class="num">Listas</th><th>Alta</th><th></th>
+            <th class="num">Rutas</th><th class="num">Listas</th><th>Alta</th><th></th>
           </tr></thead>
-          <tbody id="users-tbody"><tr><td colspan="9" class="um-empty">Cargando…</td></tr></tbody>
+          <tbody id="users-tbody"><tr><td colspan="8" class="um-empty">Cargando…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1423,15 +1405,17 @@ async function loadJobs() {
     document.getElementById('jobs-worker').textContent = d.worker === 'embedded' ? 'Worker integrado en el servidor' : 'Worker externo';
     if (!d.jobs.length) { box.innerHTML = '<div class="section-desc">Todavía no hay trabajos.</div>'; return; }
     box.innerHTML = `<table class="table" style="font-size:13px"><thead><tr>
-      <th>#</th><th>Trabajo</th><th>Estado</th><th>Creado</th><th class="num">Duración</th><th>Última línea</th><th></th></tr></thead><tbody>
+      <th>#</th><th>Trabajo</th><th>Usuario</th><th>Estado</th><th>Creado</th><th class="num">Duración</th><th>Última línea</th><th></th></tr></thead><tbody>
       ${d.jobs.map(j => {
         const [txt, cls] = JOB_STATUS[j.status] || [j.status, ''];
         const active = ['queued', 'running'].includes(j.status);
         const retry = j.attempts > 1 ? ` <span style="color:var(--muted)">· intento ${j.attempts}/${j.maxAttempts}</span>` : '';
         const last = j.error && j.status !== 'done' ? j.error : (j.lastLine || '');
+        const owner = j.payload && j.payload.user ? '@' + esc(j.payload.user.username) : '<span style="color:var(--ink-3)">sistema</span>';
         return `<tr data-id="${j.id}">
           <td style="color:var(--muted)">${j.id}</td>
           <td>${esc(j.label)}${retry}</td>
+          <td style="white-space:nowrap">${owner}</td>
           <td><span class="badge ${cls}">${txt}</span></td>
           <td style="white-space:nowrap">${fmtWhen(j.createdAt)}</td>
           <td class="num" style="white-space:nowrap">${fmtDuration(j)}</td>
@@ -1463,6 +1447,16 @@ document.getElementById('jobs-list').addEventListener('click', async e => {
   loadJobs();
 });
 document.getElementById('btn-jobs-refresh').addEventListener('click', loadJobs);
+document.getElementById('btn-jobs-prune').addEventListener('click', async () => {
+  const days = Math.max(0, parseInt(document.getElementById('jobs-prune-days').value) || 0);
+  if (!confirm(`¿Borrar los trabajos terminados de hace más de ${days} día(s)?`)) return;
+  try {
+    const d = await fetch('/api/jobs/prune', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days }) }).then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    showToast(`${d.removed} trabajo(s) purgados`);
+    loadJobs();
+  } catch (e) { showToast(e.message, true); }
+});
 document.querySelector('#admin-tabs [data-tab="jobs"]').addEventListener('click', () => {
   loadJobs();
   clearInterval(jobsTimer);
@@ -1789,7 +1783,6 @@ function showToast(msg, ms=2200) {
 }
 
 // ── Tabs (handled by the admin tab bar) ─────────────────────────────
-document.querySelector('#admin-tabs [data-tab="geo"]').addEventListener('click', () => loadGeo());
 
 // ── Icon resize helper ──────────────────────────────────────────────
 function resizeImageToDataURL(file, size) {
@@ -2176,199 +2169,6 @@ document.getElementById('btn-add-act').addEventListener('click', () => {
   setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }), 50);
 });
 
-// ── SIERRAS ─────────────────────────────────────────────────────────
-let sierras = [];
-let editingSieId = null;
-
-async function loadSierras() {
-  try {
-    const r = await fetch('/api/config/sierras');
-    sierras = await r.json();
-    renderSierras();
-    document.getElementById('sie-loading').style.display = 'none';
-    document.getElementById('sie-table').style.display = '';
-  } catch(e) {
-    document.getElementById('sie-loading').textContent = '⚠ Error: ' + e.message;
-  }
-}
-
-function fmt(n) { return n != null ? Number(n).toFixed(4) : '—'; }
-
-function renderSierras() {
-  const tbody = document.getElementById('sie-tbody');
-  tbody.innerHTML = '';
-
-  if (sierras.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-msg">Sin sierras definidas</td></tr>`;
-    return;
-  }
-
-  sierras.forEach(s => {
-    const tr = document.createElement('tr');
-    if (!s.active) tr.classList.add('inactive');
-    if (editingSieId === s.id) tr.classList.add('editing');
-
-    tr.innerHTML = `
-      <td><strong>${escHtml(s.name)}</strong></td>
-      <td style="font-size:11px;color:var(--text2)">${fmt(s.sw_lat)}</td>
-      <td style="font-size:11px;color:var(--text2)">${fmt(s.sw_lon)}</td>
-      <td style="font-size:11px;color:var(--text2)">${fmt(s.ne_lat)}</td>
-      <td style="font-size:11px;color:var(--text2)">${fmt(s.ne_lon)}</td>
-      <td><span style="color:${s.active?'var(--success)':'var(--text2)'}">${s.active?'✓':'—'}</span></td>
-      <td class="row-actions">
-        <button class="btn btn-sm" data-sie-edit="${s.id}">Editar</button>
-        <button class="btn btn-sm btn-danger" data-sie-del="${s.id}">✕</button>
-      </td>
-    `;
-
-    if (editingSieId === s.id) {
-      const editTr = document.createElement('tr');
-      editTr.className = 'edit-row';
-      editTr.innerHTML = `<td colspan="7"></td>`;
-      editTr.querySelector('td').appendChild(buildSieForm(s));
-      tbody.appendChild(tr);
-      tbody.appendChild(editTr);
-    } else {
-      tbody.appendChild(tr);
-    }
-  });
-
-  if (editingSieId === 'new') {
-    const newTr = document.createElement('tr');
-    newTr.className = 'edit-row';
-    newTr.innerHTML = `<td colspan="7"></td>`;
-    newTr.querySelector('td').appendChild(buildSieForm(null));
-    tbody.appendChild(newTr);
-  }
-
-  tbody.querySelectorAll('[data-sie-edit]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = parseInt(btn.dataset.sieEdit);
-      editingSieId = (editingSieId === id) ? null : id;
-      renderSierras();
-    });
-  });
-  tbody.querySelectorAll('[data-sie-del]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = parseInt(btn.dataset.sieDel);
-      const sie = sierras.find(s => s.id === id);
-      if (!confirm(`¿Eliminar "${sie?.name}"?`)) return;
-      await fetch(`/api/config/sierras/${id}`, { method:'DELETE' });
-      await loadSierras();
-      showToast('Sierra eliminada');
-    });
-  });
-}
-
-function buildSieForm(sie) {
-  const isNew = !sie;
-  const wrap = document.createElement('div');
-  wrap.className = 'edit-form';
-
-  const row1 = document.createElement('div');
-  row1.className = 'form-row';
-  row1.innerHTML = `
-    <div class="f-field" style="flex:3">
-      <label>Nombre</label>
-      <input type="text" name="name" value="${escHtml(sie?.name||'')}" placeholder="Ej: Sierra de Gredos">
-    </div>
-    <div class="f-field" style="flex:0 0 80px;padding-top:18px">
-      <label class="toggle-active">
-        <input type="checkbox" name="active" ${sie?.active!==0?'checked':''}>
-        Activa
-      </label>
-    </div>
-  `;
-  wrap.appendChild(row1);
-
-  const row2 = document.createElement('div');
-  row2.innerHTML = `<label style="display:block;margin-bottom:6px">Bounding box (SO → NE)</label>`;
-  const bboxGrid = document.createElement('div');
-  bboxGrid.className = 'bbox-grid';
-  bboxGrid.innerHTML = `
-    <div class="f-field"><label>SW lat</label><input type="number" name="sw_lat" value="${sie?.sw_lat??''}" step="0.0001" placeholder="39.75"></div>
-    <div class="f-field"><label>SW lon</label><input type="number" name="sw_lon" value="${sie?.sw_lon??''}" step="0.0001" placeholder="-6.1"></div>
-    <div class="f-field"><label>NE lat</label><input type="number" name="ne_lat" value="${sie?.ne_lat??''}" step="0.0001" placeholder="40.65"></div>
-    <div class="f-field"><label>NE lon</label><input type="number" name="ne_lon" value="${sie?.ne_lon??''}" step="0.0001" placeholder="-4.3"></div>
-  `;
-  row2.appendChild(bboxGrid);
-  wrap.appendChild(row2);
-
-  const btns = document.createElement('div');
-  btns.style.cssText = 'display:flex;gap:8px;margin-top:4px';
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'btn btn-sm btn-primary';
-  saveBtn.textContent = isNew ? 'Crear' : 'Guardar';
-  const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'btn btn-sm btn-ghost';
-  cancelBtn.textContent = 'Cancelar';
-  btns.appendChild(saveBtn);
-  btns.appendChild(cancelBtn);
-  wrap.appendChild(btns);
-
-  cancelBtn.addEventListener('click', () => {
-    editingSieId = null;
-    renderSierras();
-  });
-
-  saveBtn.addEventListener('click', async () => {
-    const name = wrap.querySelector('[name=name]').value.trim();
-    if (!name) { showToast('El nombre es obligatorio'); return; }
-    const body = {
-      name,
-      sw_lat: parseFloat(wrap.querySelector('[name=sw_lat]').value) || null,
-      sw_lon: parseFloat(wrap.querySelector('[name=sw_lon]').value) || null,
-      ne_lat: parseFloat(wrap.querySelector('[name=ne_lat]').value) || null,
-      ne_lon: parseFloat(wrap.querySelector('[name=ne_lon]').value) || null,
-      active: wrap.querySelector('[name=active]').checked ? 1 : 0,
-    };
-    try {
-      if (isNew) {
-        await fetch('/api/config/sierras', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-        });
-        showToast('Sierra creada');
-      } else {
-        await fetch(`/api/config/sierras/${sie.id}`, {
-          method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-        });
-        showToast('Sierra guardada');
-      }
-      editingSieId = null;
-      await loadSierras();
-    } catch(e) {
-      showToast('Error: ' + e.message);
-    }
-  });
-
-  return wrap;
-}
-
-document.getElementById('btn-add-sierra').addEventListener('click', () => {
-  editingSieId = 'new';
-  renderSierras();
-  setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }), 50);
-});
-
-// ── GEO (provincias/ccaa) ────────────────────────────────────────────
-let geoLoaded = false;
-async function loadGeo() {
-  if (geoLoaded) return;
-  try {
-    const r = await fetch('/api/config/provinces');
-    const d = await r.json();
-    const render = (id, items) => {
-      const el = document.getElementById(id);
-      if (!items.length) { el.innerHTML = `<span style="color:var(--text2);font-size:12px">Sin datos</span>`; return; }
-      el.innerHTML = items.map(v => `<span class="tag">${escHtml(v)}</span>`).join('');
-    };
-    render('geo-provinces', d.provinces);
-    render('geo-ccaa', d.ccaa);
-    render('geo-zones', d.zones);
-    geoLoaded = true;
-  } catch(e) { console.error(e); }
-}
-
 // ── PARÁMETROS ───────────────────────────────────────────────────────
 const PARAMS_KEY = 'gpx-climb-params-v2';
 const PARAMS_DEF = { minGain: 70, minGrad: 3.5, minDist: 0.2 };
@@ -2518,7 +2318,6 @@ initParamsPanel();
 
 // ── Init ─────────────────────────────────────────────────────────────
 loadActivities();
-loadSierras();
 
 })();
 </script>
@@ -2530,6 +2329,9 @@ loadSierras();
   const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const fmtN = n => Number(n || 0).toLocaleString('es');
   const JSONH = { 'Content-Type': 'application/json' };
+  // .modal-overlay shows with the `open` class (not the hidden attr)
+  const show = id => { const e = $(id); e.hidden = false; e.classList.add('open'); };
+  const hide = id => { const e = $(id); e.classList.remove('open'); e.hidden = true; };
   let gUsers = [], gMe = null, gEditing = null, gDeleting = null;
 
   async function api(url, opts = {}) {
@@ -2559,7 +2361,7 @@ loadSierras();
       $('orphans-n').textContent = fmtN(d.orphanTracks);
       $('orphans-to').innerHTML = userOptions(null);
       $('orphans-to').value = String(gMe);
-    } catch (e) { tbody.innerHTML = `<tr><td colspan="9" class="um-empty" style="color:var(--danger)">${esc(e.message)}</td></tr>`; }
+    } catch (e) { tbody.innerHTML = `<tr><td colspan="8" class="um-empty" style="color:var(--danger)">${esc(e.message)}</td></tr>`; }
   }
 
   function renderStats(orphans) {
@@ -2575,7 +2377,7 @@ loadSierras();
     const q = $('users-search').value.trim().toLowerCase();
     const list = gUsers.filter(u => !q || [u.username, u.email, u.display_name].some(v => (v || '').toLowerCase().includes(q)));
     const tbody = $('users-tbody');
-    if (!list.length) { tbody.innerHTML = `<tr><td colspan="9" class="um-empty">${q ? 'Nadie coincide con la búsqueda' : 'Sin usuarios'}</td></tr>`; return; }
+    if (!list.length) { tbody.innerHTML = `<tr><td colspan="8" class="um-empty">${q ? 'Nadie coincide con la búsqueda' : 'Sin usuarios'}</td></tr>`; return; }
     tbody.innerHTML = list.map(u => {
       const me = u.id === gMe;
       return `<tr class="${u.active ? '' : 'um-off'}">
@@ -2586,7 +2388,6 @@ loadSierras();
         <td><span class="badge ${u.role === 'admin' ? 'badge-blue' : ''}">${u.role === 'admin' ? 'Administrador' : 'Usuario'}</span></td>
         <td><span class="badge ${u.active ? 'badge-green' : 'badge-red'}">${u.active ? 'Activo' : 'Desactivado'}</span></td>
         <td class="num"><a class="um-tracks-link" href="/editor?owner=${encodeURIComponent(u.username)}" title="Ver sus rutas en el catálogo">${fmtN(u.track_count)}</a>${u.private_count ? `<div class="um-sub">${u.private_count} privadas</div>` : ''}</td>
-        <td class="num">${fmtN(Math.round(u.total_km))}</td>
         <td class="num">${u.list_count}</td>
         <td class="um-sub">${esc(u.created_at || '')}</td>
         <td><div class="um-actions">
@@ -2615,7 +2416,7 @@ loadSierras();
     $('um-role').disabled = self;                 // can't demote yourself
     $('um-active-wrap').hidden = !u || self;     // new users start active; can't deactivate yourself
     $('um-error').textContent = '';
-    $('user-modal').hidden = false;
+    show('user-modal');
     (u ? $('um-display') : $('um-username')).focus();
   }
 
@@ -2640,7 +2441,7 @@ loadSierras();
         await api('/api/admin/users', { method: 'POST', body: JSON.stringify(body) });
         toast('Usuario creado');
       }
-      $('user-modal').hidden = true;
+      hide('user-modal');
       loadUsers();
     } catch (e) { $('um-error').textContent = e.message; }
   });
@@ -2654,13 +2455,13 @@ loadSierras();
     $('du-reassign').innerHTML = userOptions(u.id) + '<option value="">— Dejarlas sin dueño —</option>';
     $('du-reassign').value = String(gMe);
     $('du-error').textContent = '';
-    $('del-user-modal').hidden = false;
+    show('del-user-modal');
   }
   $('du-submit').addEventListener('click', async () => {
     const to = $('du-reassign').value;
     try {
       const d = await api(`/api/admin/users/${gDeleting.id}${to && gDeleting.track_count ? `?reassign_to=${to}` : ''}`, { method: 'DELETE' });
-      $('del-user-modal').hidden = true;
+      hide('del-user-modal');
       toast(`Usuario borrado${d.tracks ? ` · ${d.tracks} ruta(s) reasignadas` : ''}`);
       loadUsers();
     } catch (e) { $('du-error').textContent = e.message; }
@@ -2690,9 +2491,9 @@ loadSierras();
   });
   $('btn-add-user').addEventListener('click', () => openUserModal(null));
   $('users-search').addEventListener('input', renderUsers);
-  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => { $(b.dataset.close).hidden = true; }));
-  ['user-modal', 'del-user-modal'].forEach(id => $(id).addEventListener('click', e => { if (e.target.id === id) $(id).hidden = true; }));
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') ['user-modal', 'del-user-modal'].forEach(id => { $(id).hidden = true; }); });
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => hide(b.dataset.close)));
+  ['user-modal', 'del-user-modal'].forEach(id => $(id).addEventListener('click', e => { if (e.target.id === id) hide(id); }));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') ['user-modal', 'del-user-modal'].forEach(hide); });
 
   document.querySelector('#admin-tabs [data-tab="users"]').addEventListener('click', loadUsers);
 })();

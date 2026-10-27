@@ -77,14 +77,17 @@ async function liveUser(id) {
 
 // ── Permisos por rol ───────────────────────────────────────────────
 // Non-admin users: viewer + search, track detail, compare, route drawing and their own profile.
-const ADMIN_PAGES = new Set(['/admin', '/editor', '/config', '/admin.html', '/editor.html']);
-const USER_PAGES  = new Set(['/', '/track', '/trazar', '/compare', '/perfil']);
+const ADMIN_PAGES = new Set(['/admin', '/config', '/admin.html']);
+const USER_PAGES  = new Set(['/', '/track', '/trazar', '/compare', '/perfil', '/editor', '/editor.html']);
 const USER_API = [
   ['GET',    /^\/api\/(catalog|tags|geo|tracks)$/],
   ['GET',    /^\/api\/config\/(activities|sierras|provinces)$/],
   ['GET',    /^\/api\/tracks\/\d+(\/gpx|\/export-gpx)?$/],
   ['POST',   /^\/api\/tracks\/export-gpx$/],
+  ['POST',   /^\/api\/tracks\/bulk-delete$/],
+  ['POST',   /^\/api\/tracks\/bulk-update$/],
   ['PATCH',  /^\/api\/tracks\/\d+$/],
+  ['POST',   /^\/api\/tracks\/\d+\/move$/],
   ['DELETE', /^\/api\/tracks\/\d+$/],
   ['POST',   /^\/api\/import\/upload$/],
   ['POST',   /^\/api\/db\/import-temp$/],
@@ -183,11 +186,13 @@ const worker = process.env.EMBEDDED_WORKER === '0' ? null : createWorker({
   },
 });
 
-async function apiRunScript(res, scriptPath, args = []) {
+async function apiRunScript(res, scriptPath, args = [], user = null) {
   const type = path.basename(scriptPath, '.js');
   try {
     if (!JOBS[type]) throw new Error(`Tipo de trabajo desconocido: ${type}`);
-    const job = await jobQueue().enqueue(type, { args }, { maxAttempts: JOBS[type].maxAttempts || 1 });
+    const payload = { args };
+    if (user) payload.user = { id: user.sub, username: user.username };
+    const job = await jobQueue().enqueue(type, payload, { maxAttempts: JOBS[type].maxAttempts || 1 });
     appendLog('info', type, `${type} en cola`, { job: job.id, args });
     return streamJob(res, job.id);
   } catch (e) {
@@ -617,11 +622,13 @@ async function apiCatalog(req, res) {
 }
 
 // ── API /tracks ───────────────────────────────────────────────────
-async function apiGetTracks(res, viewerId = null) {
+async function apiGetTracks(res, viewerId = null, mineOnly = false) {
   try {
     let tracks = await repo.listTracks();
-    if (viewerId != null) {   // non-admin: public tracks + own private ones
-      const visible = new Set((await sqlDb().all("SELECT id FROM tracks WHERE visibility = 'public' OR owner_id = ?", [viewerId])).map(r => r.id));
+    if (viewerId != null) {
+      // mineOnly (editor): just this user's tracks. Otherwise (compare, trazar): public + own private.
+      const where = mineOnly ? 'owner_id = ?' : "visibility = 'public' OR owner_id = ?";
+      const visible = new Set((await sqlDb().all(`SELECT id FROM tracks WHERE ${where}`, [viewerId])).map(r => r.id));
       tracks = tracks.filter(t => visible.has(t.id));
     }
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -655,11 +662,25 @@ async function apiDeleteTrack(res, id) {
   }
 }
 
-async function apiBulkDelete(req, res) {
+// True if the track belongs to ownerId (used to gate non-admin edits).
+async function ownsTrack(id, ownerId) {
+  const t = await sqlDb().get('SELECT 1 FROM tracks WHERE id = ? AND owner_id = ?', [id, ownerId]);
+  return !!t;
+}
+// For a non-admin (ownerId set), keep only the ids they own; admins (null) keep all.
+async function ownedOnly(ids, ownerId) {
+  if (ownerId == null || !ids.length) return ids;
+  const rows = await sqlDb().all(`SELECT id FROM tracks WHERE owner_id = ? AND id IN (${ids.map(() => '?').join(',')})`, [ownerId, ...ids]);
+  return rows.map(r => r.id);
+}
+
+async function apiBulkDelete(req, res, ownerId = null) {
   try {
     const body = await parseBody(req);
-    const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter(Boolean) : [];
+    let ids = Array.isArray(body.ids) ? body.ids.map(Number).filter(Boolean) : [];
     if (!ids.length) { res.writeHead(400); res.end('No ids'); return; }
+    ids = await ownedOnly(ids, ownerId);
+    if (!ids.length) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'No puedes borrar rutas que no son tuyas' })); }
     let deleted = 0, filesDeleted = 0;
     for (const id of ids) {
       const r = await deleteTrackById(id);
@@ -704,16 +725,19 @@ async function apiPatchTrack(req, res, id) {
   }
 }
 
-async function apiBulkUpdate(req, res) {
+async function apiBulkUpdate(req, res, ownerId = null) {
   try {
     const body = await parseBody(req);
-    const { ids, fields, notesAppend } = body;
+    const { fields, notesAppend } = body;
+    let { ids } = body;
     if (!Array.isArray(ids) || !ids.length || !fields) {
       res.writeHead(400); res.end('Invalid body'); return;
     }
     const editFields = Object.keys(fields).filter(k => EDITABLE_FIELDS.has(k) && fields[k] !== undefined);
     if (!editFields.length) { res.writeHead(400); res.end('No fields'); return; }
-    await repo.bulkUpdate(ids.map(Number).filter(Boolean), fields, !!notesAppend);
+    ids = await ownedOnly(ids.map(Number).filter(Boolean), ownerId);
+    if (!ids.length) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'No puedes editar rutas que no son tuyas' })); }
+    await repo.bulkUpdate(ids, fields, !!notesAppend);
     invalidateCatalogCache();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, updated: ids.length }));
@@ -840,9 +864,11 @@ async function apiAdminBackup(res) {
     const cfg  = readBackupConfig();
     pruneBackups(cfg.maxKeep || 10);
     const size = fs.statSync(gz).size;
+    appendLog('info', 'backup', `Copia de seguridad creada: ${path.basename(gz)}`, { size });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, name: path.basename(gz), size }));
   } catch (e) {
+    appendLog('error', 'backup', 'Copia de seguridad fallida', { error: e.message });
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
   }
@@ -1475,7 +1501,7 @@ const server = http.createServer(async (req, res) => {
     if (opts.maxJump)  args.push('--max-jump', String(opts.maxJump));
     if (opts.rdp)      args.push('--rdp',      String(opts.rdp));
     if (!args.length)  { res.writeHead(400); res.end('No algorithms specified'); return; }
-    return apiRunScript(res, path.join(ROOT,'scripts','clean-tracks.js'), args);
+    return apiRunScript(res, path.join(ROOT,'scripts','clean-tracks.js'), args, req.user);
   }
 
   // ── Export GPX ────────────────────────────────────────────────────
@@ -1513,14 +1539,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === '/api/tracks' && method === 'GET')
-    return apiGetTracks(res, isAdmin ? null : req.user.sub);
+    return apiGetTracks(res, isAdmin ? null : req.user.sub, searchParams.get('mine') === '1');
 
   if (pathname === '/api/tracks/bulk-update' && method === 'POST')
-    return apiBulkUpdate(req, res);
+    return apiBulkUpdate(req, res, isAdmin ? null : req.user.sub);
 
   const trackMoveMatch = pathname.match(/^\/api\/tracks\/(\d+)\/move$/);
-  if (trackMoveMatch && method === 'POST')
+  if (trackMoveMatch && method === 'POST') {
+    if (!isAdmin && !(await ownsTrack(parseInt(trackMoveMatch[1]), req.user.sub))) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Solo el propietario puede modificar esta ruta' })); }
     return apiMoveTrack(req, res, parseInt(trackMoveMatch[1]));
+  }
 
   const trackMatch = pathname.match(/^\/api\/tracks\/(\d+)$/);
   if (trackMatch && method === 'GET')
@@ -1531,7 +1559,7 @@ const server = http.createServer(async (req, res) => {
     return apiDeleteTrack(res, parseInt(trackMatch[1]));
 
   if (pathname === '/api/tracks/bulk-delete' && method === 'POST')
-    return apiBulkDelete(req, res);
+    return apiBulkDelete(req, res, isAdmin ? null : req.user.sub);
 
 
   if (pathname === '/api/db/temp-files' && method === 'GET') {
@@ -1557,14 +1585,14 @@ const server = http.createServer(async (req, res) => {
     const body = await parseBody(req).catch(() => ({}));
     const url  = (body.url || '').trim();
     if (!url) { res.writeHead(400, {'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'Missing url'})); }
-    return apiRunScript(res, path.join(ROOT, 'scripts', 'wikiloc-import.js'), [url, '--owner', String(req.user.sub)]);
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'wikiloc-import.js'), [url, '--owner', String(req.user.sub)], req.user);
   }
 
   if (pathname === '/api/import/komoot' && method === 'POST') {
     const body = await parseBody(req).catch(() => ({}));
     const url  = (body.url || '').trim();
     if (!url) { res.writeHead(400, {'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'Missing url'})); }
-    return apiRunScript(res, path.join(ROOT, 'scripts', 'komoot-import.js'), [url, '--owner', String(req.user.sub)]);
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'komoot-import.js'), [url, '--owner', String(req.user.sub)], req.user);
   }
 
   if (pathname === '/api/db/import-temp' && method === 'POST') {
@@ -1582,7 +1610,7 @@ const server = http.createServer(async (req, res) => {
     if (files) args.push('--files', files.join('|'));
     if (src)   args.push('--src', src);
     if (keep)  args.push('--keep');
-    return apiRunScript(res, path.join(ROOT,'scripts','import-from-temp.js'), args);
+    return apiRunScript(res, path.join(ROOT,'scripts','import-from-temp.js'), args, req.user);
   }
 
 
@@ -1590,18 +1618,18 @@ const server = http.createServer(async (req, res) => {
     const force = searchParams.get('force') === '1';
     const ids   = searchParams.get('ids');
     const args  = force ? ['--all'] : ids ? ['--ids', ids] : [];
-    return apiRunScript(res, path.join(ROOT,'scripts','enrich-tracks.js'), args);
+    return apiRunScript(res, path.join(ROOT,'scripts','enrich-tracks.js'), args, req.user);
   }
 
   if (pathname === '/api/db/enrich-road-types' && (method === 'POST' || method === 'GET')) {
     const force = searchParams.get('force') === '1';
     const ids   = searchParams.get('ids');
     const args  = ids ? ['--ids', ids] : force ? ['--force'] : [];
-    return apiRunScript(res, path.join(ROOT,'scripts','enrich-road-types.js'), args);
+    return apiRunScript(res, path.join(ROOT,'scripts','enrich-road-types.js'), args, req.user);
   }
 
   if (pathname === '/api/db/osm-download' && (method === 'GET' || method === 'POST')) {
-    return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-download.js'), []);
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-download.js'), [], req.user);
   }
 
   if (pathname === '/api/db/osm-precache' && (method === 'GET' || method === 'POST')) {
@@ -1616,11 +1644,11 @@ const server = http.createServer(async (req, res) => {
     if (enrichOnly)  args.push('--enrich-only');
     if (missingOnly) args.push('--missing-only');
     if (sierra)      { args.push('--sierra'); args.push(sierra); }
-    return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-precache.js'), args);
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'osm-precache.js'), args, req.user);
   }
 
   if (pathname === '/api/db/export-folders/sync' && method === 'POST') {
-    return apiRunScript(res, path.join(ROOT, 'scripts', 'export-folders.js'), []);
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'export-folders.js'), [], req.user);
   }
 
   // ── OSM settings ─────────────────────────────────────────────────
@@ -1853,7 +1881,7 @@ const server = http.createServer(async (req, res) => {
     const args  = [];
     if (force) args.push('--force');
     if (ids)   { args.push('--ids'); args.push(ids); }
-    return apiRunScript(res, path.join(ROOT,'scripts','calc-ibp.js'), args);
+    return apiRunScript(res, path.join(ROOT,'scripts','calc-ibp.js'), args, req.user);
   }
 
   // ── Log routes ───────────────────────────────────────────────────
@@ -1913,6 +1941,14 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/admin/storage' && method === 'GET') return apiStorageStatus(res);
   if (pathname === '/api/jobs' && method === 'GET') return apiJobs(res, searchParams);
+  if (pathname === '/api/jobs/prune' && method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    const body = await parseBody(req);
+    const days = Math.max(0, parseInt(body.days)); if (!Number.isFinite(days)) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'días inválido' })); }
+    const removed = await jobQueue().prune(days);
+    appendLog('info', 'jobs', `Purga de trabajos > ${days} día(s): ${removed} eliminados`, { by: req.user.username });
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, removed }));
+  }
   const jobMatch = pathname.match(/^\/api\/jobs\/(\d+)(?:\/(stream|cancel|retry))?$/);
   if (jobMatch && jobMatch[2] === 'stream' && method === 'GET') return streamJob(res, parseInt(jobMatch[1]));
   if (jobMatch && ['cancel', 'retry'].includes(jobMatch[2]) && method === 'POST') return apiJobAction(res, parseInt(jobMatch[1]), jobMatch[2]);
@@ -2006,12 +2042,12 @@ const server = http.createServer(async (req, res) => {
     if (!dest) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Falta el destino' })); }
     const args = ['--dest', dest];
     if (Array.isArray(body.ids) && body.ids.length) args.push('--ids', body.ids.map(Number).filter(Boolean).join(','));
-    return apiRunScript(res, path.join(ROOT, 'scripts', 'export-folders.js'), args);
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'export-folders.js'), args, req.user);
   }
 
   if (pathname === '/api/db/extract-urls' && method === 'POST') {
     const force = searchParams.get('force') === '1';
-    return apiRunScript(res, path.join(ROOT,'scripts','extract-urls.js'), force ? ['--force'] : []);
+    return apiRunScript(res, path.join(ROOT,'scripts','extract-urls.js'), force ? ['--force'] : [], req.user);
   }
 
   if (pathname === '/api/fs/dirs' && method === 'GET') {

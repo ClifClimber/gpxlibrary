@@ -291,6 +291,9 @@
     .fb-empty { padding:20px; text-align:center; color:var(--muted); font-size:13px; }
     #fb-footer { display:flex; align-items:center; gap:10px; padding:10px 14px; border-top:1px solid var(--border); background:var(--filter-bg); }
     #fb-selected-path { flex:1; font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace,Consolas,monospace; }
+    /* Controles y columna que solo ve un administrador */
+    body:not(.is-admin) .admin-only,
+    body:not(.is-admin) .col-owner { display: none !important; }
   </style>
 </head>
 <body>
@@ -319,7 +322,7 @@
       <button class="chip" data-pop="f-ccaa"><span class="chip-lbl" data-default="CCAA">CCAA</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip" data-pop="f-ibp"><span class="chip-lbl" data-default="Dificultad">Dificultad</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip" data-pop="f-circular"><span class="chip-lbl" data-default="Recorrido">Recorrido</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-      <button class="chip" data-pop="f-owner"><span class="chip-lbl" data-default="Dueño">Dueño</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip admin-only" data-pop="f-owner"><span class="chip-lbl" data-default="Dueño">Dueño</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip chip-toggle" id="btn-last-import" title="Mostrar solo la última importación" style="display:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Última importación
@@ -337,15 +340,15 @@
       <span class="sum-item" id="st-pending-chip"><b id="st-pending">—</b> sin clasificar</span>
     </div>
     <div id="ed-actions">
-    <button class="hbtn hbtn-outline" id="btn-open-enrich">
+    <button class="hbtn hbtn-outline admin-only" id="btn-open-enrich">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
       Enriquecer datos
     </button>
-    <button class="hbtn hbtn-outline" id="btn-ibp">
+    <button class="hbtn hbtn-outline admin-only" id="btn-ibp">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       IBP Index
     </button>
-    <button class="hbtn hbtn-outline" id="btn-import-web">
+    <button class="hbtn hbtn-outline admin-only" id="btn-import-web">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       Importar tracks
     </button>
@@ -393,7 +396,7 @@
 <div id="sel-bar">
   <span id="sel-count-label">0 seleccionados</span>
   <button id="btn-bulk-edit">Editar seleccionados</button>
-  <button id="btn-bulk-owner">
+  <button id="btn-bulk-owner" class="admin-only">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
     Cambiar dueño
   </button>
@@ -405,7 +408,7 @@
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
     Borrar seleccionados
   </button>
-  <button id="btn-sel-enrich-road">
+  <button id="btn-sel-enrich-road" class="admin-only">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
     Enriquecer OSM
   </button>
@@ -986,7 +989,8 @@ async function loadActivities() {
 async function loadTracks() {
   await loadActivities();
   try {
-    const r = await fetch('/api/tracks');
+    // Admins manage every route; a normal user only their own (?mine=1)
+    const r = await fetch('/api/tracks' + (gIsAdmin ? '' : '?mine=1'));
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     allTracks = await r.json();
     allTracks.forEach(t => { t.owner = t.owner_username || 'Sin dueño'; });
@@ -2099,7 +2103,13 @@ document.getElementById('ibp-calc-btn').addEventListener('click', async () => {
 });
 
 // ── Boot ───────────────────────────────────────────────────────────
-loadTracks();
+// Admins manage every route; a normal user only sees and manages their own
+// (the server filters /api/tracks by owner and hides the owner column/filter here).
+let gIsAdmin = false;
+fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
+  gIsAdmin = !!me && me.role === 'admin';
+  document.body.classList.toggle('is-admin', gIsAdmin);
+}).catch(() => {}).finally(loadTracks);
 
 // ── Import from web ────────────────────────────────────────────────
 (function () {

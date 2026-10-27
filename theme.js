@@ -43,8 +43,8 @@
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
       if (!me) { nav.querySelector('#nav-perfil')?.remove(); return; }
       window.gpxSetNavUser(me);
-      // Catalog and Admin are admin-only (the server refuses them too)
-      if (me.role !== 'admin') nav.querySelectorAll('a[href="/editor"], a[href="/admin"]').forEach(a => a.remove());
+      // Admin is admin-only (the server refuses it too); the catalog is open to everyone
+      if (me.role !== 'admin') nav.querySelectorAll('a[href="/admin"]').forEach(a => a.remove());
     }).catch(() => {});
 
     const btn = document.createElement('button');

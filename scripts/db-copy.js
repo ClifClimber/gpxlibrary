@@ -33,6 +33,10 @@ if (!process.env.DATABASE_URL) {
 }
 if (!process.env.DATABASE_URL) { console.error('✗ Falta DATABASE_URL en .env'); process.exit(1); }
 
+// Honor DATABASE_HOST (host:port) the same way config.js does, so the dump works inside Docker
+// where DATABASE_URL in .env points at localhost but Postgres lives at db:5432.
+const DB_URL = require('../config').DATABASE_URL || process.env.DATABASE_URL;
+
 const { Pool } = require('pg');
 const { DatabaseSync } = require('node:sqlite');
 const { parseWkbLine, lineParams } = require('../repo/postgres');
@@ -182,7 +186,7 @@ async function toPostgres(pool) {
 }
 
 (async () => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: DB_URL });
   try {
     if (TO === 'sqlite') await toSqlite(pool);
     else                 await toPostgres(pool);
