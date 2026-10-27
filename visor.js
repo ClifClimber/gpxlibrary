@@ -730,6 +730,7 @@ const ACT_PHOTOS = {
   'MTB Enduro':    '/assets/activities/mtb.jpg',
   'Gravel':        '/assets/activities/gravel.jpg',
   'Montañismo':    '/assets/activities/montanismo.jpg',
+  'Esquí Travesia': '/assets/activities/travesia.jpg',
 };
 
 function trackItemHtml(track, ri) {
