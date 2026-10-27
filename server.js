@@ -41,6 +41,9 @@ const MIME = {
   '.css':  'text/css',
   '.json': 'application/json',
   '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
   '.svg':  'image/svg+xml',
   '.ico':  'image/x-icon',
   '.gpx':  'application/gpx+xml',
@@ -541,8 +544,9 @@ async function buildCatalog(ownerId) {
       movingTime:    t.moving_time  || null,
       stoppedTime:   t.stopped_time || null,
       circular:      !!t.circular,
-      owner_id:      t.owner_id     || null,
-      visibility:    t.visibility   || 'public',
+      owner_id:      t.owner_id       || null,
+      owner_username: t.owner_username || null,
+      visibility:    t.visibility     || 'public',
       points,
     });
   }

@@ -54,7 +54,9 @@ function createPostgresRepo({ connectionString, pool: givenPool } = {}) {
         ? `WHERE visibility = 'public' OR owner_id = $1`
         : `WHERE visibility = 'public'`;
       const params = ownerId ? [ownerId] : [];
-      return rows(`SELECT ${selectCols(C.CATALOG_COLS)} FROM tracks ${where} ORDER BY date DESC NULLS LAST, ${BY_NAME} ASC, id`, params);
+      // Qualify with tracks.* because the users JOIN shares the `id` column.
+      const catCols = C.CATALOG_COLS.map(c => `tracks.${c}`).join(', ');
+      return rows(`SELECT ${catCols}, u.username AS owner_username FROM tracks LEFT JOIN users u ON u.id = tracks.owner_id ${where} ORDER BY tracks.date DESC NULLS LAST, tracks.${BY_NAME} ASC, tracks.id`, params);
     },
     async setTimes(id, moving, stopped) {
       await q('UPDATE tracks SET moving_time=$1, stopped_time=$2 WHERE id=$3', [moving, stopped, id]);

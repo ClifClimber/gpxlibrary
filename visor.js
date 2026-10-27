@@ -721,6 +721,14 @@ const SORTERS = {
   'ibp-asc':   (a, b) => (ibpForTrackV(a) ?? 9999) - (ibpForTrackV(b) ?? 9999),
 };
 
+// Foto representativa por actividad (si no hay, el item queda en gris claro).
+const ACT_PHOTOS = {
+  'Trail Running': '/assets/activities/trail-running.jpg',
+  'Running':       '/assets/activities/trail-running.jpg',
+  'MTB':           '/assets/activities/mtb.jpg',
+  'MTB Enduro':    '/assets/activities/mtb.jpg',
+};
+
 function trackItemHtml(track, ri) {
   const c = getTrackColor(track);
   const act = track.activity || 'Otro';
@@ -729,21 +737,31 @@ function trackItemHtml(track, ri) {
     ? `<span class="ti-ibp" style="color:${IBP_LEVELS[li].color};background:${IBP_LEVELS[li].bg};border-color:${IBP_LEVELS[li].border}" title="IBP ${Math.round(ibp)} · ${IBP_LEVELS[li].label}">${IBP_LEVELS[li].label}</span>`
     : '';
   const meta = [track.sierra || track.zone].filter(Boolean).map(escHtml).join(' · ');
+  const photo = ACT_PHOTOS[act];
+  const photoHtml = photo
+    ? `<div class="ti-photo" style="background-image:url('${photo}')"></div>`
+    : `<div class="ti-photo ti-photo-empty"></div>`;
+  const owner = track.owner_username
+    ? `<span class="ti-owner" title="Propietario">${escHtml(track.owner_username)}</span>` : '';
+  const detail = track.id
+    ? `<a class="track-detail-link" href="/track?id=${track.id}" target="_blank" title="Abrir página de detalle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></a>` : '';
   return `<div class="track-item${ri === activeIdx ? ' active' : ''}" data-idx="${ri}" style="--c:${c}">
-    <button class="ti-icon" title="Cambiar color de la ruta">${actIconInner(act)}</button>
-    <div class="ti-body">
-      <div class="ti-name">${escHtml(track.name)}</div>
+    <div class="ti-main">
+      <div class="ti-top">
+        <button class="ti-icon" title="Cambiar color de la ruta">${actIconInner(act)}</button>
+        <div class="ti-name">${escHtml(track.name)}</div>
+      </div>
       <div class="ti-meta"><span class="ti-act">${escHtml(track.activity || 'Sin actividad')}</span>${meta ? ' · ' + meta : ''}</div>
       <div class="ti-stats">
         <span><b>${nf1.format(track.distance)}</b> km</span>
         <span>↑ <b>${nf0.format(track.elevationGain)}</b> m</span>
         <span class="ti-rtype" title="${track.circular ? 'Circular' : 'Lineal'}">${track.circular ? ROUTE_ICON.loop : ROUTE_ICON.line}</span>
+        ${ibpHtml}
       </div>
     </div>
     <div class="ti-side">
-      ${track.date ? `<span class="ti-date">${escHtml(track.date.substring(0,7))}</span>` : ''}
-      ${track.id ? `<span class="ti-id" title="ID de importación">#${track.id}</span>` : ''}
-      ${track.id ? `<a class="track-detail-link" href="/track?id=${track.id}" target="_blank" title="Abrir página de detalle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></a>` : ''}
+      <div class="ti-side-top">${detail}${owner}</div>
+      ${photoHtml}
     </div>
   </div>`;
 }
@@ -1143,6 +1161,38 @@ function setPanelCollapsed(c) {
 $('panel-toggle').addEventListener('click', () => setPanelCollapsed(!$('app').classList.contains('panel-collapsed')));
 $('list-count').addEventListener('click', () => { if ($('app').classList.contains('panel-collapsed')) setPanelCollapsed(false); });
 try { if (localStorage.getItem('visor-panel-collapsed') === '1') setPanelCollapsed(true); } catch {}
+
+// ── Redimensionar panel (arrastrar el borde derecho) ──────────────────
+const PANEL_MIN = 320, PANEL_MAX = 680;
+function setPanelWidth(px) {
+  const w = Math.max(PANEL_MIN, Math.min(PANEL_MAX, px));
+  document.documentElement.style.setProperty('--panel-w', w + 'px');
+  try { localStorage.setItem('visor-panel-w', String(w)); } catch {}
+  return w;
+}
+try { const saved = parseInt(localStorage.getItem('visor-panel-w')); if (saved) setPanelWidth(saved); } catch {}
+
+(() => {
+  const handle = $('panel-resize');
+  if (!handle) return;
+  const onMove = e => {
+    const panelLeft = $('panel').getBoundingClientRect().left;
+    setPanelWidth(e.clientX - panelLeft);
+  };
+  const onUp = () => {
+    document.body.classList.remove('panel-resizing');
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+    if (activeIdx !== null) { const t = items[activeIdx].track; showProfile(t, getTrackColor(t)); }
+  };
+  handle.addEventListener('mousedown', e => {
+    if (window.matchMedia('(max-width: 760px)').matches) return;
+    e.preventDefault();
+    document.body.classList.add('panel-resizing');
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  });
+})();
 
 // ── Global keys / resize ─────────────────────────────────────────────
 $('profile-close').addEventListener('click', deactivateTrack);
