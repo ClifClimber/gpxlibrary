@@ -37,4 +37,6 @@ module.exports = {
   },
   // Local mirror folder for GPX files (sync-local job). Relative paths resolve from ROOT.
   LOCAL_SYNC_DIR: process.env.LOCAL_SYNC_DIR || path.join(ROOT, 'TracksGps', 'local'),
+  // Where track photos are stored (own Docker volume in production, data/photos locally).
+  PHOTOS_DIR: process.env.PHOTOS_DIR || path.join(ROOT, 'data', 'photos'),
 };

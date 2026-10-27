@@ -15,7 +15,7 @@ COPY . .
 
 # Everything the app writes outside the database and the store lives in the `appdata` volume
 # (/app/data): backups, logs, OSM cache, settings (Wikiloc token), the IBP key and the _TEMP_ inbox.
-RUN mkdir -p data TracksGps \
+RUN mkdir -p data TracksGps photos \
  && ln -s /app/data/osm-settings.json osm-settings.json \
  && ln -s /app/data/ibp.key ibp.key \
  && ln -s /app/data/_TEMP_ TracksGps/_TEMP_ \

@@ -60,10 +60,12 @@ services:
       LOCK_BACKENDS: "1"
       EMBEDDED_WORKER: "0"            # los trabajos los ejecuta el servicio worker
       LOCAL_SYNC_DIR: /sync
+      PHOTOS_DIR: /app/photos
     ports:
       - "127.0.0.1:${APP_PORT:-8081}:8080"
     volumes:
       - appdata:/app/data
+      - photodata:/app/photos
       - ${LOCAL_SYNC_DIR:-./TracksGps/local}:/sync
       - ./.env:/app/.env.host:rw
     depends_on:
@@ -84,8 +86,10 @@ services:
       DATABASE_HOST: db:5432
       S3_ENDPOINT: http://storage:3900
       LOCAL_SYNC_DIR: /sync
+      PHOTOS_DIR: /app/photos
     volumes:
       - appdata:/app/data
+      - photodata:/app/photos
       - ${LOCAL_SYNC_DIR:-./TracksGps/local}:/sync
       - ./.env:/app/.env.host:rw
     healthcheck:
@@ -103,3 +107,4 @@ volumes:
   garage-meta:
   garage-data:
   appdata:
+  photodata:
