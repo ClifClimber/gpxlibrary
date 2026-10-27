@@ -153,7 +153,7 @@ tr.inactive td { opacity: .4; }
   <a href="/">Visor</a>
   <a href="/editor">Catálogo</a>
   <a href="/compare">Comparar</a>
-  <a href="/admin" style="color:#f8fafc">Admin</a>
+  <a href="/admin" class="active">Admin</a>
   <a href="/perfil" id="nav-perfil" class="nav-user" title="Mi perfil"></a>
 </nav>
 
@@ -615,7 +615,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.6.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.6.1</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">27 octubre 2026</div>
         </div>
       </div>
@@ -634,8 +634,25 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.6.0</span>
+            <span class="cl-version">v2.6.1</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">27 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Aspecto más claro</b>: menú superior blanco con borde fino (antes oscuro), fondo de página más luminoso, sombras más suaves; botones primarios y chips activos en el color de acento. El modo oscuro se mantiene</li>
+            <li><b>Icono de usuario</b> en la esquina superior derecha de todas las páginas (avatar o inicial); el nombre aparece al pasar el ratón; enlaza a <code>/perfil</code>. Lo crea <code>theme.js</code> aunque la página no lo incluya</li>
+            <li><code>/api/auth/me</code> devuelve también <code>display_name</code> y <code>avatar_url</code></li>
+            <li><b>Visor — «Mis rutas»</b> pasa a ser un conmutador: solo tus rutas</li>
+            <li><b>Visor — nuevo filtro «Usuarios»</b>: selección múltiple de propietarios con recuento de rutas</li>
+            <li><b>Visor — «Crear ruta»</b>: botón flotante naranja abajo en el centro del mapa (se oculta con el perfil de elevación abierto)</li>
+            <li>Fotos de actividad para Alpinismo y Ferratas</li>
+            <li>Nuevos usuarios de prueba <code>iker</code>, <code>sonia</code> y <code>ana</code>; las rutas existentes se reparten entre los cuatro usuarios</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.6.0</span>
             <span class="cl-date">27 oct 2026</span>
           </div>
           <ul class="cl-list">

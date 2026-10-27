@@ -15,16 +15,34 @@
     const nav = document.querySelector('nav');
     if (!nav) return;
 
-    // User widget — populates #nav-perfil link with avatar + username
-    fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
-      if (!me) return;
-      const link = nav.querySelector('#nav-perfil');
-      if (link) {
-        const avatarHtml = me.avatar_url
-          ? `<img class="nav-avatar" src="${me.avatar_url}" alt="" onerror="this.style.display='none'">`
-          : `<svg class="nav-avatar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="padding:4px;box-sizing:border-box"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`;
-        link.innerHTML = avatarHtml + `<span class="nav-uname">${me.username}</span>`;
+    // User icon in the top-right corner (avatar or initial); the name shows on hover via data-name.
+    window.gpxSetNavUser = me => {
+      let link = nav.querySelector('#nav-perfil');
+      if (!link) {
+        link = document.createElement('a');
+        link.id = 'nav-perfil'; link.href = '/perfil'; link.className = 'nav-user';
+        if (location.pathname === '/perfil') link.classList.add('active');
       }
+      const name = me.display_name || me.username;
+      link.removeAttribute('title');
+      link.setAttribute('aria-label', name);
+      link.dataset.name = name;
+      link.textContent = '';
+      if (me.avatar_url) {
+        const img = document.createElement('img');
+        img.className = 'nav-avatar'; img.alt = ''; img.src = me.avatar_url;
+        link.appendChild(img);
+      } else {
+        const span = document.createElement('span');
+        span.className = 'nav-avatar';
+        span.textContent = name.charAt(0).toUpperCase();
+        link.appendChild(span);
+      }
+      nav.appendChild(link);   // always last: right of the theme toggle
+    };
+    fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
+      if (me) window.gpxSetNavUser(me);
+      else nav.querySelector('#nav-perfil')?.remove();
     }).catch(() => {});
 
     const btn = document.createElement('button');

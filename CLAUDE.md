@@ -99,6 +99,7 @@ All long-running operations go through the job queue (`queue/`). `apiRunScript(r
 - `/track?id=N` → `track.html` + `track.css` — detail view with tabs (Resumen, Puntos de paso, Tipos de camino, Subidas, Tiempo hoy)
 - `/editor` → `editor.html` — CRUD list, import from `_TEMP_`, tag editing
 - `/admin` → `admin.html` — tabs: Base de datos (backup/restore/vacuum, stats), Gestión de Tracks, Actividades, Sierras / Zonas, Provincias & CCAA, Parámetros (climb thresholds + Wikiloc token), **Trabajos** (job list/view/cancel/retry), Logs, Acerca de. Tabs are deep-linkable via `#tab` (e.g. `/admin#jobs`).
+- `/perfil` → `perfil.html` + `perfil.js` — user profile, tabs Mi perfil (avatar in S3 `avatars/{uid}-{ts}.ext`, name, bio, password), Mis rutas (visibility toggle), Mis listas (`user_lists`/`user_list_tracks`), Planeadas (`tracks.planned`), Estadísticas. APIs under `/api/profile/*` and `/api/lists*`.
 - `/trazar` → `trazar.html` — route drawing/editing (draw, drag/insert/delete vertices, trim, waypoints, join other tracks, undo). `?join=1,2` opens several tracks joined in order (used by Comparar → Unir). Optional trail snapping via BRouter (brouter.de) and elevation via Open-Meteo. Saving builds a GPX client-side, uploads it with `/api/import/upload`, runs `/api/db/import-temp`, then PATCHes activity/notes. Editing an existing track always saves a new copy — source GPX files are never rewritten.
 
 ### Visor (`visor.js`)
@@ -107,6 +108,7 @@ All long-running operations go through the job queue (`queue/`). `apiRunScript(r
 - `activateTrack(i, fitMap)` manages the active polyline + highlights the list row (`.track-item.active`).
 - Filters live in chips + popovers; `applyFilters()` shows/hides markers and updates the list.
 - `geoFilter` — Nominatim place search sets a radius circle filter.
+- Owner filters: chip «Mis rutas» is a toggle (`gMineOnly`); chip «Usuarios» is a multi-select popover (`#user-filters`) of catalog owners. «Crear ruta» is the floating `#btn-crear-ruta` (bottom centre of the map, hidden while the elevation profile is open). Activity photos for list cards: `ACT_PHOTOS` map → `assets/activities/*.jpg`.
 
 ### Track detail (`track.html`)
 Tabs built dynamically by `buildContent(t)`:
@@ -155,7 +157,7 @@ Every page must `<link rel="stylesheet" href="/shared.css">` followed by `<scrip
 
 Key component classes: `.btn` (+ modifiers), `.input`/`.select`, `.chip` (+ `.active`, `.open`), `.popover`, `.cat-pills`/`.cat-pill`, `.table`, `.stats-grid`/`.stat`, `.tag`, `.badge`, `.modal-overlay`/`.modal`, `.log-box`, `.floating`, `.card`.
 
-New pages start from `docs/page-template.html` and must be added to the `<nav>` in every page.
+New pages start from `docs/page-template.html` and must be added to the `<nav>` in every page. Mark the current page's nav link with `class="active"` (the nav is light: `--nav-bg`). `theme.js` appends the theme toggle and then the user icon (`#nav-perfil`, avatar or initial, name on hover via `data-name`) at the right end; it creates the icon if the page lacks it and exposes `window.gpxSetNavUser(me)` to refresh it.
 
 ## GPX conventions
 - Originals live in the immutable store (key `{uid}.gpx` in `blob/`: local `TracksGps/store/` or S3). Never rename, move or rewrite them; name/activity/zone/notes/url live only in the DB and are applied on the fly when downloading (`applyGpxMetadata()` in `domain/gpx-export.js`).

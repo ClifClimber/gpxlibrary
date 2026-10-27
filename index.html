@@ -13,7 +13,7 @@
 <body>
 <nav>
   <span class="logo">GPX Library</span>
-  <a href="/" style="color:#f8fafc">Visor</a>
+  <a href="/" class="active">Visor</a>
   <a href="/editor">Catálogo</a>
   <a href="/compare">Comparar</a>
   <a href="/admin">Admin</a>
@@ -42,16 +42,16 @@
       <button class="chip" data-pop="ibp"><span class="chip-lbl" data-default="Dificultad">Dificultad</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip" data-pop="sierra" id="chip-sierra" hidden><span class="chip-lbl" data-default="Zona">Zona</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip" data-pop="more"><span class="chip-lbl" data-default="Más filtros">Más filtros</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-      <button class="chip" data-pop="owner" id="chip-my-tracks" hidden><span class="chip-lbl" data-default="Mis rutas">Mis rutas</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" data-pop="users" id="chip-users" hidden><span class="chip-lbl" data-default="Usuarios">Usuarios</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" id="chip-my-tracks" title="Mostrar solo mis rutas" hidden>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        Mis rutas
+      </button>
       <button class="chip chip-geo active" data-pop="geo" id="chip-geo" hidden>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
         <span class="chip-lbl" id="chip-geo-lbl"></span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <span class="chips-sep"></span>
-      <a href="/trazar" class="chip chip-toggle" id="chip-crear-ruta" title="Crear una ruta nueva">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Crear ruta
-      </a>
       <button class="chip chip-clear" id="clear-filters-btn" hidden>Limpiar todo</button>
     </div>
 
@@ -121,6 +121,11 @@
 
   </div>
 
+  <a href="/trazar" id="btn-crear-ruta" title="Dibujar una ruta nueva">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Crear ruta
+  </a>
+
   <!-- Popovers (positioned under their chip) -->
   <div class="popover" id="pop-act">
     <div class="pop-title">Actividad <span class="pop-hint">clic en el punto para cambiar el color</span></div>
@@ -187,10 +192,10 @@
     <div class="pop-foot"><button class="pop-reset" data-reset="more">Borrar</button></div>
   </div>
 
-  <div class="popover" id="pop-owner">
-    <div class="pop-title">Rutas de</div>
-    <div class="cat-pills" id="owner-filters"></div>
-    <div class="pop-foot"><button class="pop-reset" data-reset="owner">Todas</button></div>
+  <div class="popover" id="pop-users">
+    <div class="pop-title">Rutas de los usuarios</div>
+    <div class="cat-pills" id="user-filters"></div>
+    <div class="pop-foot"><button class="pop-reset" data-reset="users">Borrar</button></div>
   </div>
 
   <div class="popover" id="pop-geo">

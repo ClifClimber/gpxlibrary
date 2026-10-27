@@ -61,14 +61,8 @@
     if (p.avatar_url) {
       $('avatar-placeholder').outerHTML = `<img id="avatar-img" class="avatar-img" src="${esc(p.avatar_url)}" alt="Avatar">`;
     }
-    // Update the nav-perfil in this page too
-    const navLink = document.querySelector('#nav-perfil');
-    if (navLink) {
-      const avatarHtml = p.avatar_url
-        ? `<img class="nav-avatar" src="${esc(p.avatar_url)}" alt="">`
-        : `<svg class="nav-avatar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="padding:4px;box-sizing:border-box"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`;
-      navLink.innerHTML = avatarHtml + `<span class="nav-uname">${esc(p.username)}</span>`;
-    }
+    // Keep the nav icon in sync after avatar/name changes
+    if (window.gpxSetNavUser) window.gpxSetNavUser(p);
   }
 
   function fillForm(p) {
@@ -122,7 +116,7 @@
       $('ph-displayname').textContent = display_name || gProfile.username;
       if (bio) { $('ph-bio').textContent = bio; $('ph-bio').hidden = false; }
       else $('ph-bio').hidden = true;
-      if (gProfile) { gProfile.display_name = display_name; gProfile.bio = bio; }
+      if (gProfile) { gProfile.display_name = display_name; gProfile.bio = bio; if (window.gpxSetNavUser) window.gpxSetNavUser(gProfile); }
     } catch (err) { if (err.message !== '401') setMsg('msg-profile', 'Error de red', false); }
   });
 

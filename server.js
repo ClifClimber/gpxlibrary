@@ -1010,8 +1010,11 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/auth/me' && method === 'GET') {
     if (!req.user) { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'No autenticado' })); }
+    const u = await sqlDb().get('SELECT display_name, avatar_key FROM users WHERE id = ?', [req.user.sub]).catch(() => null);
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ id: req.user.sub, username: req.user.username, role: req.user.role }));
+    return res.end(JSON.stringify({ id: req.user.sub, username: req.user.username, role: req.user.role,
+      display_name: u?.display_name || null,
+      avatar_url: u?.avatar_key ? `/api/profile/avatar/${encodeURIComponent(u.avatar_key)}` : null }));
   }
 
   // ── Admin: gestión de usuarios ────────────────────────────────────

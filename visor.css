@@ -252,8 +252,24 @@ body.panel-resizing { cursor: ew-resize; user-select: none; }
 /* ── Leaflet (posición bajo la barra de chips) ───────────────────── */
 .leaflet-top.leaflet-right { top: calc(var(--bar-h) + var(--gap) + 10px); right: 2px; }
 
-/* ── Chip "Crear ruta" — igual que chip-toggle ────────────────────── */
-#chip-crear-ruta { text-decoration: none; }
+/* ── Botón "Crear ruta": flotante, abajo en el centro del mapa ───── */
+#btn-crear-ruta {
+  position: fixed; z-index: 800; bottom: 26px;
+  left: calc(var(--panel-w) + (100vw - var(--panel-w)) / 2); transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 22px; border-radius: 999px;
+  background: linear-gradient(135deg, #fb923c, #f97316); color: #fff;
+  font-size: 14px; font-weight: 600; text-decoration: none; letter-spacing: .01em;
+  box-shadow: 0 6px 20px color-mix(in srgb, #f97316 40%, transparent), 0 1px 3px rgba(15,23,42,.12);
+  transition: transform .12s, box-shadow .12s, filter .12s;
+}
+#btn-crear-ruta:hover { transform: translateX(-50%) translateY(-2px); filter: brightness(1.05); box-shadow: 0 10px 26px color-mix(in srgb, #f97316 48%, transparent), 0 1px 3px rgba(15,23,42,.12); }
+#app.panel-collapsed #btn-crear-ruta { left: 50%; }
+/* Con el perfil de elevación abierto el botón estorbaría: se oculta */
+#app:has(#profile.visible) #btn-crear-ruta { display: none; }
+
+/* Chip "Mis rutas" (conmutador sin popover) */
+#chip-my-tracks svg { margin-right: 2px; }
 
 /* ── Paginación de la lista ──────────────────────────────────────── */
 #tracklist-pages {
@@ -296,6 +312,8 @@ body.panel-resizing { cursor: ew-resize; user-select: none; }
   #profile, #app.panel-collapsed #profile { grid-column: 1; grid-row: 4; }
   #panel, #app.panel-collapsed #panel { grid-column: 1; grid-row: 5; max-height: 42vh; align-self: end; }
   #panel-resize { display: none; }
+  #btn-crear-ruta, #app.panel-collapsed #btn-crear-ruta { left: auto; right: 12px; transform: none; bottom: calc(42vh + 20px); padding: 10px 16px; }
+  #btn-crear-ruta:hover { transform: translateY(-2px); }
   #profile-svg-wrap { height: 110px; }
   #pd-stats { width: 88px; }
   .leaflet-top.leaflet-right { top: calc(var(--bar-h) + 38px + var(--gap) * 2 + 8px); }
