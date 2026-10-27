@@ -286,6 +286,19 @@ tr.inactive td { opacity: .4; }
 
           <div class="op-item">
             <div class="op-head">
+              <h3>Importar tracks</h3>
+              <div class="op-btns">
+                <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px">Dueño
+                  <select class="select" id="import-owner" style="height:28px;font-size:12px;padding:0 8px"></select></label>
+                <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px"><input type="checkbox" id="import-force"> re-importar</label>
+                <button class="btn btn-ghost btn-sm" id="btn-import-temp">Importar de _TEMP_</button>
+              </div>
+            </div>
+            <p>Importa los GPX que haya en <code>TracksGps/_TEMP_</code> (clasifica actividad, geocodifica y evita duplicados). Las rutas nuevas se asignan al <b>dueño</b> elegido. Con <b>re-importar</b> vuelve a procesar aunque ya existan.</p>
+          </div>
+
+          <div class="op-item">
+            <div class="op-head">
               <h3>Limpiar tracks</h3>
               <div class="op-btns">
                 <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px">min-dist <input type="number" class="db-num" id="inp-mindist" value="5" min="0" max="100"> m</label>
@@ -1311,6 +1324,21 @@ document.getElementById('btn-export-folders').addEventListener('click', function
 });
 
 
+
+// Importar de _TEMP_ con selección de dueño
+(function () {
+  const sel = document.getElementById('import-owner');
+  fetch('/api/admin/users').then(r => r.json()).then(d => {
+    sel.innerHTML = (d.users || []).filter(u => u.active).map(u =>
+      `<option value="${u.id}"${u.id === d.me ? ' selected' : ''}>${escHtml(u.display_name || u.username)}</option>`).join('');
+  }).catch(() => { sel.innerHTML = '<option value="">(sin usuarios)</option>'; });
+  document.getElementById('btn-import-temp').addEventListener('click', function () {
+    const body = { owner_id: sel.value ? parseInt(sel.value) : undefined, force: document.getElementById('import-force').checked };
+    this.disabled = true;
+    streamScript('/api/db/import-temp', 'Importar desde _TEMP_', body, () => {})
+      .finally(() => { this.disabled = false; loadStats(); });
+  });
+})();
 
 document.getElementById('btn-clean').addEventListener('click', function() {
   const minDist = parseFloat(document.getElementById('inp-mindist').value) || 0;

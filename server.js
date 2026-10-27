@@ -1605,7 +1605,14 @@ const server = http.createServer(async (req, res) => {
     if (!isAdmin && (!files || src || force)) {
       res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Solo puedes importar las rutas que acabas de subir' }));
     }
-    const args  = ['--owner', String(req.user.sub)];
+    // An admin may assign the imported tracks to any user; everyone else owns what they import.
+    let ownerId = req.user.sub;
+    if (isAdmin && body.owner_id != null && body.owner_id !== '') {
+      const target = parseInt(body.owner_id);
+      if (!(await sqlDb().get('SELECT 1 FROM users WHERE id = ?', [target]))) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Usuario destino no encontrado' })); }
+      ownerId = target;
+    }
+    const args  = ['--owner', String(ownerId)];
     if (force) args.push('--force');
     if (files) args.push('--files', files.join('|'));
     if (src)   args.push('--src', src);
