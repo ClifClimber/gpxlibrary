@@ -40,9 +40,8 @@
       <button class="chip" data-pop="ele"><span class="chip-lbl" data-default="Desnivel">Desnivel</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip" data-pop="ibp"><span class="chip-lbl" data-default="Dificultad">Dificultad</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip" data-pop="sierra" id="chip-sierra" hidden><span class="chip-lbl" data-default="Zona">Zona</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-      <button class="chip" data-pop="tags" id="chip-tags" hidden><span class="chip-lbl" data-default="Etiquetas">Etiquetas</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip" data-pop="more"><span class="chip-lbl" data-default="Más filtros">Más filtros</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-      <button class="chip chip-toggle" id="chip-my-tracks" hidden title="Mostrar solo mis rutas">Mis rutas</button>
+      <button class="chip" data-pop="owner" id="chip-my-tracks" hidden><span class="chip-lbl" data-default="Mis rutas">Mis rutas</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip chip-geo active" data-pop="geo" id="chip-geo" hidden>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
         <span class="chip-lbl" id="chip-geo-lbl"></span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
@@ -174,13 +173,7 @@
     <div class="pop-foot"><button class="pop-reset" data-reset="sierra">Borrar</button></div>
   </div>
 
-  <div class="popover pop-wide" id="pop-tags">
-    <div class="pop-title">Etiquetas</div>
-    <div class="cat-pills pop-scroll" id="tag-filters"></div>
-    <div class="pop-foot"><button class="pop-reset" data-reset="tags">Borrar</button></div>
-  </div>
-
-  <div class="popover" id="pop-more">
+  <div class="popover pop-wide" id="pop-more">
     <div class="pop-title">Tipo de recorrido</div>
     <div class="cat-pills" id="route-type-filters">
       <div class="cat-pill" data-rtype="circular">🔄 Circular</div>
@@ -188,7 +181,15 @@
     </div>
     <div class="pop-title" style="margin-top:14px">Año</div>
     <select class="pop-select" id="year-filter"><option value="">Todos los años</option></select>
+    <div class="pop-title" id="tags-section-title" style="margin-top:14px" hidden>Etiquetas</div>
+    <div class="cat-pills pop-scroll" id="tag-filters"></div>
     <div class="pop-foot"><button class="pop-reset" data-reset="more">Borrar</button></div>
+  </div>
+
+  <div class="popover" id="pop-owner">
+    <div class="pop-title">Rutas de</div>
+    <div class="cat-pills" id="owner-filters"></div>
+    <div class="pop-foot"><button class="pop-reset" data-reset="owner">Todas</button></div>
   </div>
 
   <div class="popover" id="pop-geo">

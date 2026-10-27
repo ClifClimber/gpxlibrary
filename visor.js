@@ -198,6 +198,7 @@ let PS = null;
 let activeIdx = null;
 let sliders = {};
 let geoFilter = null;   // {lat, lon, radius, name}
+let gOwnerFilter = null; // null = todas; o un owner_id para filtrar por propietario
 let geoCircle = null;
 let idSet = new Set();   // filter to specific IDs (from ?ids= URL param)
 let sortMode = 'name';
@@ -664,7 +665,7 @@ function readFilters() {
     year:    $('year-filter').value,
     q:       norm($('text-search').value.trim()),
     ibpMin, ibpMax, ibpActive: ibpMin > 0 || ibpMax < 5,
-    onlyMine: !!($('chip-my-tracks') && !$('chip-my-tracks').hidden && $('chip-my-tracks').classList.contains('active')),
+    owner: gOwnerFilter,
   };
 }
 
@@ -677,7 +678,7 @@ function baseMatch(t, f) {
     (!geoFilter || trackNearPoint(t, geoFilter.lat, geoFilter.lon, geoFilter.radius)) &&
     (!f.ibpActive || (() => { const idx = ibpLevelIdxV(ibpForTrackV(t)); return idx >= f.ibpMin && idx <= f.ibpMax; })()) &&
     (f.rtype.size === 0 || (f.rtype.has('circular') && t.circular) || (f.rtype.has('lineal') && !t.circular)) &&
-    (!f.onlyMine || (gCurrentUser && t.owner_id === gCurrentUser.sub));
+    (f.owner == null || t.owner_id === f.owner);
 }
 const actOk    = (t, f) => f.acts.size === 0    || f.acts.has(t.activity || 'Sin clasificar');
 const sierraOk = (t, f) => f.sierras.size === 0 || f.sierras.has(t.sierra);
@@ -727,6 +728,8 @@ const ACT_PHOTOS = {
   'Running':       '/assets/activities/trail-running.jpg',
   'MTB':           '/assets/activities/mtb.jpg',
   'MTB Enduro':    '/assets/activities/mtb.jpg',
+  'Gravel':        '/assets/activities/gravel.jpg',
+  'Montañismo':    '/assets/activities/montanismo.jpg',
 };
 
 function trackItemHtml(track, ri) {
@@ -880,7 +883,6 @@ function multiLabel(set, plural, fmt) {
 function updateChips(f) {
   setChip('act',    multiLabel(f.acts, 'Actividades', v => v), f.acts.size);
   setChip('sierra', multiLabel(f.sierras, 'Zonas', v => v), f.sierras.size);
-  setChip('tags',   multiLabel(f.tags, 'Etiquetas', v => '#' + v), f.tags.size);
   setChip('dist',   sliders.dist?.summary(), sliders.dist?.isActive());
   setChip('ele',    sliders.ele?.summary() && `↑ ${sliders.ele.summary()}`, sliders.ele?.isActive());
   setChip('ibp',    f.ibpActive ? $('ibp-rs-label').textContent : '', f.ibpActive);
@@ -888,14 +890,20 @@ function updateChips(f) {
   if (f.rtype.has('circular')) more.push('Circular');
   if (f.rtype.has('lineal'))   more.push('Lineal');
   if (f.year) more.push(f.year);
+  if (f.tags.size) more.push(f.tags.size === 1 ? '#' + [...f.tags][0] : `${f.tags.size} etiquetas`);
   setChip('more', more.join(' · '), more.length);
+  if (f.owner != null) {
+    const ownerName = f.owner === gCurrentUser?.id ? 'Mis rutas'
+      : (CATALOG.find(t => t.owner_id === f.owner)?.owner_username || 'Usuario');
+    setChip('owner', ownerName, true);
+  } else setChip('owner', '', false);
   $('clear-filters-btn').hidden = countActiveFilters(f) === 0;
 }
 function countActiveFilters(f) {
   return f.acts.size + f.sierras.size + f.tags.size + f.rtype.size +
     (f.ibpActive ? 1 : 0) + (geoFilter ? 1 : 0) +
     (sliders.dist?.isActive() ? 1 : 0) + (sliders.ele?.isActive() ? 1 : 0) +
-    (f.year ? 1 : 0) + (f.q ? 1 : 0) + (f.onlyMine ? 1 : 0);
+    (f.year ? 1 : 0) + (f.q ? 1 : 0) + (f.owner != null ? 1 : 0);
 }
 
 // ── Build filter UI ──────────────────────────────────────────────────
@@ -924,12 +932,22 @@ function buildFilters() {
       `<div class="cat-pill" data-sierra="${escHtml(s)}">${escHtml(s)}<span class="cat-count">${sierras[s]}</span></div>`).join('');
   }
 
-  // Chip "Mis rutas" solo visible si el usuario está autenticado
+  // Chip "Mis rutas" + selector de propietario (solo si hay sesión)
   if (gCurrentUser) {
-    const chipMy = $('chip-my-tracks');
-    chipMy.hidden = false;
-    chipMy.addEventListener('click', () => {
-      chipMy.classList.toggle('active');
+    $('chip-my-tracks').hidden = false;
+    // Propietarios distintos presentes en el catálogo
+    const owners = new Map();  // id → username
+    CATALOG.forEach(t => { if (t.owner_id && t.owner_username) owners.set(t.owner_id, t.owner_username); });
+    const mine = gCurrentUser.id;
+    const others = [...owners.entries()].filter(([id]) => id !== mine).sort((a, b) => a[1].localeCompare(b[1], 'es'));
+    const pills = [`<div class="cat-pill" data-owner="${mine}">Mis rutas<span class="cat-count">${CATALOG.filter(t => t.owner_id === mine).length}</span></div>`];
+    others.forEach(([id, name]) => pills.push(`<div class="cat-pill" data-owner="${id}">${escHtml(name)}<span class="cat-count">${CATALOG.filter(t => t.owner_id === id).length}</span></div>`));
+    $('owner-filters').innerHTML = pills.join('');
+    $('owner-filters').addEventListener('click', e => {
+      const pill = e.target.closest('.cat-pill'); if (!pill) return;
+      const id = +pill.dataset.owner;
+      gOwnerFilter = (gOwnerFilter === id) ? null : id;   // volver a pulsar = quitar filtro
+      $$('#owner-filters .cat-pill').forEach(p => p.classList.toggle('active', +p.dataset.owner === gOwnerFilter));
       applyFilters();
     });
   }
@@ -937,7 +955,7 @@ function buildFilters() {
   const tagMap = {};
   CATALOG.forEach(t => (t.tags || []).forEach(tag => { tagMap[tag] = (tagMap[tag] || 0) + 1; }));
   if (Object.keys(tagMap).length) {
-    $('chip-tags').hidden = false;
+    $('tags-section-title').hidden = false;
     $('tag-filters').innerHTML = Object.keys(tagMap).sort((a, b) => a.localeCompare(b, 'es')).map(tag =>
       `<div class="cat-pill" data-tag="${escHtml(tag)}">#${escHtml(tag)}<span class="cat-count">${tagMap[tag]}</span></div>`).join('');
   }
@@ -997,7 +1015,8 @@ const RESETS = {
   dist:   () => sliders.dist.reset(),
   ele:    () => sliders.ele.reset(),
   ibp:    () => { $('ibp-rs-min').value = 0; $('ibp-rs-max').value = 5; updateIbpSlider(); },
-  more:   () => { $$('#route-type-filters .cat-pill.active').forEach(p => p.classList.remove('active')); $('year-filter').value = ''; },
+  more:   () => { $$('#route-type-filters .cat-pill.active, #tag-filters .cat-pill.active').forEach(p => p.classList.remove('active')); $('year-filter').value = ''; },
+  owner:  () => { gOwnerFilter = null; $$('#owner-filters .cat-pill.active').forEach(p => p.classList.remove('active')); },
   geo:    () => clearGeoFilter(),
 };
 $$('.pop-reset').forEach(btn => btn.addEventListener('click', () => { RESETS[btn.dataset.reset](); applyFilters(); }));
@@ -1005,8 +1024,6 @@ $('clear-filters-btn').addEventListener('click', () => {
   Object.values(RESETS).forEach(fn => fn());
   $('text-search').value = '';
   $('search-clear').hidden = true;
-  const chipMy = $('chip-my-tracks');
-  if (chipMy) chipMy.classList.remove('active');
   closePopover();
   applyFilters();
 });
