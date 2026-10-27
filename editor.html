@@ -194,6 +194,10 @@
     /* ── Activity badge ─────────────────────── */
     .act-badge { display:inline-block; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:700; white-space:nowrap; }
     .sierra-chip { font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; display:block; }
+    .owner-chip { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:500; white-space:nowrap; }
+    .owner-ini { width:20px; height:20px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; background:var(--accent-soft); color:var(--accent); }
+    .owner-lock { font-size:10px; }
+    .owner-none { font-size:11px; font-weight:600; color:var(--warn); }
     .tags-chip { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:999px; font-size:10px; background:color-mix(in srgb,#3b82f6 14%,transparent); color:#2563eb; border:1px solid color-mix(in srgb,#3b82f6 40%,transparent); }
 
     /* ── Tag input in inline edit ──────────────── */
@@ -315,6 +319,7 @@
       <button class="chip" data-pop="f-ccaa"><span class="chip-lbl" data-default="CCAA">CCAA</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip" data-pop="f-ibp"><span class="chip-lbl" data-default="Dificultad">Dificultad</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip" data-pop="f-circular"><span class="chip-lbl" data-default="Recorrido">Recorrido</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" data-pop="f-owner"><span class="chip-lbl" data-default="Dueño">Dueño</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip chip-toggle" id="btn-last-import" title="Mostrar solo la última importación" style="display:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Última importación
@@ -372,6 +377,7 @@
     <option value="1">🔄 Circular</option>
     <option value="0">↔ Lineal</option>
   </select>
+  <select class="tb-select" id="f-owner"><option value="">Todos los dueños</option></select>
 </div>
 
 <!-- Chip popovers -->
@@ -381,11 +387,16 @@
 <div class="popover pop-wide" id="pop-f-ccaa"><div class="pop-title">Comunidad autónoma</div><div class="cat-pills pop-scroll" data-for="f-ccaa"></div><div class="pop-foot"><button class="pop-reset" data-for="f-ccaa">Borrar</button></div></div>
 <div class="popover" id="pop-f-ibp"><div class="pop-title">Dificultad IBP</div><div class="cat-pills" data-for="f-ibp"></div><div class="pop-foot"><button class="pop-reset" data-for="f-ibp">Borrar</button></div></div>
 <div class="popover" id="pop-f-circular"><div class="pop-title">Tipo de recorrido</div><div class="cat-pills" data-for="f-circular"></div><div class="pop-foot"><button class="pop-reset" data-for="f-circular">Borrar</button></div></div>
+<div class="popover" id="pop-f-owner"><div class="pop-title">Dueño de la ruta</div><div class="cat-pills pop-scroll" data-for="f-owner"></div><div class="pop-foot"><button class="pop-reset" data-for="f-owner">Borrar</button></div></div>
 
 <!-- Selection bar -->
 <div id="sel-bar">
   <span id="sel-count-label">0 seleccionados</span>
   <button id="btn-bulk-edit">Editar seleccionados</button>
+  <button id="btn-bulk-owner">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    Cambiar dueño
+  </button>
   <button id="btn-export-sel">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     Exportar GPX
@@ -407,6 +418,34 @@
 </div>
 
 
+
+<!-- Change owner modal -->
+<div id="owner-modal" class="modal-overlay" hidden>
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <h3>Cambiar dueño</h3>
+      <button class="icon-btn" id="owner-modal-close" aria-label="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;padding-top:8px">
+      <p style="font-size:13px"><b id="owner-modal-n">0</b> ruta(s) seleccionada(s)</p>
+      <div><label class="field-label" for="owner-modal-user">Nuevo dueño</label>
+        <select class="select" id="owner-modal-user" style="width:100%"></select></div>
+      <div><label class="field-label" for="owner-modal-vis">Visibilidad</label>
+        <select class="select" id="owner-modal-vis" style="width:100%">
+          <option value="">No cambiar</option>
+          <option value="public">Pública</option>
+          <option value="private">Privada</option>
+        </select></div>
+      <div id="owner-modal-err" style="color:var(--danger);font-size:12px;min-height:16px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" id="owner-modal-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="owner-modal-ok">Aplicar</button>
+    </div>
+  </div>
+</div>
 
 <!-- Delete confirmation modal -->
 <div id="del-overlay">
@@ -496,6 +535,7 @@
         <th class="sortable" data-col="id" style="width:44px;text-align:right" title="ID de importación">#</th>
         <th class="sortable" data-col="name">Nombre</th>
         <th class="col-activ sortable" data-col="activity">Actividad</th>
+        <th class="col-owner sortable" data-col="owner">Dueño</th>
         <th class="col-prov sortable" data-col="has_osm" title="Datos OSM de tipos de camino" style="text-align:center">OSM</th>
         <th class="col-ccaa sortable" data-col="ccaa">CCAA</th>
         <th class="col-sierra sortable" data-col="sierra">Sierra / Zona</th>
@@ -510,7 +550,7 @@
       </tr>
     </thead>
     <tbody id="tracks-body">
-      <tr><td colspan="14" class="empty-td">Cargando...</td></tr>
+      <tr><td colspan="15" class="empty-td">Cargando...</td></tr>
     </tbody>
   </table>
 </div>
@@ -949,6 +989,7 @@ async function loadTracks() {
     const r = await fetch('/api/tracks');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     allTracks = await r.json();
+    allTracks.forEach(t => { t.owner = t.owner_username || 'Sin dueño'; });
     // Colors now driven by activity (ACT_COLORS), not category
 
     // Mostrar botón solo si hay tracks marcados como importación reciente
@@ -970,11 +1011,18 @@ async function loadTracks() {
     }
 
     populateFilters();
+    // Deep link from Admin → Usuarios: /editor?owner=<username>
+    const ownerParam = new URLSearchParams(location.search).get('owner');
+    if (ownerParam) {
+      const sel = document.getElementById('f-owner');
+      if ([...sel.options].some(o => o.value === ownerParam)) sel.value = ownerParam;
+      history.replaceState(null, '', '/editor');
+    }
     applyFilters();
     updateStats();
   } catch(e) {
     document.getElementById('tracks-body').innerHTML =
-      `<tr><td colspan="14" class="empty-td">⚠ No se pudo cargar. Inicia el servidor con <code>npm start</code>.<br><small>${escHtml(e.message)}</small></td></tr>`;
+      `<tr><td colspan="15" class="empty-td">⚠ No se pudo cargar. Inicia el servidor con <code>npm start</code>.<br><small>${escHtml(e.message)}</small></td></tr>`;
   }
 }
 
@@ -990,6 +1038,7 @@ function populateFilters() {
   fill('f-province', unique('province'));
   fill('f-ccaa',     unique('ccaa'));
   fill('f-sierra',   unique('sierra'));
+  fill('f-owner',    unique('owner'));
 
   // Bulk activity select — sorted alphabetically
   const bvAct = document.getElementById('bv-activity');
@@ -1007,10 +1056,12 @@ function applyFilters() {
   const fSie = document.getElementById('f-sierra').value;
   const fIbp = document.getElementById('f-ibp').value;
   const fCirc = document.getElementById('f-circular').value;
+  const fOwn = document.getElementById('f-owner').value;
 
   const qn = normTxt(q);
-  function matchRow(t, skipAct, skipPro, skipCCA, skipSie) {
-    if (qn && !normTxt(`${t.name} ${t.sierra||''} ${t.zone||''} ${t.tags||''}`).includes(qn)) return false;
+  function matchRow(t, skipAct, skipPro, skipCCA, skipSie, skipOwn) {
+    if (qn && !normTxt(`${t.name} ${t.sierra||''} ${t.zone||''} ${t.tags||''} ${t.owner||''}`).includes(qn)) return false;
+    if (!skipOwn && fOwn && t.owner !== fOwn) return false;
     if (!skipAct && fAct && t.activity !== fAct) return false;
     if (!skipPro && fPro && t.province !== fPro) return false;
     if (!skipCCA && fCCA && t.ccaa     !== fCCA) return false;
@@ -1034,11 +1085,11 @@ function applyFilters() {
     : `${filtered.length} rutas <small>de ${allTracks.length}</small>`;
   updateSelBar();
   updateSearchChip();
-  updateSelectOptions(matchRow, fAct, fPro, fCCA, fSie);
+  updateSelectOptions(matchRow, fAct, fPro, fCCA, fSie, fOwn);
   updateChips();
 }
 
-function updateSelectOptions(matchRow, fAct, fPro, fCCA, fSie) {
+function updateSelectOptions(matchRow, fAct, fPro, fCCA, fSie, fOwn) {
   function counts(tracks) {
     const c = {}; tracks.forEach(t => { if (t) c[t] = (c[t]||0)+1; }); return c;
   }
@@ -1046,6 +1097,7 @@ function updateSelectOptions(matchRow, fAct, fPro, fCCA, fSie) {
   const proC  = counts(allTracks.filter(t=>matchRow(t,false,true, false,false)).map(t=>t.province));
   const ccaaC = counts(allTracks.filter(t=>matchRow(t,false,false,true, false)).map(t=>t.ccaa));
   const sieC  = counts(allTracks.filter(t=>matchRow(t,false,false,false,true )).map(t=>t.sierra));
+  const ownC  = counts(allTracks.filter(t=>matchRow(t,false,false,false,false,true)).map(t=>t.owner));
 
   function rebuild(id, countMap, currentVal) {
     const sel = document.getElementById(id);
@@ -1062,6 +1114,7 @@ function updateSelectOptions(matchRow, fAct, fPro, fCCA, fSie) {
   rebuild('f-province', proC,  fPro);
   rebuild('f-ccaa',     ccaaC, fCCA);
   rebuild('f-sierra',   sieC,  fSie);
+  rebuild('f-owner',    ownC,  fOwn);
 }
 
 function normTxt(s) {
@@ -1073,7 +1126,7 @@ function updateSearchChip() {
 }
 
 // ── Filter chips + popovers (drive the hidden selects) ─────────────
-const FILTER_IDS = ['f-activity','f-sierra','f-province','f-ccaa','f-ibp','f-circular'];
+const FILTER_IDS = ['f-activity','f-sierra','f-province','f-ccaa','f-ibp','f-circular','f-owner'];
 
 function optParts(opt) {
   const m = opt.textContent.match(/^(.*) \((\d+)\)$/);
@@ -1193,7 +1246,7 @@ function ibpBadge(val) {
 function renderTable() {
   const tbody = document.getElementById('tracks-body');
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="14" class="empty-td">Sin resultados. Ajusta los filtros.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" class="empty-td">Sin resultados. Ajusta los filtros.</td></tr>';
     return;
   }
   tbody.innerHTML = filtered.map(t => {
@@ -1220,6 +1273,9 @@ function renderTable() {
         ${(t.file||'').startsWith('TracksGps/store/') ? '' : `<span style="display:block;font-size:9px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px" title="${escHtml(t.file||'')}">${escHtml((t.file||'').replace('TracksGps/',''))}</span>`}
       </td>
       <td>${actBadge}</td>
+      <td class="col-owner">${t.owner_username
+        ? `<span class="owner-chip" title="${t.visibility === 'private' ? 'Privada' : 'Pública'}"><span class="owner-ini">${escHtml(t.owner_username.charAt(0).toUpperCase())}</span>${escHtml(t.owner_username)}${t.visibility === 'private' ? ' <span class="owner-lock">🔒</span>' : ''}</span>`
+        : '<span class="owner-none">Sin dueño</span>'}</td>
       <td style="text-align:center">${(t.road_types && t.road_types !== '{}') ? '<span style="color:#16a34a;font-size:14px;font-weight:700" title="Tiene datos OSM">✓</span>' : ''}</td>
       <td style="font-size:11px;color:var(--muted)">${escHtml(t.ccaa||'—')}</td>
       <td>${sierraCell}</td>
@@ -1289,7 +1345,7 @@ function injectEditRow(t) {
   const row = document.createElement('tr');
   row.className = 'inline-edit-row';
   row.dataset.editFor = t.id;
-  row.innerHTML = `<td colspan="14">
+  row.innerHTML = `<td colspan="15">
     <form class="edit-form" id="ef-${t.id}">
       <div class="edit-grid">
         <div class="ef-group"><label class="ef-label">Nombre</label>
@@ -1576,6 +1632,45 @@ function openBulkPanel() {
 }
 
 document.getElementById('btn-bulk-edit').addEventListener('click', openBulkPanel);
+
+// ── Cambiar dueño de las rutas seleccionadas ───────────────────────
+(function () {
+  const $ = id => document.getElementById(id);
+  const close = () => { $('owner-modal').hidden = true; };
+  $('btn-bulk-owner').addEventListener('click', async () => {
+    if (!selected.size) return;
+    $('owner-modal-n').textContent = selected.size;
+    $('owner-modal-err').textContent = '';
+    $('owner-modal-vis').value = '';
+    try {
+      const d = await (await fetch('/api/admin/users')).json();
+      $('owner-modal-user').innerHTML = d.users.filter(u => u.active).map(u =>
+        `<option value="${u.id}">${escHtml(u.display_name || u.username)} (@${escHtml(u.username)})</option>`).join('') +
+        '<option value="">— Sin dueño —</option>';
+    } catch { $('owner-modal-err').textContent = 'No se pudo cargar la lista de usuarios'; }
+    $('owner-modal').hidden = false;
+  });
+  $('owner-modal-ok').addEventListener('click', async () => {
+    const owner = $('owner-modal-user').value;
+    const body = { ids: [...selected], owner_id: owner === '' ? null : +owner };
+    if ($('owner-modal-vis').value) body.visibility = $('owner-modal-vis').value;
+    const r = await fetch('/api/admin/tracks/owner', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { $('owner-modal-err').textContent = d.error || 'Error'; return; }
+    const name = owner === '' ? null : $('owner-modal-user').selectedOptions[0].textContent.match(/@([^)]+)\)/)[1];
+    allTracks.forEach(t => {
+      if (!selected.has(t.id)) return;
+      t.owner_id = body.owner_id; t.owner_username = name; t.owner = name || 'Sin dueño';
+      if (body.visibility) t.visibility = body.visibility;
+    });
+    close();
+    applyFilters();   // rebuilds the filter options (owner counts) keeping the current filters
+    showToast(`Dueño cambiado en ${d.updated} ruta(s)`);
+  });
+  $('owner-modal-close').addEventListener('click', close);
+  $('owner-modal-cancel').addEventListener('click', close);
+  $('owner-modal').addEventListener('click', e => { if (e.target.id === 'owner-modal') close(); });
+})();
 document.getElementById('bulk-close').addEventListener('click', closeBulkPanel);
 document.getElementById('btn-bulk-cancel').addEventListener('click', closeBulkPanel);
 function closeBulkPanel() { document.getElementById('bulk-panel').classList.remove('open'); }

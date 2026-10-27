@@ -63,6 +63,18 @@ function isPublicFile(rel) {
   return ext === '.html' || ext === '.css' || PUBLIC_JS.has(rel);
 }
 
+// ── Estado vivo de la cuenta (rol / activo), con caché corta ───────
+const _liveUsers = new Map();   // id → { at, row }
+async function liveUser(id) {
+  const hit = _liveUsers.get(id);
+  if (hit && Date.now() - hit.at < 15000) return hit.row;
+  let row;
+  try { row = (await sqlDb().get('SELECT username, role, active FROM users WHERE id = ?', [id])) || null; }
+  catch { return hit ? hit.row : null; }   // DB hiccup: keep the last known state
+  _liveUsers.set(id, { at: Date.now(), row });
+  return row;
+}
+
 // ── Permisos por rol ───────────────────────────────────────────────
 // Non-admin users: viewer + search, track detail, compare, route drawing and their own profile.
 const ADMIN_PAGES = new Set(['/admin', '/editor', '/config', '/admin.html', '/editor.html']);
@@ -1010,6 +1022,13 @@ const server = http.createServer(async (req, res) => {
 
   // ── Auth ──────────────────────────────────────────────────────────
   authMiddleware(req);
+  // The token carries the role at login time: use the live account state so that deactivating a
+  // user or changing their role from Admin takes effect at once.
+  if (req.user) {
+    const live = await liveUser(req.user.sub);
+    if (!live || !live.active) { clearCookie(res); req.user = null; }
+    else { req.user.role = live.role; req.user.username = live.username; }
+  }
 
   // Login page and auth endpoints are public
   if (pathname === '/login') return serveStatic(res, path.join(ROOT, 'login.html'), req);
@@ -1048,20 +1067,59 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/admin/users' && method === 'GET') {
     if (!requireAdmin(req, res)) return;
     const db = sqlDb();
-    const users = await db.all('SELECT id, username, email, role, active, to_char(created_at AT TIME ZONE \'UTC\', \'YYYY-MM-DD\') AS created_at FROM users ORDER BY id');
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify(users));
+    const users = await db.all(`
+      SELECT u.id, u.username, u.email, u.display_name, u.avatar_key, u.role, u.active,
+             to_char(u.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS created_at,
+             CAST(COUNT(t.id) AS INTEGER) AS track_count,
+             CAST(COUNT(t.id) FILTER (WHERE t.visibility = 'private') AS INTEGER) AS private_count,
+             ROUND(CAST(COALESCE(SUM(t.distance), 0) AS NUMERIC), 1) AS total_km,
+             CAST((SELECT COUNT(*) FROM user_lists l WHERE l.owner_id = u.id) AS INTEGER) AS list_count
+      FROM users u LEFT JOIN tracks t ON t.owner_id = u.id
+      GROUP BY u.id ORDER BY u.id`);
+    const orphan = await db.get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM tracks WHERE owner_id IS NULL');
+    for (const u of users) {
+      u.avatar_url = u.avatar_key ? `/api/profile/avatar/${encodeURIComponent(u.avatar_key)}` : null;
+      delete u.avatar_key;
+    }
+    res.writeHead(200, J);
+    return res.end(JSON.stringify({ users, orphanTracks: orphan.n, me: req.user.sub }));
+  }
+
+  // Change the owner (and optionally the visibility) of several tracks at once
+  if (pathname === '/api/admin/tracks/owner' && method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    const body = await parseBody(req);
+    const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter(Boolean) : [];
+    const orphans = body.orphans === true;   // every track without owner
+    if (!ids.length && !orphans) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Sin rutas' })); }
+    const owner = body.owner_id == null || body.owner_id === '' ? null : parseInt(body.owner_id);
+    const db = sqlDb();
+    if (owner != null && !(await db.get('SELECT 1 FROM users WHERE id = ?', [owner]))) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Usuario no encontrado' })); }
+    const sets = ['owner_id = ?']; const vals = [owner];
+    if (body.visibility === 'public' || body.visibility === 'private') { sets.push('visibility = ?'); vals.push(body.visibility); }
+    const where = orphans ? 'owner_id IS NULL' : `id IN (${ids.map(() => '?').join(',')})`;
+    if (!orphans) vals.push(...ids);
+    const r = await db.get(`WITH up AS (UPDATE tracks SET ${sets.join(', ')} WHERE ${where} RETURNING 1) SELECT CAST(COUNT(*) AS INTEGER) AS n FROM up`, vals);
+    invalidateCatalogCache();
+    appendLog('info', 'users', `Dueño cambiado en ${r.n} ruta(s)`, { owner, by: req.user.username });
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, updated: r.n }));
   }
 
   if (pathname === '/api/admin/users' && method === 'POST') {
     if (!requireAdmin(req, res)) return;
     const body = await parseBody(req);
-    const { username, email, password, role = 'user' } = body;
+    const username = String(body.username || '').trim().toLowerCase();
+    const email    = String(body.email || '').trim().toLowerCase();
+    const { password, display_name } = body;
+    const role = body.role === 'admin' ? 'admin' : 'user';
     if (!username || !email || !password) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Faltan campos obligatorios' })); }
+    if (!/^[a-z0-9._-]{2,32}$/.test(username)) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Usuario: 2–32 caracteres (letras, números, punto, guion)' })); }
+    if (password.length < 6) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'La contraseña debe tener al menos 6 caracteres' })); }
     const db = sqlDb();
     try {
       const hash = hashPassword(password);
-      const row = await db.get('INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?) RETURNING id, username, email, role', [username, email, hash, role]);
+      const row = await db.get('INSERT INTO users (username, email, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?) RETURNING id, username, email, role', [username, email, hash, role, (display_name || '').trim() || null]);
+      appendLog('info', 'users', `Usuario creado: ${username}`, { role, by: req.user.username });
       res.writeHead(201, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify(row));
     } catch (e) {
@@ -1077,16 +1135,72 @@ const server = http.createServer(async (req, res) => {
     const uid = parseInt(userMatch[1]);
     const body = await parseBody(req);
     const db = sqlDb();
+    const fail = (code, error) => { res.writeHead(code, J); res.end(JSON.stringify({ error })); };
+    const target = await db.get('SELECT id, role, active FROM users WHERE id = ?', [uid]);
+    if (!target) return fail(404, 'Usuario no encontrado');
+    const self = uid === req.user.sub;
+    if (self && body.active === false) return fail(400, 'No puedes desactivar tu propia cuenta');
+    if (self && body.role && body.role !== 'admin') return fail(400, 'No puedes quitarte el rol de administrador');
+    if (target.role === 'admin' && ((body.role && body.role !== 'admin') || body.active === false)) {
+      const { n } = await db.get("SELECT CAST(COUNT(*) AS INTEGER) AS n FROM users WHERE role = 'admin' AND active AND id <> ?", [uid]);
+      if (!n) return fail(400, 'Debe quedar al menos un administrador activo');
+    }
     const updates = [];
     const vals = [];
     if (body.active !== undefined) { updates.push('active = ?'); vals.push(body.active ? 1 : 0); }
-    if (body.role) { updates.push('role = ?'); vals.push(body.role); }
-    if (body.password) { updates.push('password_hash = ?'); vals.push(hashPassword(body.password)); }
-    if (!updates.length) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Nada que actualizar' })); }
+    if (body.role) { updates.push('role = ?'); vals.push(body.role === 'admin' ? 'admin' : 'user'); }
+    if (body.password) {
+      if (String(body.password).length < 6) return fail(400, 'La contraseña debe tener al menos 6 caracteres');
+      updates.push('password_hash = ?'); vals.push(hashPassword(body.password));
+    }
+    if (body.email !== undefined) {
+      const email = String(body.email).trim().toLowerCase();
+      if (!email) return fail(400, 'El email es obligatorio');
+      updates.push('email = ?'); vals.push(email);
+    }
+    if (body.display_name !== undefined) { updates.push('display_name = ?'); vals.push(String(body.display_name).trim() || null); }
+    if (!updates.length) return fail(400, 'Nada que actualizar');
+    updates.push('updated_at = NOW()');
     vals.push(uid);
-    await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, vals);
+    try {
+      await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, vals);
+    } catch (e) {
+      if (e.code === '23505') return fail(409, 'Ese email ya lo usa otro usuario');
+      throw e;
+    }
+    _liveUsers.delete(uid);
+    invalidateCatalogCache();
+    appendLog('info', 'users', `Usuario modificado: id=${uid}`, { fields: Object.keys(body).filter(k => k !== 'password').concat(body.password ? ['password'] : []), by: req.user.username });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ ok: true }));
+  }
+
+  // Delete a user: their tracks go to another user (reassign_to) or are left without owner
+  if (userMatch && method === 'DELETE') {
+    if (!requireAdmin(req, res)) return;
+    const uid = parseInt(userMatch[1]);
+    const db = sqlDb();
+    const fail = (code, error) => { res.writeHead(code, J); res.end(JSON.stringify({ error })); };
+    if (uid === req.user.sub) return fail(400, 'No puedes borrar tu propia cuenta');
+    const target = await db.get('SELECT id, username, role, avatar_key FROM users WHERE id = ?', [uid]);
+    if (!target) return fail(404, 'Usuario no encontrado');
+    if (target.role === 'admin') {
+      const { n } = await db.get("SELECT CAST(COUNT(*) AS INTEGER) AS n FROM users WHERE role = 'admin' AND active AND id <> ?", [uid]);
+      if (!n) return fail(400, 'Debe quedar al menos un administrador activo');
+    }
+    const to = searchParams.get('reassign_to') ? parseInt(searchParams.get('reassign_to')) : null;
+    if (to === uid) return fail(400, 'No puedes reasignar las rutas al mismo usuario');
+    if (to != null && !(await db.get('SELECT 1 FROM users WHERE id = ?', [to]))) return fail(404, 'Usuario destino no encontrado');
+    let moved = 0;
+    await db.tx(async t => {
+      moved = (await t.get('WITH up AS (UPDATE tracks SET owner_id = ? WHERE owner_id = ? RETURNING 1) SELECT CAST(COUNT(*) AS INTEGER) AS n FROM up', [to, uid])).n;
+      await t.run('DELETE FROM users WHERE id = ?', [uid]);   // user_lists cascade
+    });
+    if (target.avatar_key) blob.del(target.avatar_key).catch(() => {});
+    _liveUsers.delete(uid);
+    invalidateCatalogCache();
+    appendLog('info', 'users', `Usuario borrado: ${target.username}`, { tracks: moved, reassign_to: to, by: req.user.username });
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, tracks: moved }));
   }
 
   // ── Perfil del usuario autenticado ───────────────────────────────

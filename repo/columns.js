@@ -17,6 +17,7 @@ const LIST_COLS = [
   'center_lat', 'center_lon', 'raw_count', 'clean_count', 'cleaned',
   'activity', 'province', 'ccaa', 'sierra', 'notes', 'url', 'imported_at', 'tags',
   'ibp_bicycle', 'ibp_hiking', 'ibp_running', 'is_recent_import', 'circular', 'road_types',
+  'owner_id', 'visibility',
 ];
 
 const CATALOG_COLS = [

@@ -38,7 +38,9 @@ function createPostgresRepo({ connectionString, pool: givenPool } = {}) {
     pool,
 
     async listTracks() {
-      return rows(`SELECT ${selectCols(C.LIST_COLS)} FROM tracks ORDER BY tracks.imported_at DESC, ${BY_NAME}, id`);
+      return rows(`SELECT ${selectCols(C.LIST_COLS)},
+        (SELECT username FROM users u WHERE u.id = tracks.owner_id) AS owner_username
+        FROM tracks ORDER BY tracks.imported_at DESC, ${BY_NAME}, id`);
     },
     async getTrack(id) {
       return first(`SELECT ${selectCols(C.TRACK_COLS)} FROM tracks WHERE id=$1`, [id]);

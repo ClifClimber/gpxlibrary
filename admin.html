@@ -144,6 +144,28 @@ tr.inactive td { opacity: .4; }
 .chip-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 
 @media (max-width: 700px) { .bbox-grid { grid-template-columns: 1fr 1fr; } }
+
+/* Usuarios */
+.um-user { display: flex; align-items: center; gap: 10px; min-width: 170px; }
+.um-avatar { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; object-fit: cover; display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 14px; }
+.um-name { font-weight: 600; line-height: 1.25; }
+.um-sub { font-size: 11px; color: var(--muted); }
+.um-you { font-size: 10px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 999px; margin-left: 4px; vertical-align: 1px; }
+.um-email { color: var(--ink-2); font-size: 12px; }
+.um-actions { display: flex; gap: 4px; justify-content: flex-end; white-space: nowrap; }
+.um-empty { text-align: center; color: var(--muted); padding: 22px !important; }
+.um-off td { opacity: .55; }
+.um-off td:last-child { opacity: 1; }
+.um-form { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; }
+.um-form .input, .um-form .select { width: 100%; }
+.um-row { display: flex; gap: 12px; align-items: flex-end; }
+.um-check { display: flex; align-items: center; gap: 6px; font-size: 13px; height: 36px; white-space: nowrap; cursor: pointer; }
+.um-error { color: var(--danger); font-size: 12px; min-height: 16px; }
+.um-orphans { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.um-orphans-txt { flex: 1; min-width: 220px; font-size: 13px; }
+.um-tracks-link { color: inherit; text-decoration: none; font-weight: 600; }
+.um-tracks-link:hover { color: var(--accent); text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -168,6 +190,7 @@ tr.inactive td { opacity: .4; }
 
   <div class="seg-tabs" id="admin-tabs" style="margin-bottom:16px">
     <button class="seg-tab active" data-tab="bd">Base de datos</button>
+    <button class="seg-tab" data-tab="users">Usuarios</button>
     <button class="seg-tab" data-tab="tracks">Gestión de Tracks</button>
     <button class="seg-tab" data-tab="activities">Actividades</button>
     <button class="seg-tab" data-tab="sierras">Sierras / Zonas</button>
@@ -176,7 +199,6 @@ tr.inactive td { opacity: .4; }
     <button class="seg-tab" data-tab="jobs">Trabajos</button>
     <button class="seg-tab" data-tab="logs">Logs</button>
     <button class="seg-tab" data-tab="about">Acerca de</button>
-    <button class="seg-tab" data-tab="users" id="tab-btn-users" hidden>Usuarios</button>
   </div>
 
   <!-- ── Tab: Base de datos ── -->
@@ -615,7 +637,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.6.2</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.6.3</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">27 octubre 2026</div>
         </div>
       </div>
@@ -634,8 +656,22 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.6.2</span>
+            <span class="cl-version">v2.6.3</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">27 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Gestión de usuarios</b> en Admin → Usuarios: crear, editar (nombre, email, rol, contraseña), activar/desactivar y borrar; resumen con rutas, km y listas por usuario</li>
+            <li>Al borrar un usuario, sus rutas se reasignan a otro o se dejan sin dueño (sus listas se eliminan); protegido para no quedarte sin admin ni desactivarte a ti mismo</li>
+            <li>Los cambios de rol o la desactivación tienen efecto inmediato aunque la sesión siga abierta</li>
+            <li><b>Catálogo</b>: nueva columna <b>Dueño</b> (con aviso de ruta privada), filtro por dueño y acción «Cambiar dueño» para las rutas seleccionadas (con visibilidad opcional)</li>
+            <li>Aviso y botón para asignar de golpe las rutas sin dueño</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.6.2</span>
             <span class="cl-date">27 oct 2026</span>
           </div>
           <ul class="cl-list">
@@ -926,49 +962,84 @@ tr.inactive td { opacity: .4; }
 
   <!-- ── Tab: Usuarios (solo admin) ── -->
   <div class="tab-panel" id="tab-users">
-    <div class="card" style="margin-bottom:16px">
+    <div class="stats-grid" id="users-stats" style="margin-bottom:16px"></div>
+
+    <div class="card" id="orphans-card" style="margin-bottom:16px" hidden>
+      <div class="card-body um-orphans">
+        <span class="um-orphans-txt"><b id="orphans-n">0</b> rutas no tienen dueño (nadie puede editarlas salvo un admin).</span>
+        <select class="select" id="orphans-to" style="width:auto"></select>
+        <button class="btn btn-primary btn-sm" id="orphans-assign">Asignar todas</button>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card-head">
-        <h3 class="card-title">Usuarios</h3>
+        <h2>Usuarios</h2>
+        <input class="input input-sm" type="search" id="users-search" placeholder="Buscar usuario o email…" style="width:200px">
         <button class="btn btn-primary btn-sm" id="btn-add-user">+ Nuevo usuario</button>
       </div>
-      <div class="card-body" style="padding:0">
+      <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="table" id="users-table">
-          <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th><th>Estado</th><th>Creado</th><th></th></tr></thead>
-          <tbody id="users-tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Cargando...</td></tr></tbody>
+          <thead><tr>
+            <th>Usuario</th><th>Email</th><th>Rol</th><th>Estado</th>
+            <th class="num">Rutas</th><th class="num">Km</th><th class="num">Listas</th><th>Alta</th><th></th>
+          </tr></thead>
+          <tbody id="users-tbody"><tr><td colspan="9" class="um-empty">Cargando…</td></tr></tbody>
         </table>
       </div>
     </div>
 
-    <!-- Modal nuevo usuario -->
-    <div id="add-user-modal" class="modal-overlay" hidden>
-      <div class="modal" style="max-width:400px">
+    <!-- Modal crear / editar usuario -->
+    <div id="user-modal" class="modal-overlay" hidden>
+      <div class="modal" style="max-width:440px">
         <div class="modal-head">
-          <h3>Nuevo usuario</h3>
-          <button class="icon-btn" id="add-user-modal-close">
+          <h3 id="um-title">Nuevo usuario</h3>
+          <button class="icon-btn" data-close="user-modal" aria-label="Cerrar">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;padding:20px 24px">
-          <label style="font-size:13px;font-weight:500;color:var(--ink-2)">Usuario
-            <input class="input" type="text" id="nu-username" placeholder="usuario" style="margin-top:5px;width:100%">
-          </label>
-          <label style="font-size:13px;font-weight:500;color:var(--ink-2)">Email
-            <input class="input" type="email" id="nu-email" placeholder="email@ejemplo.com" style="margin-top:5px;width:100%">
-          </label>
-          <label style="font-size:13px;font-weight:500;color:var(--ink-2)">Contraseña
-            <input class="input" type="password" id="nu-password" placeholder="••••••••" style="margin-top:5px;width:100%">
-          </label>
-          <label style="font-size:13px;font-weight:500;color:var(--ink-2)">Rol
-            <select class="select" id="nu-role" style="margin-top:5px;width:100%">
-              <option value="user">Usuario</option>
-              <option value="admin">Admin</option>
-            </select>
-          </label>
-          <div id="add-user-error" style="color:var(--danger);font-size:13px;min-height:18px"></div>
+        <div class="modal-body um-form">
+          <div><label class="field-label" for="um-username">Usuario</label>
+            <input class="input" type="text" id="um-username" placeholder="usuario" autocomplete="off"></div>
+          <div><label class="field-label" for="um-display">Nombre visible</label>
+            <input class="input" type="text" id="um-display" placeholder="Opcional" maxlength="80"></div>
+          <div><label class="field-label" for="um-email">Email</label>
+            <input class="input" type="email" id="um-email" placeholder="email@ejemplo.com" autocomplete="off"></div>
+          <div><label class="field-label" for="um-password" id="um-password-lbl">Contraseña</label>
+            <input class="input" type="password" id="um-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password"></div>
+          <div class="um-row">
+            <div style="flex:1"><label class="field-label" for="um-role">Rol</label>
+              <select class="select" id="um-role"><option value="user">Usuario</option><option value="admin">Administrador</option></select></div>
+            <label class="um-check" id="um-active-wrap"><input type="checkbox" id="um-active" checked> Cuenta activa</label>
+          </div>
+          <div class="um-error" id="um-error"></div>
         </div>
         <div class="modal-foot">
-          <button class="btn btn-outline" id="add-user-modal-cancel">Cancelar</button>
-          <button class="btn btn-primary" id="add-user-submit">Crear usuario</button>
+          <button class="btn btn-outline" data-close="user-modal">Cancelar</button>
+          <button class="btn btn-primary" id="um-submit">Crear usuario</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal borrar usuario -->
+    <div id="del-user-modal" class="modal-overlay" hidden>
+      <div class="modal" style="max-width:440px">
+        <div class="modal-head">
+          <h3>Borrar usuario</h3>
+          <button class="icon-btn" data-close="del-user-modal" aria-label="Cerrar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body um-form">
+          <p id="du-text" style="font-size:13px;line-height:1.55"></p>
+          <div id="du-reassign-wrap"><label class="field-label" for="du-reassign">Sus rutas pasan a</label>
+            <select class="select" id="du-reassign"></select></div>
+          <p style="font-size:12px;color:var(--muted)">Sus listas personales se borran. Esta acción no se puede deshacer.</p>
+          <div class="um-error" id="du-error"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-outline" data-close="del-user-modal">Cancelar</button>
+          <button class="btn btn-danger" id="du-submit">Borrar usuario</button>
         </div>
       </div>
     </div>
@@ -2453,65 +2524,178 @@ loadSierras();
 </script>
 
 <script>
-// ── Usuarios (solo admin) ─────────────────────────────────────────────
-async function loadUsers() {
-  const tbody = document.getElementById('users-tbody');
-  try {
-    const r = await fetch('/api/admin/users');
-    if (!r.ok) return;
-    const users = await r.json();
-    if (!users.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Sin usuarios</td></tr>'; return; }
-    tbody.innerHTML = users.map(u => `
-      <tr>
-        <td><b>${u.username}</b></td>
-        <td>${u.email}</td>
-        <td><span class="badge ${u.role === 'admin' ? '' : 'badge-muted'}">${u.role}</span></td>
-        <td><span class="badge ${u.active ? 'badge-success' : 'badge-danger'}">${u.active ? 'Activo' : 'Inactivo'}</span></td>
-        <td>${fmtDate(u.created_at)}</td>
-        <td><button class="btn btn-outline btn-sm" onclick="toggleUser(${u.id}, ${!u.active})">${u.active ? 'Desactivar' : 'Activar'}</button></td>
-      </tr>`).join('');
-  } catch (e) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger);padding:16px">${e.message}</td></tr>`; }
-}
+// ── Usuarios ──────────────────────────────────────────────────────────
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const fmtN = n => Number(n || 0).toLocaleString('es');
+  const JSONH = { 'Content-Type': 'application/json' };
+  let gUsers = [], gMe = null, gEditing = null, gDeleting = null;
 
-async function toggleUser(id, active) {
-  const r = await fetch(`/api/admin/users/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active }) });
-  if (r.ok) loadUsers();
-  else { const d = await r.json(); showToast(d.error || 'Error', 'danger'); }
-}
-
-document.querySelector('#admin-tabs [data-tab="users"]').addEventListener('click', loadUsers);
-
-document.getElementById('btn-add-user').addEventListener('click', () => {
-  document.getElementById('add-user-modal').hidden = false;
-  document.getElementById('nu-username').focus();
-  document.getElementById('add-user-error').textContent = '';
-});
-document.getElementById('add-user-modal-close').addEventListener('click', () => { document.getElementById('add-user-modal').hidden = true; });
-document.getElementById('add-user-modal-cancel').addEventListener('click', () => { document.getElementById('add-user-modal').hidden = true; });
-
-document.getElementById('add-user-submit').addEventListener('click', async () => {
-  const username = document.getElementById('nu-username').value.trim();
-  const email    = document.getElementById('nu-email').value.trim();
-  const password = document.getElementById('nu-password').value;
-  const role     = document.getElementById('nu-role').value;
-  const errEl    = document.getElementById('add-user-error');
-  errEl.textContent = '';
-  if (!username || !email || !password) { errEl.textContent = 'Rellena todos los campos'; return; }
-  const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, email, password, role }) });
-  const d = await r.json();
-  if (r.ok) {
-    document.getElementById('add-user-modal').hidden = true;
-    loadUsers();
-    showToast('Usuario creado');
-  } else { errEl.textContent = d.error || 'Error al crear usuario'; }
-});
-
-// Mostrar tab Usuarios solo si el usuario es admin
-fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
-  if (me && me.role === 'admin') {
-    document.getElementById('tab-btn-users').hidden = false;
+  async function api(url, opts = {}) {
+    const r = await fetch(url, { headers: JSONH, ...opts });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    return d;
   }
-});
+
+  function avatar(u) {
+    const name = u.display_name || u.username;
+    return u.avatar_url
+      ? `<img class="um-avatar" src="${esc(u.avatar_url)}" alt="">`
+      : `<span class="um-avatar">${esc(name.charAt(0).toUpperCase())}</span>`;
+  }
+  const userOptions = (exclude, placeholder) => (placeholder ? `<option value="">${placeholder}</option>` : '') +
+    gUsers.filter(u => u.id !== exclude).map(u => `<option value="${u.id}">${esc(u.display_name || u.username)} (@${esc(u.username)})</option>`).join('');
+
+  async function loadUsers() {
+    const tbody = $('users-tbody');
+    try {
+      const d = await api('/api/admin/users');
+      gUsers = d.users; gMe = d.me;
+      renderStats(d.orphanTracks);
+      renderUsers();
+      $('orphans-card').hidden = !d.orphanTracks;
+      $('orphans-n').textContent = fmtN(d.orphanTracks);
+      $('orphans-to').innerHTML = userOptions(null);
+      $('orphans-to').value = String(gMe);
+    } catch (e) { tbody.innerHTML = `<tr><td colspan="9" class="um-empty" style="color:var(--danger)">${esc(e.message)}</td></tr>`; }
+  }
+
+  function renderStats(orphans) {
+    const active = gUsers.filter(u => u.active).length;
+    const admins = gUsers.filter(u => u.role === 'admin').length;
+    const tracks = gUsers.reduce((s, u) => s + u.track_count, 0);
+    $('users-stats').innerHTML = [
+      [gUsers.length, 'Usuarios'], [active, 'Activos'], [admins, 'Administradores'], [fmtN(tracks), 'Rutas con dueño'], [fmtN(orphans), 'Rutas sin dueño'],
+    ].map(([v, l]) => `<div class="stat"><div class="val">${v}</div><div class="lbl">${l}</div></div>`).join('');
+  }
+
+  function renderUsers() {
+    const q = $('users-search').value.trim().toLowerCase();
+    const list = gUsers.filter(u => !q || [u.username, u.email, u.display_name].some(v => (v || '').toLowerCase().includes(q)));
+    const tbody = $('users-tbody');
+    if (!list.length) { tbody.innerHTML = `<tr><td colspan="9" class="um-empty">${q ? 'Nadie coincide con la búsqueda' : 'Sin usuarios'}</td></tr>`; return; }
+    tbody.innerHTML = list.map(u => {
+      const me = u.id === gMe;
+      return `<tr class="${u.active ? '' : 'um-off'}">
+        <td><div class="um-user">${avatar(u)}<div>
+          <div class="um-name">${esc(u.display_name || u.username)}${me ? '<span class="um-you">TÚ</span>' : ''}</div>
+          <div class="um-sub">@${esc(u.username)}</div></div></div></td>
+        <td class="um-email">${esc(u.email)}</td>
+        <td><span class="badge ${u.role === 'admin' ? 'badge-blue' : ''}">${u.role === 'admin' ? 'Administrador' : 'Usuario'}</span></td>
+        <td><span class="badge ${u.active ? 'badge-green' : 'badge-red'}">${u.active ? 'Activo' : 'Desactivado'}</span></td>
+        <td class="num"><a class="um-tracks-link" href="/editor?owner=${encodeURIComponent(u.username)}" title="Ver sus rutas en el catálogo">${fmtN(u.track_count)}</a>${u.private_count ? `<div class="um-sub">${u.private_count} privadas</div>` : ''}</td>
+        <td class="num">${fmtN(Math.round(u.total_km))}</td>
+        <td class="num">${u.list_count}</td>
+        <td class="um-sub">${esc(u.created_at || '')}</td>
+        <td><div class="um-actions">
+          <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${u.id}">Editar</button>
+          ${me ? '' : `<button class="btn btn-ghost btn-sm" data-act="toggle" data-id="${u.id}">${u.active ? 'Desactivar' : 'Activar'}</button>
+          <button class="btn btn-danger btn-sm" data-act="delete" data-id="${u.id}" title="Borrar usuario">Borrar</button>`}
+        </div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Crear / editar ──
+  function openUserModal(u) {
+    gEditing = u || null;
+    $('um-title').textContent = u ? `Editar @${u.username}` : 'Nuevo usuario';
+    $('um-submit').textContent = u ? 'Guardar cambios' : 'Crear usuario';
+    $('um-username').value = u ? u.username : '';
+    $('um-username').disabled = !!u;
+    $('um-display').value = u?.display_name || '';
+    $('um-email').value = u?.email || '';
+    $('um-password').value = '';
+    $('um-password-lbl').textContent = u ? 'Nueva contraseña (vacío = no cambiar)' : 'Contraseña';
+    $('um-role').value = u?.role || 'user';
+    $('um-active').checked = u ? !!u.active : true;
+    const self = u && u.id === gMe;
+    $('um-role').disabled = self;                 // can't demote yourself
+    $('um-active-wrap').hidden = !u || self;     // new users start active; can't deactivate yourself
+    $('um-error').textContent = '';
+    $('user-modal').hidden = false;
+    (u ? $('um-display') : $('um-username')).focus();
+  }
+
+  $('um-submit').addEventListener('click', async () => {
+    const body = {
+      display_name: $('um-display').value.trim(),
+      email: $('um-email').value.trim(),
+      role: $('um-role').value,
+    };
+    const pwd = $('um-password').value;
+    if (pwd) body.password = pwd;
+    if (!body.email) return ($('um-error').textContent = 'El email es obligatorio');
+    if (pwd && pwd.length < 6) return ($('um-error').textContent = 'La contraseña debe tener al menos 6 caracteres');
+    try {
+      if (gEditing) {
+        if (gEditing.id !== gMe) body.active = $('um-active').checked; else delete body.role;
+        await api(`/api/admin/users/${gEditing.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+        toast('Usuario actualizado');
+      } else {
+        body.username = $('um-username').value.trim();
+        if (!body.username || !pwd) return ($('um-error').textContent = 'Usuario y contraseña son obligatorios');
+        await api('/api/admin/users', { method: 'POST', body: JSON.stringify(body) });
+        toast('Usuario creado');
+      }
+      $('user-modal').hidden = true;
+      loadUsers();
+    } catch (e) { $('um-error').textContent = e.message; }
+  });
+
+  // ── Borrar ──
+  function openDeleteModal(u) {
+    gDeleting = u;
+    $('du-text').innerHTML = `Vas a borrar a <b>${esc(u.display_name || u.username)}</b> (@${esc(u.username)}).` +
+      (u.track_count ? ` Tiene <b>${fmtN(u.track_count)}</b> ruta(s).` : ' No tiene rutas.');
+    $('du-reassign-wrap').hidden = !u.track_count;
+    $('du-reassign').innerHTML = userOptions(u.id) + '<option value="">— Dejarlas sin dueño —</option>';
+    $('du-reassign').value = String(gMe);
+    $('du-error').textContent = '';
+    $('del-user-modal').hidden = false;
+  }
+  $('du-submit').addEventListener('click', async () => {
+    const to = $('du-reassign').value;
+    try {
+      const d = await api(`/api/admin/users/${gDeleting.id}${to && gDeleting.track_count ? `?reassign_to=${to}` : ''}`, { method: 'DELETE' });
+      $('del-user-modal').hidden = true;
+      toast(`Usuario borrado${d.tracks ? ` · ${d.tracks} ruta(s) reasignadas` : ''}`);
+      loadUsers();
+    } catch (e) { $('du-error').textContent = e.message; }
+  });
+
+  // ── Eventos ──
+  $('users-tbody').addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]'); if (!btn) return;
+    const u = gUsers.find(x => x.id === +btn.dataset.id); if (!u) return;
+    if (btn.dataset.act === 'edit') return openUserModal(u);
+    if (btn.dataset.act === 'delete') return openDeleteModal(u);
+    if (btn.dataset.act === 'toggle') {
+      try {
+        await api(`/api/admin/users/${u.id}`, { method: 'PATCH', body: JSON.stringify({ active: !u.active }) });
+        toast(u.active ? `@${u.username} desactivado: ya no puede entrar` : `@${u.username} activado`);
+        loadUsers();
+      } catch (err) { toast(err.message, true); }
+    }
+  });
+  $('orphans-assign').addEventListener('click', async () => {
+    const to = $('orphans-to').value; if (!to) return;
+    try {
+      const d = await api('/api/admin/tracks/owner', { method: 'POST', body: JSON.stringify({ orphans: true, owner_id: +to }) });
+      toast(`${d.updated} ruta(s) asignadas`);
+      loadUsers();
+    } catch (e) { toast(e.message, true); }
+  });
+  $('btn-add-user').addEventListener('click', () => openUserModal(null));
+  $('users-search').addEventListener('input', renderUsers);
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => { $(b.dataset.close).hidden = true; }));
+  ['user-modal', 'del-user-modal'].forEach(id => $(id).addEventListener('click', e => { if (e.target.id === id) $(id).hidden = true; }));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') ['user-modal', 'del-user-modal'].forEach(id => { $(id).hidden = true; }); });
+
+  document.querySelector('#admin-tabs [data-tab="users"]').addEventListener('click', loadUsers);
+})();
 </script>
 
 <script>
