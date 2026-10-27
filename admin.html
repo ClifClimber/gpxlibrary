@@ -615,7 +615,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.6.1</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.6.2</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">27 octubre 2026</div>
         </div>
       </div>
@@ -634,8 +634,24 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.6.1</span>
+            <span class="cl-version">v2.6.2</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">27 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Permisos por rol</b>: Admin y Catálogo solo para administradores (el resto es redirigido al visor y no ve esos enlaces en el menú); las APIs de administración, copias, importaciones masivas y mantenimiento devuelven 403 a los demás</li>
+            <li>Los usuarios normales usan visor y búsqueda, ficha de ruta, Comparar, Trazar y Mi perfil; ven las rutas públicas y sus propias privadas</li>
+            <li>Editar y borrar una ruta: solo su propietario o un admin; el botón «Editar» de la ficha solo aparece a quien puede usarlo</li>
+            <li><b>Propietario al importar</b>: las rutas guardadas desde Trazar/Comparar o importadas de Wikiloc/Komoot pertenecen a quien las crea (<code>--owner</code> en <code>import-from-temp.js</code>; no cambia el dueño al reimportar)</li>
+            <li>Un usuario normal solo puede importar el fichero que acaba de subir (sin <code>src</code> ni <code>force</code>)</li>
+            <li>El inicio de sesión no distingue mayúsculas en el usuario ni en el email</li>
+            <li>Test del repositorio: el fixture borra también <code>users</code> y las tablas de listas antes de migrar</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.6.1</span>
             <span class="cl-date">27 oct 2026</span>
           </div>
           <ul class="cl-list">

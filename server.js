@@ -63,6 +63,28 @@ function isPublicFile(rel) {
   return ext === '.html' || ext === '.css' || PUBLIC_JS.has(rel);
 }
 
+// ── Permisos por rol ───────────────────────────────────────────────
+// Non-admin users: viewer + search, track detail, compare, route drawing and their own profile.
+const ADMIN_PAGES = new Set(['/admin', '/editor', '/config', '/admin.html', '/editor.html']);
+const USER_PAGES  = new Set(['/', '/track', '/trazar', '/compare', '/perfil']);
+const USER_API = [
+  ['GET',    /^\/api\/(catalog|tags|geo|tracks)$/],
+  ['GET',    /^\/api\/config\/(activities|sierras|provinces)$/],
+  ['GET',    /^\/api\/tracks\/\d+(\/gpx|\/export-gpx)?$/],
+  ['POST',   /^\/api\/tracks\/export-gpx$/],
+  ['PATCH',  /^\/api\/tracks\/\d+$/],
+  ['DELETE', /^\/api\/tracks\/\d+$/],
+  ['POST',   /^\/api\/import\/upload$/],
+  ['POST',   /^\/api\/db\/import-temp$/],
+];
+function userMayAccess(pathname, method) {
+  if (ADMIN_PAGES.has(pathname)) return false;
+  if (USER_PAGES.has(pathname)) return true;
+  if (pathname.startsWith('/api/') || pathname.startsWith('/auth/'))
+    return USER_API.some(([m, re]) => (m === method || (m === 'GET' && method === 'HEAD')) && re.test(pathname));
+  return true;   // static files: still filtered by isPublicFile() at the end
+}
+
 function serveStatic(res, filePath, req) {
   const ext  = path.extname(filePath).toLowerCase();
   const mime = MIME[ext] || 'application/octet-stream';
@@ -583,9 +605,13 @@ async function apiCatalog(req, res) {
 }
 
 // ── API /tracks ───────────────────────────────────────────────────
-async function apiGetTracks(res) {
+async function apiGetTracks(res, viewerId = null) {
   try {
-    const tracks = await repo.listTracks();
+    let tracks = await repo.listTracks();
+    if (viewerId != null) {   // non-admin: public tracks + own private ones
+      const visible = new Set((await sqlDb().all("SELECT id FROM tracks WHERE visibility = 'public' OR owner_id = ?", [viewerId])).map(r => r.id));
+      tracks = tracks.filter(t => visible.has(t.id));
+    }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(tracks));
   } catch (e) {
@@ -991,7 +1017,8 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/auth/login' && method === 'POST') {
     const body = await parseBody(req);
     const db = sqlDb();
-    const user = await db.get('SELECT id, username, email, password_hash, role, active FROM users WHERE username = ? OR email = ?', [body.username, body.username]);
+    const login = String(body.username || '').trim().toLowerCase();
+    const user = await db.get('SELECT id, username, email, password_hash, role, active FROM users WHERE lower(username) = ? OR lower(email) = ?', [login, login]);
     if (!user || !user.active || !checkPassword(body.password || '', user.password_hash)) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: 'Usuario o contraseña incorrectos' }));
@@ -1305,6 +1332,24 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // Role gate: Admin and the catalog (editor) are admin-only; other users get the viewer, search,
+  // track detail, compare, route drawing and their profile. Everything not allow-listed is refused.
+  const isAdmin = req.user?.role === 'admin';
+  if (!isAdmin && !userMayAccess(pathname, method)) {
+    if (pathname.startsWith('/api/') || pathname.startsWith('/auth/')) {
+      res.writeHead(req.user ? 403 : 401, J); return res.end(JSON.stringify({ error: 'Solo para administradores' }));
+    }
+    res.writeHead(302, { Location: '/' }); return res.end();
+  }
+  // Single-track access: private tracks only for their owner; editing/deleting only for owner or admin.
+  const anyTrackMatch = pathname.match(/^\/api\/tracks\/(\d+)(?:\/(?:gpx|export-gpx))?$/);
+  if (anyTrackMatch && !isAdmin) {
+    const t = await sqlDb().get('SELECT owner_id, visibility FROM tracks WHERE id = ?', [parseInt(anyTrackMatch[1])]);
+    const own = t && t.owner_id === req.user.sub;
+    if (!t || (!own && t.visibility !== 'public')) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+    if ((method === 'PATCH' || method === 'DELETE') && !own) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Solo el propietario puede modificar esta ruta' })); }
+  }
+
   if (pathname === '/api/db/stats' && method === 'GET')
     return apiStats(res);
 
@@ -1354,7 +1399,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === '/api/tracks' && method === 'GET')
-    return apiGetTracks(res);
+    return apiGetTracks(res, isAdmin ? null : req.user.sub);
 
   if (pathname === '/api/tracks/bulk-update' && method === 'POST')
     return apiBulkUpdate(req, res);
@@ -1398,14 +1443,14 @@ const server = http.createServer(async (req, res) => {
     const body = await parseBody(req).catch(() => ({}));
     const url  = (body.url || '').trim();
     if (!url) { res.writeHead(400, {'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'Missing url'})); }
-    return apiRunScript(res, path.join(ROOT, 'scripts', 'wikiloc-import.js'), [url]);
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'wikiloc-import.js'), [url, '--owner', String(req.user.sub)]);
   }
 
   if (pathname === '/api/import/komoot' && method === 'POST') {
     const body = await parseBody(req).catch(() => ({}));
     const url  = (body.url || '').trim();
     if (!url) { res.writeHead(400, {'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'Missing url'})); }
-    return apiRunScript(res, path.join(ROOT, 'scripts', 'komoot-import.js'), [url]);
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'komoot-import.js'), [url, '--owner', String(req.user.sub)]);
   }
 
   if (pathname === '/api/db/import-temp' && method === 'POST') {
@@ -1414,7 +1459,11 @@ const server = http.createServer(async (req, res) => {
     const files = Array.isArray(body.files) && body.files.length ? body.files : null;
     const src   = typeof body.src === 'string' && body.src.trim() ? body.src.trim() : null;
     const keep  = body.keep === true;
-    const args  = [];
+    // Non-admins (route drawing / compare → save) may only import the files they just uploaded.
+    if (!isAdmin && (!files || src || force)) {
+      res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Solo puedes importar las rutas que acabas de subir' }));
+    }
+    const args  = ['--owner', String(req.user.sub)];
     if (force) args.push('--force');
     if (files) args.push('--files', files.join('|'));
     if (src)   args.push('--src', src);

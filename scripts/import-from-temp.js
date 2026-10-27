@@ -36,6 +36,8 @@ const FILTER_FILES = filesIdx !== -1
   : null;
 const srcIdx  = process.argv.indexOf('--src');
 const SRC_DIR = srcIdx !== -1 ? path.resolve(process.argv[srcIdx + 1]) : TEMP_DIR;
+const ownerIdx = process.argv.indexOf('--owner');   // user who imports: owner of newly created tracks
+const OWNER_ID = ownerIdx !== -1 ? parseInt(process.argv[ownerIdx + 1]) || null : null;
 
 // ── Sierras (cargadas desde BD en tiempo de ejecución) ──────────────
 let SIERRAS = [];
@@ -121,8 +123,8 @@ function collectTempGpx(dir) {
       (name,file,zone,date,distance,elevation_gain,elevation_loss,
        min_elevation,max_elevation,sw_lat,sw_lon,ne_lat,ne_lon,
        center_lat,center_lon,raw_count,cleaned,activity,sierra,province,ccaa,url,circular,
-       ibp_bicycle,ibp_hiking,ibp_running,is_recent_import)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,1)
+       ibp_bicycle,ibp_hiking,ibp_running,is_recent_import,owner_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,1,?)
     ON CONFLICT(file) DO UPDATE SET
       name=excluded.name, zone=excluded.zone,
       date=excluded.date, distance=excluded.distance,
@@ -156,6 +158,7 @@ function collectTempGpx(dir) {
         activity ?? null, sierra ?? null, province ?? null, ccaa ?? null,
         track.url ?? null, track.circular ?? 0,
         ibp.ibp_bicycle ?? null, ibp.ibp_hiking ?? null, ibp.ibp_running ?? null,
+        OWNER_ID,
       ]);
       await t.setPoints(row.id, track.points);
       await t.setPoints(row.id, [], { clean: true });

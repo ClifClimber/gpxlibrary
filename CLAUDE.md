@@ -54,6 +54,8 @@ Pure functions with no database, filesystem or network access (phase 1 of the cl
 ### Docker deployment
 `Dockerfile` + compose service `app` (`docker compose up -d --build`, port `APP_PORT` default 8081) + `worker` service (same image, runs `node worker.js`). Compose sets `DATABASE_HOST=db:5432` (`config.js` rewrites the host of `DATABASE_URL`), `S3_ENDPOINT=http://storage:3900` and `LOCK_BACKENDS=1`. Everything else the app writes lives in the `appdata` volume at `/app/data`; `osm-settings.json`, `ibp.key` and `TracksGps/_TEMP_` are symlinks into it. `HOST` sets the listen address (default loopback). `scripts/docker.js` locates the docker CLI.
 
+Roles: `admin` can use everything. Any other user only gets what `userMayAccess()` in `server.js` allow-lists (`USER_PAGES`, `USER_API`): viewer/search, `/track`, `/compare`, `/trazar`, `/perfil` and their APIs; `/admin` and `/editor` (catalog) redirect to `/`, other APIs return 403. Non-admins see public tracks plus their own private ones, and may PATCH/DELETE only their own tracks; `/api/db/import-temp` requires `files` (no `src`/`force`). Imports pass `--owner <userId>` to `import-from-temp.js`, which sets `owner_id` only on newly created tracks. Login is case-insensitive. `theme.js` hides the Catálogo/Admin nav links for non-admins.
+
 Static files are an allow-list (`isPublicFile()` in `server.js`): root `*.html`/`*.css`, the browser scripts in `PUBLIC_JS` and `assets/`. A new front-end script must be added to `PUBLIC_JS`. No CORS headers; non-GET requests with a foreign `Origin` get 403.
 
 Node.js HTTP server (`server.js`); PostgreSQL via `repo/postgres.js`. Requires Node v22+ for `node:sqlite` (used only in `db-copy.js` backup/restore).

@@ -151,6 +151,7 @@ async function main() {
     const child = spawn(process.execPath, [
       path.join(__dirname, 'import-from-temp.js'),
       '--files', path.basename(filename),
+      ...(process.argv.includes('--owner') ? ['--owner', process.argv[process.argv.indexOf('--owner') + 1]] : []),
     ], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
 
     child.stdout.on('data', d => process.stdout.write(d));

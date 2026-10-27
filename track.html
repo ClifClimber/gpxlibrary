@@ -361,7 +361,10 @@ function render(t) {
 
   // Header
   updateHeader(t);
-  document.getElementById('edit-btn').hidden = false;
+  // Only the owner or an admin may edit (the server enforces it as well)
+  fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
+    if (me && (me.role === 'admin' || me.id === t.owner_id)) document.getElementById('edit-btn').hidden = false;
+  }).catch(() => {});
   const traceBtn = document.getElementById('trace-btn');
   traceBtn.href = `/trazar?id=${t.id}`; traceBtn.hidden = false;
   if (t.file) document.getElementById('back-link').href = `/?file=${encodeURIComponent(t.file)}`;

@@ -8,7 +8,7 @@ const TRACK_COLS = [
   'raw_count', 'clean_count', 'cleaned',
   'activity', 'province', 'ccaa', 'sierra', 'notes', 'url',
   'road_types', 'surface_types', 'road_type_seq', 'moving_time', 'stopped_time', 'tags',
-  'ibp_bicycle', 'ibp_hiking', 'ibp_running', 'circular', 'waypoints_json',
+  'ibp_bicycle', 'ibp_hiking', 'ibp_running', 'circular', 'waypoints_json', 'owner_id', 'visibility',
 ];
 
 const LIST_COLS = [

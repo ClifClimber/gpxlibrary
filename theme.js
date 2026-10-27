@@ -41,8 +41,10 @@
       nav.appendChild(link);   // always last: right of the theme toggle
     };
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
-      if (me) window.gpxSetNavUser(me);
-      else nav.querySelector('#nav-perfil')?.remove();
+      if (!me) { nav.querySelector('#nav-perfil')?.remove(); return; }
+      window.gpxSetNavUser(me);
+      // Catalog and Admin are admin-only (the server refuses them too)
+      if (me.role !== 'admin') nav.querySelectorAll('a[href="/editor"], a[href="/admin"]').forEach(a => a.remove());
     }).catch(() => {});
 
     const btn = document.createElement('button');
