@@ -225,6 +225,8 @@
       };
       await fetch(`/api/tracks/${trackId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
       await fetch(`/api/profile/tracks/${trackId}/visibility`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: privacy }) });
+      if ($('f-planned').checked)
+        await fetch(`/api/profile/tracks/${trackId}/planned`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planned: true }) }).catch(() => {});
       location.href = `/track?id=${trackId}`;
     } catch (err) { $('step3-err').textContent = 'No se pudo guardar: ' + err.message; btn.disabled = false; }
   });

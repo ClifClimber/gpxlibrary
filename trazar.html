@@ -225,6 +225,13 @@ body { display: flex; flex-direction: column; overflow: hidden; }
         <label class="p-lbl" for="f-notes">Notas</label>
         <textarea class="textarea" id="f-notes" rows="3" placeholder="Opcional"></textarea>
       </div>
+
+      <div class="p-block">
+        <label class="p-lbl" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="f-planned" style="width:auto">
+          Marcar como planeada (creada pero aún no realizada)
+        </label>
+      </div>
     </div>
 
     <div id="p-foot">
@@ -1009,6 +1016,9 @@ $('btn-save').addEventListener('click', async () => {
     if (notes) patch.notes = notes;
     if (Object.keys(patch).length) {
       await fetch(`/api/tracks/${newId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+    }
+    if ($('f-planned')?.checked) {
+      await fetch(`/api/profile/tracks/${newId}/planned`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planned: true }) }).catch(() => {});
     }
     logLine('✓ Ruta guardada', 'ok');
     dirty = false;
