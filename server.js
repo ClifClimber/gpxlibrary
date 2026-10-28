@@ -599,6 +599,7 @@ async function buildCatalog(ownerId) {
       ibp_bicycle:   t.ibp_bicycle  != null ? Math.round(t.ibp_bicycle)  : null,
       ibp_hiking:    t.ibp_hiking   != null ? Math.round(t.ibp_hiking)   : null,
       ibp_running:   t.ibp_running  != null ? Math.round(t.ibp_running)  : null,
+      difficulty:    t.difficulty   ?? null,   // grade chosen by the user (0–5), else derived from the IBP
       hasOsm:        !!(t.road_types && t.road_types !== '{}'),
       movingTime:    t.moving_time  || null,
       stoppedTime:   t.stopped_time || null,
@@ -715,6 +716,18 @@ async function listAccess(listId, userId, isAdmin = false) {
   return { role: null, exists: true, list: l };
 }
 
+// Coerces and checks the numeric editable fields in place; returns an error message or null.
+//   days_declared: NULL auto · 0 several (no number) · 1 one day · N days
+//   difficulty:    NULL from IBP · 0 Muy fácil … 5 Extrema
+function normalizeTrackFields(f) {
+  const int = (k, min, max, msg) => {
+    if (!(k in f)) return null;
+    f[k] = f[k] === null || f[k] === '' ? null : Number(f[k]);
+    return f[k] === null || (Number.isInteger(f[k]) && f[k] >= min && f[k] <= max) ? null : msg;
+  };
+  return int('days_declared', 0, 365, 'Días no válidos') || int('difficulty', 0, 5, 'Dificultad no válida');
+}
+
 // True if the track belongs to ownerId (used to gate non-admin edits).
 async function ownsTrack(id, ownerId) {
   const t = await sqlDb().get('SELECT 1 FROM tracks WHERE id = ? AND owner_id = ?', [id, ownerId]);
@@ -767,13 +780,8 @@ async function apiPatchTrack(req, res, id) {
     const body   = await parseBody(req);
     const fields = Object.keys(body).filter(k => EDITABLE_FIELDS.has(k));
     if (!fields.length) { res.writeHead(400); res.end('No editable fields'); return; }
-    if ('days_declared' in body) {   // NULL auto · 0 several (no number) · 1 one day · N days
-      const v = body.days_declared;
-      body.days_declared = v === null || v === '' ? null : Number(v);
-      if (body.days_declared !== null && !(Number.isInteger(body.days_declared) && body.days_declared >= 0 && body.days_declared <= 365)) {
-        res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Días no válidos' }));
-      }
-    }
+    const bad = normalizeTrackFields(body);
+    if (bad) { res.writeHead(400, J); return res.end(JSON.stringify({ error: bad })); }
     // The GPX is immutable: metadata lives only in the DB (it is applied on download).
     await repo.updateTrack(id, body);
     invalidateCatalogCache();
@@ -795,6 +803,8 @@ async function apiBulkUpdate(req, res, ownerId = null) {
     }
     const editFields = Object.keys(fields).filter(k => EDITABLE_FIELDS.has(k) && fields[k] !== undefined);
     if (!editFields.length) { res.writeHead(400); res.end('No fields'); return; }
+    const bad = normalizeTrackFields(fields);
+    if (bad) { res.writeHead(400, J); return res.end(JSON.stringify({ error: bad })); }
     ids = await ownedOnly(ids.map(Number).filter(Boolean), ownerId);
     if (!ids.length) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'No puedes editar rutas que no son tuyas' })); }
     await repo.bulkUpdate(ids, fields, !!notesAppend);

@@ -46,6 +46,10 @@ function ibpLevelIdxV(val) {
   if (val == null) return -1;
   return IBP_LEVELS.findIndex(l => val >= l.min && val <= l.max);
 }
+// Difficulty grade (0–5): the one the user chose, else derived from the IBP
+function gradeIdxV(t) {
+  return t.difficulty != null ? t.difficulty : ibpLevelIdxV(ibpForTrackV(t));
+}
 
 // ── Activity colors & icons ──────────────────────────────────────────
 const ACT_COLORS = {
@@ -677,7 +681,7 @@ function baseMatch(t, f) {
     (!f.year || (t.date && t.date.startsWith(f.year))) &&
     (!f.q || t._q.includes(f.q)) &&
     (!geoFilter || trackNearPoint(t, geoFilter.lat, geoFilter.lon, geoFilter.radius)) &&
-    (!f.ibpActive || (() => { const idx = ibpLevelIdxV(ibpForTrackV(t)); return idx >= f.ibpMin && idx <= f.ibpMax; })()) &&
+    (!f.ibpActive || (() => { const idx = gradeIdxV(t); return idx >= f.ibpMin && idx <= f.ibpMax; })()) &&
     (f.rtype.size === 0 || (f.rtype.has('circular') && t.circular) || (f.rtype.has('lineal') && !t.circular)) &&
     (!f.mineOnly || t.owner_id === gCurrentUser.id) &&
     (f.users.size === 0 || f.users.has(t.owner_id));
@@ -741,9 +745,10 @@ const ACT_PHOTOS = {
 function trackItemHtml(track, ri) {
   const c = getTrackColor(track);
   const act = track.activity || 'Otro';
-  const ibp = ibpForTrackV(track), li = ibpLevelIdxV(ibp);
+  const ibp = ibpForTrackV(track), li = gradeIdxV(track);
+  const gradeTitle = (ibp != null ? `IBP ${Math.round(ibp)} · ` : '') + IBP_LEVELS[li]?.label + (track.difficulty != null ? ' (indicada por el autor)' : '');
   const ibpHtml = li >= 0
-    ? `<span class="ti-ibp" style="color:${IBP_LEVELS[li].color};background:${IBP_LEVELS[li].bg};border-color:${IBP_LEVELS[li].border}" title="IBP ${Math.round(ibp)} · ${IBP_LEVELS[li].label}">${IBP_LEVELS[li].label}</span>`
+    ? `<span class="ti-ibp" style="color:${IBP_LEVELS[li].color};background:${IBP_LEVELS[li].bg};border-color:${IBP_LEVELS[li].border}" title="${escHtml(gradeTitle)}">${IBP_LEVELS[li].label}</span>`
     : '';
   const meta = [track.sierra || track.zone].filter(Boolean).map(escHtml).join(' · ');
   const photo = track.cover || ACT_PHOTOS[act];   // route cover (thumbnail) or the activity's stock photo

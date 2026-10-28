@@ -208,8 +208,9 @@
     $('f-sierra').value = t.sierra || '';
     $('pc-act').textContent = t.activity ? '✓ precalculada' : '';
     $('pc-sierra').textContent = t.sierra ? '✓ precalculada' : (t.province ? 'prov. ' + t.province : '');
-    const ibp = t.ibp_hiking || t.ibp_bicycle || t.ibp_running;
-    $('f-ibp').textContent = ibp ? Math.round(ibp) + ' IBP' : 'sin calcular';
+    gIbp = { hiking: t.ibp_hiking, bicycle: t.ibp_bicycle, running: t.ibp_running };
+    gradeTouched = t.difficulty != null;
+    updateGrade(t.difficulty);
     $('dl-activities').innerHTML = (acts || []).map(a => `<option value="${esc(a.name)}">`).join('');
     const sierras = (geo.zones || geo.sierras || []).concat(geo.provinces || []);
     $('dl-sierras').innerHTML = [...new Set(sierras)].map(s => `<option value="${esc(s)}">`).join('');
@@ -234,6 +235,38 @@
       $('pc-days').textContent = det.multiDay ? `detectado: ${det.days} días ${REASON[det.reason] || ''}` : 'detectado: un día';
     } catch { setDays('1', ''); }
   }
+
+  // ── Dificultad: IBP + grado (misma escala que visor y catálogo) ──
+  const GRADES = [
+    { label: 'Muy fácil', max: 50,  color: '#16a34a' }, { label: 'Fácil',    max: 100, color: '#ca8a04' },
+    { label: 'Moderada',  max: 150, color: '#ea580c' }, { label: 'Dura',     max: 250, color: '#dc2626' },
+    { label: 'Muy dura',  max: 400, color: '#9333ea' }, { label: 'Extrema',  max: Infinity, color: '#64748b' },
+  ];
+  const CYCLING = ['MTB', 'MTB Enduro', 'Mtb', 'Gravel', 'Bikepacking', 'Ciclismo de carretera'];
+  const RUNNING = ['Trail Running', 'Running'];
+  let gIbp = {}, gradeTouched = false;
+  const ibpFor = act => (CYCLING.includes(act) ? gIbp.bicycle : RUNNING.includes(act) ? gIbp.running : gIbp.hiking);
+  const gradeOf = v => (v == null ? -1 : GRADES.findIndex(g => v <= g.max));
+  // Shows the IBP for the chosen activity and its grade; the select follows it until the user picks one
+  function updateGrade(chosen) {
+    const ibp = ibpFor($('f-activity').value.trim()), calc = gradeOf(ibp);
+    const g = GRADES[calc];
+    $('f-ibp').innerHTML = ibp != null
+      ? `IBP <b>${Math.round(ibp)}</b> → <span class="grade-dot" style="background:${g.color}"></span><b>${g.label}</b> (calculado para ${CYCLING.includes($('f-activity').value) ? 'bici' : RUNNING.includes($('f-activity').value) ? 'correr' : 'a pie'})`
+      : 'IBP sin calcular';
+    if (chosen != null) $('f-grade').value = String(chosen);
+    else if (!gradeTouched && calc >= 0) $('f-grade').value = String(calc);
+    $('pc-grade').textContent = calc >= 0 && +$('f-grade').value === calc ? '✓ precalculada' : (calc >= 0 ? 'cambiada por ti' : '');
+    $('f-grade').dataset.calc = calc;
+  }
+  $('f-activity').addEventListener('input', () => updateGrade());
+  $('f-grade').addEventListener('change', () => { gradeTouched = true; updateGrade(); });
+  // Value for tracks.difficulty: NULL keeps it tied to the IBP; a different grade is stored
+  const difficultyValue = () => {
+    const calc = +$('f-grade').dataset.calc, v = +$('f-grade').value;
+    if (calc < 0 && !gradeTouched) return null;   // no IBP and the user didn't pick one
+    return v === calc ? null : v;
+  };
 
   // ── Duración ──
   function setDays(mode, n) {
@@ -347,6 +380,7 @@
         activity: $('f-activity').value.trim(),
         sierra: $('f-sierra').value.trim(),
         days_declared: daysDeclared(),
+        difficulty: difficultyValue(),
       };
       await fetch(`/api/tracks/${trackId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
       await fetch(`/api/profile/tracks/${trackId}/visibility`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: privacy }) });

@@ -9,7 +9,7 @@ const TRACK_COLS = [
   'activity', 'province', 'ccaa', 'sierra', 'notes', 'url',
   'road_types', 'surface_types', 'road_type_seq', 'moving_time', 'stopped_time', 'tags',
   'ibp_bicycle', 'ibp_hiking', 'ibp_running', 'circular', 'waypoints_json', 'owner_id', 'visibility',
-  'days_declared',
+  'days_declared', 'difficulty',
 ];
 
 const LIST_COLS = [
@@ -18,7 +18,7 @@ const LIST_COLS = [
   'center_lat', 'center_lon', 'raw_count', 'clean_count', 'cleaned',
   'activity', 'province', 'ccaa', 'sierra', 'notes', 'url', 'imported_at', 'tags',
   'ibp_bicycle', 'ibp_hiking', 'ibp_running', 'is_recent_import', 'circular', 'road_types',
-  'owner_id', 'visibility',
+  'owner_id', 'visibility', 'difficulty',
 ];
 
 const CATALOG_COLS = [
@@ -26,11 +26,11 @@ const CATALOG_COLS = [
   'ibp_bicycle', 'ibp_hiking', 'ibp_running',
   'distance', 'elevation_gain', 'elevation_loss', 'min_elevation', 'max_elevation',
   'sw_lat', 'sw_lon', 'ne_lat', 'ne_lon', 'center_lat', 'center_lon', 'catalog_pts', 'road_types',
-  'moving_time', 'stopped_time', 'circular', 'owner_id', 'visibility', 'cover_photo_id',
+  'moving_time', 'stopped_time', 'circular', 'owner_id', 'visibility', 'cover_photo_id', 'difficulty',
 ];
 
 // Fields a client may change through PATCH / bulk update.
-const EDITABLE_FIELDS = new Set(['name', 'activity', 'province', 'ccaa', 'sierra', 'notes', 'url', 'tags', 'days_declared']);
+const EDITABLE_FIELDS = new Set(['name', 'activity', 'province', 'ccaa', 'sierra', 'notes', 'url', 'tags', 'days_declared', 'difficulty']);
 
 const CONFIG_TABLES = {
   config_activities: { order: ['sort_order', 'name'], cols: ['name', 'color', 'keywords', 'sort_order', 'active'] },

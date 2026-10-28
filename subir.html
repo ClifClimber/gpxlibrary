@@ -53,6 +53,9 @@
 .priv-opt { flex: 1; border: 1.5px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; cursor: pointer; font-size: 13px; text-align: center; }
 .priv-opt.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 
+.ibp-info { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.ibp-info b { color: var(--ink); }
+.grade-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 4px 0 2px; vertical-align: 0; }
 .dup-panel { margin-top: 16px; padding: 14px 16px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--warn) 12%, transparent); }
 .dup-title { font-weight: 600; margin-bottom: 4px; }
 .dup-panel p { font-size: 13px; color: var(--ink-2); margin-bottom: 10px; }
@@ -178,8 +181,16 @@
       </div>
       <div class="wz-row">
         <div class="wz-field">
-          <label>Dificultad (IBP precalculado)</label>
-          <div id="f-ibp" style="font-size:14px;font-weight:600;padding:8px 0">—</div>
+          <label>Dificultad <span class="precalc" id="pc-grade"></span></label>
+          <select class="select" id="f-grade">
+            <option value="0">Muy fácil</option>
+            <option value="1">Fácil</option>
+            <option value="2">Moderada</option>
+            <option value="3">Dura</option>
+            <option value="4">Muy dura</option>
+            <option value="5">Extrema</option>
+          </select>
+          <div class="ibp-info" id="f-ibp">—</div>
         </div>
         <div class="wz-field">
           <label>Privacidad</label>
