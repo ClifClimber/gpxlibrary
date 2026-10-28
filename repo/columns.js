@@ -9,7 +9,7 @@ const TRACK_COLS = [
   'activity', 'province', 'ccaa', 'sierra', 'notes', 'url',
   'road_types', 'surface_types', 'road_type_seq', 'moving_time', 'stopped_time', 'tags',
   'ibp_bicycle', 'ibp_hiking', 'ibp_running', 'circular', 'waypoints_json', 'owner_id', 'visibility',
-  'days_declared', 'difficulty',
+  'days_declared', 'difficulty', 'planned',
 ];
 
 const LIST_COLS = [

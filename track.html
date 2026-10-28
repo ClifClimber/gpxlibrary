@@ -22,67 +22,6 @@
   <a href="/perfil" id="nav-perfil" class="nav-user" title="Mi perfil"></a>
 </nav>
 
-<!-- Edit modal -->
-<div id="edit-overlay">
-  <div id="edit-modal">
-    <div id="edit-modal-head">
-      <h2>Editar track</h2>
-      <button id="edit-modal-close" title="Cerrar">×</button>
-    </div>
-    <div id="edit-modal-body">
-      <div>
-        <div class="ef-label">Nombre</div>
-        <input id="ef-name" class="ef-input" type="text">
-      </div>
-      <div>
-        <div class="ef-label">Actividad</div>
-        <input id="ef-activity" class="ef-input" type="text" list="ef-activity-list">
-      </div>
-      <div class="ef-row2">
-        <div>
-          <div class="ef-label">Sierra / Parque</div>
-          <input id="ef-sierra" class="ef-input" type="text" list="ef-sierra-list">
-        </div>
-        <div>
-          <div class="ef-label">Provincia</div>
-          <input id="ef-province" class="ef-input" type="text" list="ef-province-list">
-        </div>
-      </div>
-      <div class="ef-row2">
-        <div>
-          <div class="ef-label">Comunidad (CCAA)</div>
-          <input id="ef-ccaa" class="ef-input" type="text" list="ef-ccaa-list">
-        </div>
-        <div>
-          <div class="ef-label">URL fuente</div>
-          <input id="ef-url" class="ef-input" type="url" placeholder="https://…">
-        </div>
-      </div>
-      <div>
-        <div class="ef-label">Etiquetas</div>
-        <div id="ef-tags-list"></div>
-        <div id="ef-tag-row">
-          <input id="ef-tag-input" class="ef-input" type="text" placeholder="Nueva etiqueta…" maxlength="40" autocomplete="off">
-          <div id="ef-tag-suggestions"></div>
-          <button type="button" id="ef-tag-add-btn" onclick="efAddTag()">Añadir</button>
-        </div>
-      </div>
-      <div>
-        <div class="ef-label">Notas</div>
-        <textarea id="ef-notes" class="ef-textarea"></textarea>
-      </div>
-    </div>
-    <div id="edit-modal-foot">
-      <span id="edit-msg"></span>
-      <button class="ef-cancel" id="ef-cancel-btn">Cancelar</button>
-      <button class="ef-save" id="ef-save-btn">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        Guardar
-      </button>
-    </div>
-  </div>
-</div>
-
 <div id="app">
   <div id="map"></div>
   <div id="overlay">
@@ -107,7 +46,7 @@
               </button>
               <div id="list-dropdown"></div>
             </div>
-            <button class="ph-btn" id="edit-btn" onclick="openEditModal()" hidden>
+            <button class="ph-btn" id="edit-btn" onclick="location.href='/subir?edit=' + gTrack.id" hidden>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Editar
             </button>
@@ -290,23 +229,14 @@ if (!trackId) {
       acts.forEach(a => {
         if (a.color) DB_ACT_COLORS[a.name] = a.color;
         if (a.icon) DB_ACT_ICONS[a.name] = a.icon;
-        const dl = document.getElementById('ef-activity-list');
-        if (dl) { const o = document.createElement('option'); o.value = a.name; dl.appendChild(o); }
       });
     })
     .catch(() => {});
-  fetch('/api/config/provinces').then(r => r.json()).then(geo => {
-    [['ef-sierra-list', geo.zones], ['ef-province-list', geo.provinces], ['ef-ccaa-list', geo.ccaa]].forEach(([id, items]) => {
-      const dl = document.getElementById(id);
-      if (!dl || !items) return;
-      items.forEach(v => { const o = document.createElement('option'); o.value = v; dl.appendChild(o); });
-    });
-  }).catch(() => {});
   Promise.all([
     fetch(`/api/tracks/${trackId}`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
     actsP,
   ])
-    .then(([t]) => { render(t); document.getElementById('export-wrap').style.display = ''; initTagSuggestions(); initEfTagSuggestions(); })
+    .then(([t]) => { render(t); document.getElementById('export-wrap').style.display = ''; initTagSuggestions(); })
     .catch(e => { document.getElementById('loading').innerHTML = `<p style="color:#ef4444">Error: ${esc(e.message)}</p>`; });
 }
 
@@ -1695,154 +1625,6 @@ async function enrichRoadTypes() {
   };
 }
 
-// ── Edit modal — tags ─────────────────────────────────────────────
-function efGetTags() {
-  return [...document.querySelectorAll('#ef-tags-list .ef-tag')].map(el => el.dataset.tag);
-}
-function efRenderTags(tags) {
-  document.getElementById('ef-tags-list').innerHTML = tags.map(tag =>
-    `<span class="ef-tag" data-tag="${esc(tag)}">#${esc(tag)}<button class="ef-tag-del" onclick="efRemoveTag('${esc(tag).replace(/'/g,"\\'")}')">×</button></span>`
-  ).join('');
-}
-function efAddTag() {
-  const inp = document.getElementById('ef-tag-input');
-  const val = inp.value.trim().toLowerCase().replace(/\s+/g, '-');
-  if (!val) return;
-  const tags = efGetTags();
-  if (tags.includes(val)) { inp.value = ''; return; }
-  tags.push(val);
-  efRenderTags(tags);
-  inp.value = '';
-  document.getElementById('ef-tag-suggestions')?.classList.remove('open');
-}
-function efRemoveTag(tag) { efRenderTags(efGetTags().filter(t => t !== tag)); }
-
-function initEfTagSuggestions() {
-  const inp = document.getElementById('ef-tag-input');
-  const box = document.getElementById('ef-tag-suggestions');
-  if (!inp || !box) return;
-  let focusIdx = -1;
-
-  function posBox() {
-    const r = inp.getBoundingClientRect();
-    box.style.top = (r.bottom + 3) + 'px'; box.style.left = r.left + 'px'; box.style.width = r.width + 'px';
-  }
-  async function showSug(val) {
-    if (!allTagsGlobal.length) { try { allTagsGlobal = await fetch('/api/tags').then(r => r.json()); } catch {} }
-    const q = val.trim().toLowerCase().replace(/\s+/g, '-');
-    const cur = efGetTags();
-    const matches = allTagsGlobal.filter(t => q === '' || t.includes(q));
-    if (!matches.length) { box.classList.remove('open'); return; }
-    focusIdx = -1;
-    box.innerHTML = matches.map(t => {
-      const already = cur.includes(t);
-      return `<div class="tag-sug-item${already ? ' tag-sug-already' : ''}" data-tag="${esc(t)}">${esc(t)}${already ? ' ✓' : ''}</div>`;
-    }).join('');
-    posBox();
-    box.classList.add('open');
-    box.querySelectorAll('.tag-sug-item:not(.tag-sug-already)').forEach(el => {
-      el.addEventListener('mousedown', e => { e.preventDefault(); inp.value = el.dataset.tag; box.classList.remove('open'); efAddTag(); });
-    });
-  }
-  inp.addEventListener('input',  () => showSug(inp.value));
-  inp.addEventListener('focus',  () => showSug(inp.value));
-  inp.addEventListener('blur',   () => setTimeout(() => box.classList.remove('open'), 150));
-  inp.addEventListener('keydown', e => {
-    const items = box.querySelectorAll('.tag-sug-item');
-    if (e.key === 'Enter')     { e.preventDefault(); efAddTag(); return; }
-    if (e.key === 'Escape')    { box.classList.remove('open'); return; }
-    if (e.key === 'ArrowDown') {
-      e.preventDefault(); focusIdx = Math.min(focusIdx + 1, items.length - 1);
-      items.forEach((el, i) => el.classList.toggle('focused', i === focusIdx));
-      if (items[focusIdx]) inp.value = items[focusIdx].dataset.tag;
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault(); focusIdx = Math.max(focusIdx - 1, -1);
-      items.forEach((el, i) => el.classList.toggle('focused', i === focusIdx));
-      if (focusIdx >= 0 && items[focusIdx]) inp.value = items[focusIdx].dataset.tag;
-    }
-  });
-}
-
-// ── Edit modal ────────────────────────────────────────────────────
-
-function openEditModal() {
-  if (!gTrack) return;
-  const t = gTrack;
-  document.getElementById('ef-name').value     = t.name      || '';
-  document.getElementById('ef-activity').value = t.activity  || '';
-  document.getElementById('ef-sierra').value   = t.sierra    || '';
-  document.getElementById('ef-province').value = t.province  || '';
-  document.getElementById('ef-ccaa').value     = t.ccaa      || '';
-  document.getElementById('ef-url').value      = t.url       || '';
-  document.getElementById('ef-notes').value    = t.notes     || '';
-  let tags = [];
-  try { tags = Array.isArray(t.tags) ? t.tags : JSON.parse(t.tags || '[]'); } catch {}
-  efRenderTags(tags);
-  document.getElementById('ef-tag-input').value = '';
-  document.getElementById('ef-tag-suggestions')?.classList.remove('open');
-  document.getElementById('edit-msg').textContent = '';
-  document.getElementById('edit-msg').className   = '';
-  document.getElementById('edit-overlay').classList.add('open');
-  document.getElementById('ef-name').focus();
-}
-
-function closeEditModal() {
-  document.getElementById('edit-overlay').classList.remove('open');
-}
-
-document.getElementById('edit-modal-close').addEventListener('click', closeEditModal);
-document.getElementById('ef-cancel-btn').addEventListener('click', closeEditModal);
-document.getElementById('edit-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('edit-overlay')) closeEditModal();
-});
-
-document.getElementById('ef-save-btn').addEventListener('click', async () => {
-  if (!gTrack) return;
-  const btn = document.getElementById('ef-save-btn');
-  const msg = document.getElementById('edit-msg');
-  btn.disabled = true;
-  msg.textContent = 'Guardando…'; msg.className = '';
-
-  const modalTags = efGetTags();
-  const body = {
-    name:     document.getElementById('ef-name').value.trim()     || null,
-    activity: document.getElementById('ef-activity').value.trim() || null,
-    sierra:   document.getElementById('ef-sierra').value.trim()   || null,
-    province: document.getElementById('ef-province').value.trim() || null,
-    ccaa:     document.getElementById('ef-ccaa').value.trim()     || null,
-    url:      document.getElementById('ef-url').value.trim()      || null,
-    notes:    document.getElementById('ef-notes').value           || null,
-    tags:     JSON.stringify(modalTags),
-  };
-
-  try {
-    const res = await fetch(`/api/tracks/${gTrack.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const d = await res.json();
-    // Update local state
-    Object.assign(gTrack, body);
-    gTrack.tags = modalTags;
-    if (d.movedFile) gTrack.file = d.movedFile.to;
-    // Update header and sync panel tags list
-    updateHeader(gTrack);
-    renderTags(modalTags);
-    const moved = d.movedFile ? ` · movido a ${d.movedFile.to.split('/').slice(0,3).join('/')}` : '';
-    msg.textContent = '✓ Guardado' + moved; msg.className = 'ok';
-    setTimeout(closeEditModal, moved ? 2200 : 900);
-  } catch (e) {
-    msg.textContent = 'Error: ' + e.message; msg.className = 'err';
-  } finally {
-    btn.disabled = false;
-  }
-});
 </script>
-<datalist id="ef-activity-list"></datalist>
-<datalist id="ef-sierra-list"></datalist>
-<datalist id="ef-province-list"></datalist>
-<datalist id="ef-ccaa-list"></datalist>
 </body>
 </html>

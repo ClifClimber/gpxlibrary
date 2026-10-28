@@ -81,6 +81,17 @@
 .ph-add:hover { border-color: var(--accent); color: var(--accent); }
 #photo-file { display: none; }
 
+/* Edit mode (/subir?edit=ID): straight to the details form, plus the extra fields */
+.edit-only { display: none; }
+body.edit-mode .edit-only { display: block; }
+body.edit-mode .wz-steps { display: none; }
+body.edit-mode a.edit-only { display: inline-flex; }
+.tag-edit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.tag-edit input { flex: 1; min-width: 120px; border: none; outline: none; background: transparent; color: var(--ink); font: inherit; font-size: 13px; padding: 3px 2px; }
+.tag-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+.tag-chip button { border: none; background: none; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; }
+.wz-foot-btns { display: flex; gap: 8px; align-items: center; }
+
 .wz-foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }
 .wz-msg { font-size: 13px; }
 .wz-msg.err { color: var(--danger); }
@@ -157,8 +168,8 @@
 
     <!-- Paso 3 -->
     <section class="wz-step" id="step-3">
-      <div class="wz-title">Detalles del track</div>
-      <div class="wz-sub">Hemos precalculado actividad, dificultad y zona. Ajusta lo que quieras y guarda.</div>
+      <div class="wz-title" id="s3-title">Detalles del track</div>
+      <div class="wz-sub" id="s3-sub">Hemos precalculado actividad, dificultad y zona. Ajusta lo que quieras y guarda.</div>
       <div class="wz-field">
         <label>Nombre</label>
         <input type="text" class="input" id="f-name" maxlength="200">
@@ -218,6 +229,29 @@
           <input type="checkbox" id="f-planned" style="width:auto"> Es una ruta <b>planeada</b> (creada pero aún no realizada)
         </label>
       </div>
+      <div class="edit-only">
+        <div class="wz-row">
+          <div class="wz-field">
+            <label>Provincia</label>
+            <input type="text" class="input" id="f-province" list="dl-provinces" autocomplete="off">
+            <datalist id="dl-provinces"></datalist>
+          </div>
+          <div class="wz-field">
+            <label>Comunidad autónoma</label>
+            <input type="text" class="input" id="f-ccaa" list="dl-ccaa" autocomplete="off">
+            <datalist id="dl-ccaa"></datalist>
+          </div>
+        </div>
+        <div class="wz-field">
+          <label>Enlace de origen</label>
+          <input type="url" class="input" id="f-url" placeholder="https://…">
+        </div>
+        <div class="wz-field">
+          <label>Etiquetas <span class="precalc">Intro o coma para añadir</span></label>
+          <div class="tag-edit" id="f-tags-box"><input type="text" id="f-tag-input" maxlength="40" list="dl-tags" autocomplete="off" placeholder="Nueva etiqueta…"></div>
+          <datalist id="dl-tags"></datalist>
+        </div>
+      </div>
       <div class="wz-field">
         <label>Fotos</label>
         <div class="ph-grid" id="ph-grid">
@@ -230,7 +264,10 @@
       </div>
       <div class="wz-foot">
         <span class="wz-msg err" id="step3-err"></span>
-        <button class="btn btn-primary" id="b3-save">Guardar track</button>
+        <div class="wz-foot-btns">
+          <a class="btn edit-only" id="b3-cancel" href="/">Cancelar</a>
+          <button class="btn btn-primary" id="b3-save">Guardar track</button>
+        </div>
       </div>
     </section>
   </div>

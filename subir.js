@@ -12,8 +12,15 @@
   let editingExisting = false;   // step 3 is editing a route the user already had
   let privacy = 'public';
 
+  // /subir?edit=ID edits a route you already have: straight to the details form (step 3)
+  const editParam = parseInt(new URLSearchParams(location.search).get('edit'));
+  const EDIT_ID = editParam > 0 ? editParam : null;
+  let tags = [];
+
   // ── Auth ──
-  fetch('/api/auth/me').then(r => { if (!r.ok) location.href = '/login?next=/subir'; });
+  fetch('/api/auth/me').then(r => {
+    if (!r.ok) location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
+  });
 
   // ── Stepper ──
   function goStep(n) {
@@ -202,8 +209,17 @@
       fetch('/api/config/activities').then(r => r.json()).catch(() => []),
       fetch('/api/config/provinces').then(r => r.json()).catch(() => ({})),
     ]);
-    $('f-name').value = t.name || parsed.name;
+    $('f-name').value = t.name || parsed?.name || '';
     $('f-desc').value = t.notes || '';
+    $('f-planned').checked = !!t.planned;
+    // Extra fields (edit mode only)
+    $('f-province').value = t.province || '';
+    $('f-ccaa').value = t.ccaa || '';
+    $('f-url').value = t.url || '';
+    try { tags = Array.isArray(t.tags) ? t.tags : JSON.parse(t.tags || '[]'); } catch { tags = []; }
+    renderTags();
+    $('dl-provinces').innerHTML = (geo.provinces || []).map(s => `<option value="${esc(s)}">`).join('');
+    $('dl-ccaa').innerHTML = (geo.ccaa || []).map(s => `<option value="${esc(s)}">`).join('');
     $('f-activity').value = t.activity || '';
     $('f-sierra').value = t.sierra || '';
     $('pc-act').textContent = t.activity ? '✓ precalculada' : '';
@@ -215,7 +231,7 @@
     const sierras = (geo.zones || geo.sierras || []).concat(geo.provinces || []);
     $('dl-sierras').innerHTML = [...new Set(sierras)].map(s => `<option value="${esc(s)}">`).join('');
     // waypoints → descripción
-    const wNames = (t.waypoints || parsed.wpts).map(w => w.name).filter(Boolean);
+    const wNames = (t.waypoints || parsed?.wpts || []).map(w => w.name).filter(Boolean);
     if (wNames.length) {
       const fill = $('wpt-fill'); fill.hidden = false;
       fill.onclick = () => { const cur = $('f-desc').value.trim(); $('f-desc').value = (cur ? cur + '\n\n' : '') + 'Pasa por: ' + wNames.slice(0, 12).join(', ') + '.'; fill.hidden = true; };
@@ -370,6 +386,35 @@
     } catch {}
   });
 
+  // ── Etiquetas (modo edición) ──
+  function renderTags() {
+    const box = $('f-tags-box'), inp = $('f-tag-input');
+    box.querySelectorAll('.tag-chip').forEach(c => c.remove());
+    tags.forEach(tag => {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip';
+      chip.innerHTML = `#${esc(tag)}<button type="button" title="Quitar" data-tag="${esc(tag)}">×</button>`;
+      box.insertBefore(chip, inp);
+    });
+  }
+  function addTag() {
+    const inp = $('f-tag-input');
+    const val = inp.value.trim().toLowerCase().replace(/\s+/g, '-').replace(/,/g, '');
+    inp.value = '';
+    if (!val || tags.includes(val)) return;
+    tags.push(val); renderTags();
+  }
+  $('f-tag-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
+    else if (e.key === 'Backspace' && !e.target.value && tags.length) { tags.pop(); renderTags(); }
+  });
+  $('f-tag-input').addEventListener('change', addTag);   // also picking a suggestion from the list
+  $('f-tags-box').addEventListener('click', e => {
+    const b = e.target.closest('button[data-tag]');
+    if (b) { tags = tags.filter(t => t !== b.dataset.tag); renderTags(); }
+    else $('f-tag-input').focus();
+  });
+
   // ── Guardar ──
   $('b3-save').addEventListener('click', async () => {
     const btn = $('b3-save'); btn.disabled = true; $('step3-err').textContent = '';
@@ -382,11 +427,54 @@
         days_declared: daysDeclared(),
         difficulty: difficultyValue(),
       };
-      await fetch(`/api/tracks/${trackId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
-      await fetch(`/api/profile/tracks/${trackId}/visibility`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: privacy }) });
-      if ($('f-planned').checked)
-        await fetch(`/api/profile/tracks/${trackId}/planned`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planned: true }) }).catch(() => {});
+      if (EDIT_ID) {
+        addTag();   // text typed but not confirmed yet
+        Object.assign(patch, {
+          province: $('f-province').value.trim() || null,
+          ccaa: $('f-ccaa').value.trim() || null,
+          url: $('f-url').value.trim() || null,
+          tags: JSON.stringify(tags),
+        });
+      }
+      const J = { 'Content-Type': 'application/json' };
+      const put = async (url, body) => {
+        const r = await fetch(url, { method: 'PATCH', headers: J, body: JSON.stringify(body) });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      };
+      await put(`/api/tracks/${trackId}`, patch);
+      await put(`/api/profile/tracks/${trackId}/visibility`, { visibility: privacy });
+      await put(`/api/profile/tracks/${trackId}/planned`, { planned: $('f-planned').checked });
       location.href = `/track?id=${trackId}`;
     } catch (err) { $('step3-err').textContent = 'No se pudo guardar: ' + err.message; btn.disabled = false; }
   });
+
+  // ── Modo edición: abre directamente el paso 3 con la ruta cargada ──
+  if (EDIT_ID) {
+    document.body.classList.add('edit-mode');
+    document.title = 'Editar ruta — GPX Library';
+    $('s3-title').textContent = 'Editar ruta';
+    $('s3-sub').textContent = 'Cambia lo que quieras y guarda; el trazado no se modifica.';
+    $('b3-save').textContent = 'Guardar cambios';
+    $('b3-cancel').href = `/track?id=${EDIT_ID}`;
+    (async () => {
+      try {
+        const [me, t] = await Promise.all([
+          fetch('/api/auth/me').then(r => r.json()),
+          fetch(`/api/tracks/${EDIT_ID}`).then(r => { if (!r.ok) throw new Error('No se encontró la ruta'); return r.json(); }),
+        ]);
+        if (me.role !== 'admin' && me.id !== t.owner_id) throw new Error('Solo el dueño o un administrador puede editar esta ruta');
+        trackId = EDIT_ID; editingExisting = true;
+        await loadTrackIntoForm();
+        goStep(3);
+        fetch('/api/tags').then(r => r.json()).then(all => {
+          $('dl-tags').innerHTML = (all || []).map(x => `<option value="${esc(typeof x === 'string' ? x : x.tag || x.name || '')}">`).join('');
+        }).catch(() => {});
+      } catch (err) {
+        $('step-1').classList.remove('active');
+        $('step-3').classList.add('active');
+        $('step3-err').textContent = err.message;
+        $('b3-save').disabled = true;
+      }
+    })();
+  }
 })();
