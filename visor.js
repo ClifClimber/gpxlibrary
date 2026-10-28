@@ -746,7 +746,7 @@ function trackItemHtml(track, ri) {
     ? `<span class="ti-ibp" style="color:${IBP_LEVELS[li].color};background:${IBP_LEVELS[li].bg};border-color:${IBP_LEVELS[li].border}" title="IBP ${Math.round(ibp)} · ${IBP_LEVELS[li].label}">${IBP_LEVELS[li].label}</span>`
     : '';
   const meta = [track.sierra || track.zone].filter(Boolean).map(escHtml).join(' · ');
-  const photo = ACT_PHOTOS[act];
+  const photo = track.cover || ACT_PHOTOS[act];   // route cover (thumbnail) or the activity's stock photo
   const photoHtml = photo
     ? `<div class="ti-photo" style="background-image:url('${photo}')"></div>`
     : `<div class="ti-photo ti-photo-empty"></div>`;

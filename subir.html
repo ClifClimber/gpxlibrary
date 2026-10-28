@@ -57,7 +57,12 @@
 .ph-grid { display: flex; flex-wrap: wrap; gap: 10px; }
 .ph-thumb { position: relative; width: 92px; height: 70px; border-radius: 8px; overflow: hidden; background: var(--soft); }
 .ph-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.ph-thumb button { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; font-size: 12px; line-height: 1; }
+.ph-thumb button { position: absolute; top: 3px; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(0,0,0,.55); color: #fff; cursor: pointer; font-size: 12px; line-height: 1; }
+.ph-thumb .ph-del { right: 3px; }
+.ph-thumb .ph-cover { left: 3px; font-size: 13px; }
+.ph-thumb.is-cover { box-shadow: 0 0 0 2px var(--accent); }
+.ph-thumb.is-cover .ph-cover { background: var(--accent); }
+.ph-cover-lbl { position: absolute; left: 0; right: 0; bottom: 0; font-size: 10px; font-weight: 700; text-align: center; color: #fff; background: rgba(0,0,0,.55); padding: 2px 0; }
 .ph-add { width: 92px; height: 70px; border: 2px dashed var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--muted); }
 .ph-add:hover { border-color: var(--accent); color: var(--accent); }
 #photo-file { display: none; }
@@ -176,6 +181,7 @@
           </div>
         </div>
         <input type="file" id="photo-file" accept="image/*" multiple>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px" id="ph-hint" hidden>Pulsa ☆ en una foto para usarla como <b>portada</b> de la ruta (es la que aparece en la lista del visor).</div>
       </div>
       <div class="wz-foot">
         <span class="wz-msg err" id="step3-err"></span>

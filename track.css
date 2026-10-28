@@ -76,9 +76,17 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 
 /* Tira de fotos del track */
 #track-photos { display: flex; gap: 8px; overflow-x: auto; padding: 12px 0 4px; scrollbar-width: thin; }
-#track-photos .tp-ph { flex: 0 0 auto; width: 140px; height: 94px; border-radius: 10px; overflow: hidden; background: var(--soft); }
+#track-photos .tp-ph { position: relative; flex: 0 0 auto; width: 140px; height: 94px; border-radius: 10px; overflow: hidden; background: var(--soft); }
+#track-photos .tp-ph.is-cover { box-shadow: inset 0 0 0 2px var(--accent); }
+#track-photos .tp-ph a { display: block; width: 100%; height: 100%; }
 #track-photos .tp-ph img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s; }
 #track-photos .tp-ph:hover img { transform: scale(1.05); }
+#track-photos .tp-cover, #track-photos .tp-set-cover {
+  position: absolute; left: 6px; bottom: 6px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+  border: none; color: #fff; background: rgba(0,0,0,.55); }
+#track-photos .tp-cover { background: var(--accent); }
+#track-photos .tp-set-cover { cursor: pointer; opacity: 0; transition: opacity .15s; }
+#track-photos .tp-ph:hover .tp-set-cover { opacity: 1; }
 
 /* ── Tabs ────────────────────────────────────────────────────────── */
 #tab-nav-wrap { position: sticky; top: 0; z-index: 5; background: var(--card); margin: 0 -16px 16px; padding: 10px 16px; border-bottom: 1px solid var(--border); }

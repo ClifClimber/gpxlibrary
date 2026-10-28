@@ -97,6 +97,7 @@ const USER_API = [
   ['POST',   /^\/api\/tracks\/\d+\/photos$/],
   ['GET',    /^\/api\/photos\/\d+$/],
   ['DELETE', /^\/api\/photos\/\d+$/],
+  ['PATCH',  /^\/api\/tracks\/\d+\/cover$/],
   ['GET',    /^\/api\/lists(\/shared)?$/],
   ['POST',   /^\/api\/lists$/],
   ['PATCH',  /^\/api\/lists\/\d+$/],
@@ -604,6 +605,7 @@ async function buildCatalog(ownerId) {
       owner_id:      t.owner_id       || null,
       owner_username: t.owner_username || null,
       visibility:    t.visibility     || 'public',
+      cover:         t.cover_photo_id ? `/api/photos/${t.cover_photo_id}?size=thumb` : null,
       points,
     });
   }
@@ -657,8 +659,11 @@ async function apiGetTracks(res, viewerId = null, mineOnly = false) {
 
 
 async function deleteTrackById(id) {
+  // Photo rows go away with the track (FK cascade); their files must be removed by hand
+  const photos = await sqlDb().all('SELECT filename, thumb_filename FROM track_photos WHERE track_id = ?', [id]).catch(() => []);
   const file = await repo.deleteTrack(id);
   if (!file) return { ok: false, error: 'Not found' };
+  for (const p of photos) for (const f of [p.filename, p.thumb_filename]) if (f) { try { fs.unlinkSync(path.join(PHOTOS_DIR, f)); } catch {} }
   invalidateCatalogCache();
   let fileDeleted = false;
   try { fileDeleted = await deleteTrackFile(file, blob); }
@@ -1667,12 +1672,15 @@ const server = http.createServer(async (req, res) => {
     const t = await sqlDb().get('SELECT owner_id, visibility FROM tracks WHERE id = ?', [tid]);
     if (!t) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
     if (!isAdmin && t.visibility !== 'public' && t.owner_id !== req.user.sub) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
-    const rows = await sqlDb().all('SELECT id, caption, mime, position FROM track_photos WHERE track_id = ? ORDER BY position, id', [tid]);
-    res.writeHead(200, J); return res.end(JSON.stringify(rows.map(p => ({ ...p, url: `/api/photos/${p.id}` }))));
+    const cover = (await sqlDb().get('SELECT cover_photo_id FROM tracks WHERE id = ?', [tid])).cover_photo_id;
+    const rows = await sqlDb().all('SELECT id, caption, mime, position, thumb_filename FROM track_photos WHERE track_id = ? ORDER BY position, id', [tid]);
+    res.writeHead(200, J);
+    return res.end(JSON.stringify(rows.map(p => ({ id: p.id, caption: p.caption, mime: p.mime, position: p.position,
+      url: `/api/photos/${p.id}`, thumb: `/api/photos/${p.id}?size=thumb`, is_cover: p.id === cover }))));
   }
   if (trackPhotosMatch && method === 'POST') {
     const tid = parseInt(trackPhotosMatch[1]);
-    const t = await sqlDb().get('SELECT owner_id FROM tracks WHERE id = ?', [tid]);
+    const t = await sqlDb().get('SELECT owner_id, cover_photo_id FROM tracks WHERE id = ?', [tid]);
     if (!t) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
     if (!isAdmin && t.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Solo el propietario puede añadir fotos' })); }
     const body = await parseBody(req);
@@ -1680,38 +1688,72 @@ const server = http.createServer(async (req, res) => {
     if (!b64 || !mimeType || !/^image\//.test(mimeType)) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Falta la imagen' })); }
     const buf = Buffer.from(b64, 'base64');
     if (buf.length > 8 * 1024 * 1024) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'La foto no puede superar 8 MB' })); }
+    // Optional small version made by the browser (JPEG), used by lists such as the viewer's
+    const thumb = typeof body.thumb === 'string' && body.thumb ? Buffer.from(body.thumb, 'base64') : null;
     const ext = mimeType === 'image/png' ? '.png' : mimeType === 'image/webp' ? '.webp' : '.jpg';
-    const fname = `t${tid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+    const base = `t${tid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const fname = base + ext, tname = thumb && thumb.length <= 1024 * 1024 ? base + '-thumb.jpg' : null;
     try {
       fs.mkdirSync(PHOTOS_DIR, { recursive: true });
       fs.writeFileSync(path.join(PHOTOS_DIR, fname), buf);
+      if (tname) fs.writeFileSync(path.join(PHOTOS_DIR, tname), thumb);
     } catch (e) {
       appendLog('error', 'photos', 'No se pudo guardar la foto', { error: e.message });
       res.writeHead(500, J); return res.end(JSON.stringify({ error: 'No se pudo guardar la foto: ' + e.message }));
     }
     const pos = (await sqlDb().get('SELECT COALESCE(MAX(position),0)+1 AS p FROM track_photos WHERE track_id = ?', [tid])).p;
     const row = await sqlDb().get(
-      'INSERT INTO track_photos (track_id, owner_id, filename, mime, size, caption, position) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id',
-      [tid, t.owner_id, fname, mimeType, buf.length, (body.caption || '').trim() || null, pos]);
-    res.writeHead(201, J); return res.end(JSON.stringify({ ok: true, id: row.id, url: `/api/photos/${row.id}` }));
+      'INSERT INTO track_photos (track_id, owner_id, filename, thumb_filename, mime, size, caption, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
+      [tid, t.owner_id, fname, tname, mimeType, buf.length, (body.caption || '').trim() || null, pos]);
+    // The first photo of a route becomes its cover
+    const isCover = !t.cover_photo_id || body.cover === true;
+    if (isCover) { await sqlDb().run('UPDATE tracks SET cover_photo_id = ? WHERE id = ?', [row.id, tid]); invalidateCatalogCache(); }
+    res.writeHead(201, J);
+    return res.end(JSON.stringify({ ok: true, id: row.id, url: `/api/photos/${row.id}`, thumb: `/api/photos/${row.id}?size=thumb`, is_cover: isCover }));
+  }
+
+  // Choose the cover photo of a route (owner or admin)
+  const coverMatch = pathname.match(/^\/api\/tracks\/(\d+)\/cover$/);
+  if (coverMatch && method === 'PATCH') {
+    const tid = parseInt(coverMatch[1]);
+    const t = await sqlDb().get('SELECT owner_id FROM tracks WHERE id = ?', [tid]);
+    if (!t) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+    if (!isAdmin && t.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Solo el propietario puede cambiar la portada' })); }
+    const body = await parseBody(req);
+    const pid = body.photo_id == null ? null : parseInt(body.photo_id);
+    if (pid != null && !(await sqlDb().get('SELECT 1 FROM track_photos WHERE id = ? AND track_id = ?', [pid, tid]))) {
+      res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Esa foto no es de esta ruta' }));
+    }
+    await sqlDb().run('UPDATE tracks SET cover_photo_id = ? WHERE id = ?', [pid, tid]);
+    invalidateCatalogCache();
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, cover_photo_id: pid }));
   }
 
   const photoMatch = pathname.match(/^\/api\/photos\/(\d+)$/);
   if (photoMatch && method === 'GET') {
-    const p = await sqlDb().get('SELECT tp.filename, tp.mime, t.owner_id, t.visibility FROM track_photos tp JOIN tracks t ON t.id = tp.track_id WHERE tp.id = ?', [parseInt(photoMatch[1])]);
+    const p = await sqlDb().get('SELECT tp.filename, tp.thumb_filename, tp.mime, t.owner_id, t.visibility FROM track_photos tp JOIN tracks t ON t.id = tp.track_id WHERE tp.id = ?', [parseInt(photoMatch[1])]);
     if (!p) { res.writeHead(404); return res.end('Not found'); }
     if (!isAdmin && p.visibility !== 'public' && p.owner_id !== req.user.sub) { res.writeHead(404); return res.end('Not found'); }
-    let buf; try { buf = fs.readFileSync(path.join(PHOTOS_DIR, p.filename)); } catch { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': p.mime || 'image/jpeg', 'Cache-Control': 'max-age=86400' });
+    const useThumb = searchParams.get('size') === 'thumb' && p.thumb_filename;
+    let buf; try { buf = fs.readFileSync(path.join(PHOTOS_DIR, useThumb ? p.thumb_filename : p.filename)); } catch { res.writeHead(404); return res.end('Not found'); }
+    res.writeHead(200, { 'Content-Type': useThumb ? 'image/jpeg' : (p.mime || 'image/jpeg'), 'Cache-Control': 'private, max-age=86400' });
     return res.end(buf);
   }
   if (photoMatch && method === 'DELETE') {
-    const p = await sqlDb().get('SELECT tp.filename, t.owner_id FROM track_photos tp JOIN tracks t ON t.id = tp.track_id WHERE tp.id = ?', [parseInt(photoMatch[1])]);
+    const pid = parseInt(photoMatch[1]);
+    const p = await sqlDb().get('SELECT tp.track_id, tp.filename, tp.thumb_filename, t.owner_id, t.cover_photo_id FROM track_photos tp JOIN tracks t ON t.id = tp.track_id WHERE tp.id = ?', [pid]);
     if (!p) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrada' })); }
     if (!isAdmin && p.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
-    await sqlDb().run('DELETE FROM track_photos WHERE id = ?', [parseInt(photoMatch[1])]);
-    try { fs.unlinkSync(path.join(PHOTOS_DIR, p.filename)); } catch {}
-    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+    await sqlDb().run('DELETE FROM track_photos WHERE id = ?', [pid]);   // cover_photo_id → NULL (FK)
+    for (const f of [p.filename, p.thumb_filename]) if (f) { try { fs.unlinkSync(path.join(PHOTOS_DIR, f)); } catch {} }
+    let newCover = null;
+    if (p.cover_photo_id === pid) {   // the cover went away: the next photo takes its place
+      const next = await sqlDb().get('SELECT id FROM track_photos WHERE track_id = ? ORDER BY position, id LIMIT 1', [p.track_id]);
+      newCover = next ? next.id : null;
+      await sqlDb().run('UPDATE tracks SET cover_photo_id = ? WHERE id = ?', [newCover, p.track_id]);
+      invalidateCatalogCache();
+    }
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, cover_photo_id: newCover }));
   }
 
 

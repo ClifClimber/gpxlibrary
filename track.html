@@ -339,14 +339,31 @@ document.querySelectorAll('.exp-opt').forEach(opt => {
 });
 
 // ── Fotos del track ──────────────────────────────────────────────
-async function loadTrackPhotos(id) {
+async function loadTrackPhotos(id, ownerId) {
   try {
-    const photos = await fetch(`/api/tracks/${id}/photos`).then(r => r.ok ? r.json() : []);
+    const [photos, me] = await Promise.all([
+      fetch(`/api/tracks/${id}/photos`).then(r => r.ok ? r.json() : []),
+      fetch('/api/auth/me').then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
     if (!photos.length) return;
-    const strip = document.createElement('div');
-    strip.id = 'track-photos';
-    strip.innerHTML = photos.map(p => `<a href="${esc(p.url)}" target="_blank" class="tp-ph"><img src="${esc(p.url)}" alt="${esc(p.caption||'')}" loading="lazy"></a>`).join('');
-    document.getElementById('content').insertAdjacentElement('afterbegin', strip);
+    const canEdit = !!me && (me.role === 'admin' || me.id === ownerId);
+    photos.sort((a, b) => (b.is_cover ? 1 : 0) - (a.is_cover ? 1 : 0));   // cover first
+    let strip = document.getElementById('track-photos');
+    if (!strip) {
+      strip = document.createElement('div');
+      strip.id = 'track-photos';
+      document.getElementById('content').insertAdjacentElement('afterbegin', strip);
+    }
+    strip.innerHTML = photos.map(p => `<div class="tp-ph${p.is_cover ? ' is-cover' : ''}">
+        <a href="${esc(p.url)}" target="_blank"><img src="${esc(p.thumb || p.url)}" alt="${esc(p.caption || '')}" loading="lazy"></a>
+        ${p.is_cover ? '<span class="tp-cover">★ Portada</span>'
+          : canEdit ? `<button class="tp-set-cover" data-photo="${p.id}" title="Usar como portada">☆ Portada</button>` : ''}
+      </div>`).join('');
+    strip.onclick = async e => {
+      const b = e.target.closest('.tp-set-cover'); if (!b) return;
+      const r = await fetch(`/api/tracks/${id}/cover`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photo_id: +b.dataset.photo }) });
+      if (r.ok) loadTrackPhotos(id, ownerId);
+    };
   } catch {}
 }
 
@@ -474,7 +491,7 @@ function render(t) {
   document.getElementById('content').insertAdjacentHTML('afterbegin', buildContent(t, color, icon));
 
   // Fotos del track (subidas desde el asistente Upload Trail)
-  loadTrackPhotos(t.id);
+  loadTrackPhotos(t.id, t.owner_id);
 
   // File folder link
   const ffl = document.getElementById('file-folder-link');

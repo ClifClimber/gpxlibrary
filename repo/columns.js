@@ -25,7 +25,7 @@ const CATALOG_COLS = [
   'ibp_bicycle', 'ibp_hiking', 'ibp_running',
   'distance', 'elevation_gain', 'elevation_loss', 'min_elevation', 'max_elevation',
   'sw_lat', 'sw_lon', 'ne_lat', 'ne_lon', 'center_lat', 'center_lon', 'catalog_pts', 'road_types',
-  'moving_time', 'stopped_time', 'circular', 'owner_id', 'visibility',
+  'moving_time', 'stopped_time', 'circular', 'owner_id', 'visibility', 'cover_photo_id',
 ];
 
 // Fields a client may change through PATCH / bulk update.

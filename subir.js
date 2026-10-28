@@ -186,7 +186,7 @@
   });
 
   // ── Fotos ──
-  let photos = [];   // [{id, url}]
+  let photos = [];   // [{id, url, thumb, is_cover}]
   function renderPhotos(list) {
     photos = list;
     const grid = $('ph-grid');
@@ -194,32 +194,72 @@
     const add = $('ph-add');
     for (const p of photos) {
       const d = document.createElement('div');
-      d.className = 'ph-thumb';
-      d.innerHTML = `<img src="${esc(p.url)}" alt=""><button data-id="${p.id}" title="Quitar">✕</button>`;
+      d.className = 'ph-thumb' + (p.is_cover ? ' is-cover' : '');
+      d.innerHTML = `<img src="${esc(p.thumb || p.url)}" alt="">` +
+        `<button class="ph-cover" data-cover="${p.id}" title="${p.is_cover ? 'Portada de la ruta' : 'Usar como portada'}">${p.is_cover ? '★' : '☆'}</button>` +
+        `<button class="ph-del" data-id="${p.id}" title="Quitar">✕</button>` +
+        (p.is_cover ? '<span class="ph-cover-lbl">Portada</span>' : '');
       grid.insertBefore(d, add);
     }
+    $('ph-hint').hidden = photos.length < 2;
   }
   $('ph-add').addEventListener('click', () => { if (!trackId) return; $('photo-file').click(); });
   $('photo-file').addEventListener('change', async e => {
     for (const file of [...e.target.files]) await uploadPhoto(file);
     e.target.value = '';
   });
+
+  // Downscale in the browser: a web-sized photo (≤1600 px) and a thumbnail (≤480 px) for lists
+  async function resizeImage(file, maxSide, quality) {
+    const img = await new Promise((res, rej) => {
+      const url = URL.createObjectURL(file), i = new Image();
+      i.onload = () => { URL.revokeObjectURL(url); res(i); };
+      i.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo leer la imagen')); };
+      i.src = url;
+    });
+    const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);   // JPEG has no transparency
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', quality).split(',')[1];
+  }
+
   async function uploadPhoto(file) {
-    if (file.size > 8 * 1024 * 1024) { $('step3-err').textContent = 'Cada foto máximo 8 MB'; return; }
-    const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
+    $('step3-err').textContent = '';
+    if (!/^image\//.test(file.type)) { $('step3-err').textContent = 'Solo imágenes'; return; }
+    let data, thumb;
+    try { data = await resizeImage(file, 1600, 0.85); thumb = await resizeImage(file, 480, 0.8); }
+    catch (err) { $('step3-err').textContent = err.message; return; }
     try {
       const r = await fetch(`/api/tracks/${trackId}/photos`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: b64, mime: file.type }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data, thumb, mime: 'image/jpeg' }),
       });
       if (!r.ok) { const e = await r.json(); $('step3-err').textContent = e.error || 'Error al subir foto'; return; }
       const d = await r.json();
-      renderPhotos(photos.concat([{ id: d.id, url: d.url }]));
+      const list = d.is_cover ? photos.map(p => ({ ...p, is_cover: false })) : photos;
+      renderPhotos(list.concat([{ id: d.id, url: d.url, thumb: d.thumb, is_cover: d.is_cover }]));
     } catch { $('step3-err').textContent = 'Error de red al subir la foto'; }
   }
+
   $('ph-grid').addEventListener('click', async e => {
+    const cov = e.target.closest('button[data-cover]');
+    if (cov) {
+      const id = +cov.dataset.cover;
+      if (photos.find(p => p.id === id)?.is_cover) return;
+      try {
+        const r = await fetch(`/api/tracks/${trackId}/cover`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photo_id: id }) });
+        if (r.ok) renderPhotos(photos.map(p => ({ ...p, is_cover: p.id === id })));
+      } catch {}
+      return;
+    }
     const btn = e.target.closest('button[data-id]'); if (!btn) return;
     const id = +btn.dataset.id;
-    try { await fetch(`/api/photos/${id}`, { method: 'DELETE' }); renderPhotos(photos.filter(p => p.id !== id)); } catch {}
+    try {
+      const d = await fetch(`/api/photos/${id}`, { method: 'DELETE' }).then(r => r.json());
+      renderPhotos(photos.filter(p => p.id !== id).map(p => ({ ...p, is_cover: d.cover_photo_id != null ? p.id === d.cover_photo_id : p.is_cover })));
+    } catch {}
   });
 
   // ── Guardar ──
