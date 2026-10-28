@@ -74,4 +74,25 @@ function elapsedSeconds(points) {
   return s > 0 ? s : null;
 }
 
-module.exports = { computeMetrics, computeTimes, elapsedSeconds, ELE_NOISE_M, CIRCULAR_KM };
+/**
+ * Recording sessions of a track: timestamped points split wherever the clock jumps more than splitGapS
+ * (long stops, nights, or files glued together). Each item: { s, e } epoch seconds and km covered.
+ * Kept small so it can be stored with the track and re-read with different thresholds.
+ */
+function timeSegments(points, splitGapS = 3600) {
+  const pts = (points || []).filter(p => p.time != null && Number.isFinite(Number(p.time)))
+    .sort((a, b) => a.time - b.time);
+  if (pts.length < 2) return null;
+  const segs = [];
+  let cur = { s: pts[0].time, e: pts[0].time, km: 0 };
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    if ((b.time - a.time) / 1000 > splitGapS) { segs.push(cur); cur = { s: b.time, e: b.time, km: 0 }; continue; }
+    cur.e = b.time;
+    cur.km += havKm(a.lat, a.lon, b.lat, b.lon);
+  }
+  segs.push(cur);
+  return segs.map(g => ({ s: Math.round(g.s / 1000), e: Math.round(g.e / 1000), km: Math.round(g.km * 100) / 100 }));
+}
+
+module.exports = { computeMetrics, computeTimes, elapsedSeconds, timeSegments, ELE_NOISE_M, CIRCULAR_KM };

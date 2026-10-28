@@ -16,7 +16,11 @@ const DEFAULT_CONFIG = {
     enabled: true,
     excludeFromRecords: true,   // don't count for "longest route" / "biggest climb in one route"
     excludeFromTotals: false,   // don't count for totals (km, ascent, routes, provinces…)
-    maxElapsedHours: 20,        // first→last timestamp: when known it decides on its own
+    // From the recording sessions (tracks.time_segments) when the GPX has times:
+    overnightGapHours: 6,       // a stop this long splits two days of activity
+    maxGapHours: 96,            // a longer jump means files glued together → times are ignored
+    minDayKm: 1,                // a "day" needs at least this distance to count
+    maxContinuousHours: 18,     // one session longer than this (GPS left on overnight) spans several days
     maxDayHours: 12,            // estimated effort hours above which a route is multi-day
     maxMovingHours: 12,         // measured moving time above which a route is multi-day
     keywords: '\\b(\\d+|dos|tres|cuatro|cinco|seis|siete|ocho)\\s*(etapas|d[ií]as|jornadas)\\b|bikepacking|traves[ií]a de \\d+',
@@ -54,7 +58,7 @@ function mergeConfig(stored) {
   if (stored.xp) for (const k of Object.keys(cfg.xp)) cfg.xp[k] = num(stored.xp[k], cfg.xp[k]);
   const md = stored.multiDay || {};
   for (const k of ['enabled', 'excludeFromRecords', 'excludeFromTotals']) if (typeof md[k] === 'boolean') cfg.multiDay[k] = md[k];
-  for (const k of ['maxElapsedHours', 'maxDayHours', 'maxMovingHours']) cfg.multiDay[k] = num(md[k], cfg.multiDay[k]);
+  for (const k of ['overnightGapHours', 'maxGapHours', 'minDayKm', 'maxContinuousHours', 'maxDayHours', 'maxMovingHours']) cfg.multiDay[k] = num(md[k], cfg.multiDay[k]);
   if (typeof md.keywords === 'string') cfg.multiDay.keywords = md.keywords;
   for (const g of md.groups || []) {
     const cur = cfg.multiDay.groups.find(x => x.id === g.id);
@@ -80,7 +84,10 @@ function validateConfig(cfg) {
     if (!f.tiers.every((t, i) => i === 0 || t > f.tiers[i - 1])) throw new Error(`«${f.name}»: los umbrales deben ir de menor a mayor`);
   }
   for (const g of cfg.multiDay.groups) if (!(g.kmh > 0 && g.climbMh > 0)) throw new Error(`Grupo «${g.name}»: velocidad y ritmo de subida deben ser > 0`);
-  if (!(cfg.multiDay.maxDayHours > 0 && cfg.multiDay.maxMovingHours > 0 && cfg.multiDay.maxElapsedHours > 0)) throw new Error('Las horas máximas deben ser > 0');
+  const m = cfg.multiDay;
+  if (!(m.maxDayHours > 0 && m.maxMovingHours > 0 && m.overnightGapHours > 0 && m.maxContinuousHours > 0)) throw new Error('Las horas deben ser > 0');
+  if (!(m.maxGapHours > m.overnightGapHours)) throw new Error('El hueco máximo debe ser mayor que la parada nocturna');
+  if (!(m.minDayKm >= 0)) throw new Error('Los km mínimos por día no pueden ser negativos');
   if (!(cfg.xp.levelBase > 0 && cfg.xp.gainPerXp > 0)) throw new Error('Parámetros de XP no válidos');
   try { new RegExp(cfg.multiDay.keywords, 'i'); } catch (e) { throw new Error('Palabras clave: expresión no válida (' + e.message + ')'); }
   return cfg;
@@ -91,10 +98,33 @@ function groupFor(activity, cfg) {
   return gs.find(g => g.activities.includes(activity)) || gs.find(g => g.id === 'foot') || gs[gs.length - 1];
 }
 
+/** Days with activity from the recording sessions; null when the times can't be trusted. */
+function activeDays(segs, md) {
+  if (!Array.isArray(segs) || !segs.length) return null;
+  const gapsH = segs.slice(1).map((s, i) => (s.s - segs[i].e) / 3600);
+  if (gapsH.some(h => h > md.maxGapHours || h < 0)) return null;   // glued files / clock jumps
+  // Group sessions into days (split at overnight stops); a group spanning more than maxContinuousHours
+  // (GPS left on in the hut) counts as the number of calendar days it covers, at least two.
+  let days = 0, dayKm = 0, dayStart = segs[0].s, dayEnd = segs[0].e;
+  const close = () => {
+    if (dayKm < md.minDayKm) return;
+    const spanH = (dayEnd - dayStart) / 3600;
+    days += spanH > md.maxContinuousHours ? Math.max(2, Math.ceil(spanH / 24)) : 1;
+  };
+  segs.forEach((s, i) => {
+    if (i > 0 && gapsH[i - 1] >= md.overnightGapHours) { close(); dayKm = 0; dayStart = s.s; }
+    dayKm += Number(s.km) || 0;
+    dayEnd = s.e;
+  });
+  close();
+  return Math.max(1, days);
+}
+
 /**
- * Effort estimate and verdict for one track ({name, activity, distance, elevation_gain, moving_time, elapsed_time}).
- * Measured elapsed time (first→last point) decides on its own; without it: name keywords, then moving
- * time (which leaves out pauses over 5 min, so it can't prove a single day), then the effort estimate.
+ * Effort estimate and verdict for one track ({name, activity, distance, elevation_gain, moving_time,
+ * time_segments}). Trustworthy recording times decide on their own (days with activity); otherwise:
+ * name keywords, then moving time (it leaves out pauses over 5 min, so it can't prove a single day),
+ * then the effort estimate for the activity group.
  */
 function multiDayInfo(t, cfg) {
   const md = cfg.multiDay;
@@ -102,13 +132,15 @@ function multiDayInfo(t, cfg) {
   const km = Number(t.distance) || 0, gain = Number(t.elevation_gain) || 0;
   const estHours = km / g.kmh + gain / g.climbMh;
   const movingHours = t.moving_time ? Number(t.moving_time) / 3600 : null;
-  const elapsedHours = t.elapsed_time ? Number(t.elapsed_time) / 3600 : null;
+  let segs = t.time_segments;
+  if (typeof segs === 'string') { try { segs = JSON.parse(segs); } catch { segs = null; } }
+  const elapsedHours = Array.isArray(segs) && segs.length ? (segs[segs.length - 1].e - segs[0].s) / 3600 : null;
   const r1 = n => (n == null ? null : Math.round(n * 10) / 10);
-  if (elapsedHours != null) {
-    const multiDay = md.enabled && elapsedHours > md.maxElapsedHours;
-    return { multiDay, reason: multiDay ? 'tiempo total' : null, group: g.id, estHours: r1(estHours),
-             movingHours: r1(movingHours), elapsedHours: r1(elapsedHours),
-             estDays: multiDay ? Math.max(2, Math.ceil(elapsedHours / 24)) : 1 };
+  const days = activeDays(segs, md);
+  if (days != null) {
+    const multiDay = md.enabled && days >= 2;
+    return { multiDay, reason: multiDay ? 'días con actividad' : null, group: g.id, estHours: r1(estHours),
+             movingHours: r1(movingHours), elapsedHours: r1(elapsedHours), timesTrusted: true, estDays: days };
   }
   let reason = null;
   if (md.keywords) {
@@ -117,8 +149,8 @@ function multiDayInfo(t, cfg) {
   if (!reason && movingHours != null && movingHours > md.maxMovingHours) reason = 'tiempo en movimiento';
   if (!reason && estHours > md.maxDayHours) reason = 'distancia y desnivel';
   const multiDay = md.enabled && !!reason;
-  return { multiDay, reason: multiDay ? reason : null, group: g.id, estHours: Math.round(estHours * 10) / 10,
-           movingHours: movingHours != null ? Math.round(movingHours * 10) / 10 : null,
+  return { multiDay, reason: multiDay ? reason : null, group: g.id, estHours: r1(estHours),
+           movingHours: r1(movingHours), elapsedHours: r1(elapsedHours), timesTrusted: false,
            estDays: multiDay ? Math.max(2, Math.ceil(estHours / md.maxDayHours)) : 1 };
 }
 

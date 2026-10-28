@@ -692,7 +692,7 @@ async function gamificationConfig() { return mergeConfig(await getSetting('gamif
 // Completed (non-planned) tracks of a user, in the shape computeAchievements expects
 async function userCompletedTracks(uid) {
   return sqlDb().all(
-    `SELECT id, name, activity, distance, elevation_gain, moving_time, province, circular, date
+    `SELECT id, name, activity, distance, elevation_gain, moving_time, time_segments, province, circular, date
      FROM tracks WHERE owner_id = ? AND NOT planned`, [uid]);
 }
 async function userAchievements(uid, cfg) {
@@ -2184,6 +2184,10 @@ const server = http.createServer(async (req, res) => {
     appendLog('info', 'gamification', 'Parámetros de gamificación restablecidos', { by: req.user.username });
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, config: mergeConfig(null) }));
   }
+  if (pathname === '/api/db/backfill-elapsed' && method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    return apiRunScript(res, path.join(ROOT, 'scripts', 'backfill-elapsed.js'), searchParams.get('all') === '1' ? ['--all'] : [], req.user);
+  }
   // Preview with an unsaved config: which routes count as multi-day and how each user ends up
   if (pathname === '/api/admin/gamification/preview' && method === 'POST') {
     if (!requireAdmin(req, res)) return;
@@ -2192,13 +2196,13 @@ const server = http.createServer(async (req, res) => {
     catch (e) { res.writeHead(400, J); return res.end(JSON.stringify({ error: e.message })); }
     const db = sqlDb();
     const tracks = await db.all(
-      `SELECT t.id, t.name, t.activity, t.distance, t.elevation_gain, t.moving_time, u.username AS owner
+      `SELECT t.id, t.name, t.activity, t.distance, t.elevation_gain, t.moving_time, t.time_segments, u.username AS owner
        FROM tracks t LEFT JOIN users u ON u.id = t.owner_id WHERE NOT t.planned`);
     const multiDay = tracks.map(t => ({ t, i: multiDayInfo(t, cfg) })).filter(x => x.i.multiDay)
       .sort((a, b) => b.i.estHours - a.i.estHours)
       .map(({ t, i }) => ({ id: t.id, name: t.name, owner: t.owner, activity: t.activity,
                             km: Math.round(t.distance * 10) / 10, gain: t.elevation_gain,
-                            estHours: i.estHours, movingHours: i.movingHours, reason: i.reason, estDays: i.estDays }));
+                            estHours: i.estHours, movingHours: i.movingHours, elapsedHours: i.elapsedHours, reason: i.reason, estDays: i.estDays }));
     const users = await db.all('SELECT id, username FROM users WHERE active ORDER BY username');
     const perUser = [];
     for (const u of users) {

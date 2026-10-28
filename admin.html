@@ -151,6 +151,7 @@ tr.inactive td { opacity: .4; }
 .gm-checks label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .gm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .gm-row4 { grid-template-columns: repeat(4, 1fr); }
+.gm-row3 { grid-template-columns: repeat(3, 1fr); }
 .gm-row .input { width: 100%; }
 #gm-groups .input, #gm-families .input { height: 30px; font-size: 12px; padding: 0 8px; }
 #gm-groups .num .input, #gm-families .num .input { width: 86px; text-align: right; }
@@ -1021,9 +1022,19 @@ tr.inactive td { opacity: .4; }
           <label><input type="checkbox" id="gm-md-records"> No cuentan para los récords de un día (ruta más larga, mayor desnivel)</label>
           <label><input type="checkbox" id="gm-md-totals"> No cuentan tampoco para los totales (km, desnivel, rutas, provincias…)</label>
         </div>
+        <div class="gm-row gm-row4">
+          <div><label class="field-label">Parada que separa días (h)</label><input class="input" type="number" step="0.5" min="1" id="gm-md-night"></div>
+          <div><label class="field-label">Tramo continuo máx. (h)</label><input class="input" type="number" step="0.5" min="1" id="gm-md-cont"></div>
+          <div><label class="field-label">Hueco máximo fiable (h)</label><input class="input" type="number" step="1" min="2" id="gm-md-maxgap"></div>
+          <div><label class="field-label">Km mínimos para contar un día</label><input class="input" type="number" step="0.5" min="0" id="gm-md-minkm"></div>
+        </div>
         <div class="gm-row">
-          <div><label class="field-label">Horas estimadas máx. en un día</label><input class="input" type="number" step="0.5" min="1" id="gm-md-dayh"></div>
-          <div><label class="field-label">Horas en movimiento máx. en un día</label><input class="input" type="number" step="0.5" min="1" id="gm-md-movh"></div>
+          <div><label class="field-label">Horas en movimiento máx. (sin horas fiables)</label><input class="input" type="number" step="0.5" min="1" id="gm-md-movh"></div>
+          <div><label class="field-label">Horas estimadas máx. (sin horas fiables)</label><input class="input" type="number" step="0.5" min="1" id="gm-md-dayh"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="section-desc" style="margin:0;flex:1;min-width:240px">Si el GPX tiene horas fiables se cuentan los <b>días con actividad</b> (tramos separados por paradas largas, como las noches) y eso decide. Un salto mayor que el hueco máximo indica ficheros unidos de fechas distintas: entonces se ignoran las horas. Las rutas importadas antes de esta versión hay que procesarlas una vez:</span>
+          <button class="btn btn-ghost btn-sm" id="gm-backfill">Calcular tiempos de las rutas</button>
         </div>
         <div><label class="field-label">Palabras clave en el nombre (expresión regular)</label><input class="input" type="text" id="gm-md-kw" spellcheck="false" style="font-family:ui-monospace,Consolas,monospace;font-size:12px"></div>
         <p class="section-desc" style="margin:0">Una ruta es de varios días si su nombre encaja con las palabras clave, si el tiempo en movimiento supera el máximo o si las <b>horas estimadas</b> = km ÷ velocidad + desnivel ÷ ritmo de subida superan el máximo. El tiempo guardado no incluye las paradas largas (noches), por eso se combina con la estimación.</p>
@@ -2660,6 +2671,10 @@ loadActivities();
     $('gm-md-totals').checked = md.excludeFromTotals;
     $('gm-md-dayh').value = md.maxDayHours;
     $('gm-md-movh').value = md.maxMovingHours;
+    $('gm-md-night').value = md.overnightGapHours;
+    $('gm-md-cont').value = md.maxContinuousHours;
+    $('gm-md-maxgap').value = md.maxGapHours;
+    $('gm-md-minkm').value = md.minDayKm;
     $('gm-md-kw').value = md.keywords;
     $('gm-groups').innerHTML = md.groups.map(g => `<tr data-g="${esc(g.id)}">
       <td><b>${esc(g.name)}</b></td>
@@ -2686,6 +2701,8 @@ loadActivities();
       xp: { perKm: +$('gm-xp-km').value, gainPerXp: +$('gm-xp-gain').value, perTier: +$('gm-xp-tier').value, levelBase: +$('gm-xp-base').value },
       multiDay: {
         enabled: $('gm-md-enabled').checked, excludeFromRecords: $('gm-md-records').checked, excludeFromTotals: $('gm-md-totals').checked,
+        overnightGapHours: +$('gm-md-night').value, maxContinuousHours: +$('gm-md-cont').value,
+        maxGapHours: +$('gm-md-maxgap').value, minDayKm: +$('gm-md-minkm').value,
         maxDayHours: +$('gm-md-dayh').value, maxMovingHours: +$('gm-md-movh').value, keywords: $('gm-md-kw').value,
         groups: [...document.querySelectorAll('#gm-groups tr')].map(tr => {
           const g = { id: tr.dataset.g, kmh: +tr.querySelector('[data-k="kmh"]').value, climbMh: +tr.querySelector('[data-k="climbMh"]').value };
@@ -2725,18 +2742,22 @@ loadActivities();
     const btn = $('gm-preview'); btn.disabled = true;
     try {
       const d = await send('/api/admin/gamification/preview', 'POST', read());
-      const REASON = { 'nombre': 'nombre', 'tiempo en movimiento': 'tiempo', 'distancia y desnivel': 'estimación' };
+      const REASON = { 'días con actividad': 'horas del GPX', 'nombre': 'nombre', 'tiempo en movimiento': 'movimiento', 'distancia y desnivel': 'estimación' };
       $('gm-preview-body').innerHTML =
         `<div class="gm-pv-grid">${d.perUser.map(u => `<div class="stat"><div class="val">Nv ${u.level}</div><div class="lbl">@${esc(u.username)} · ${fmt(u.xp)} XP · ${u.unlocked}/${u.total}</div></div>`).join('')}</div>` +
         `<p class="section-desc" style="margin:0 0 8px"><b>${d.multiDay.length}</b> de ${fmt(d.totalTracks)} rutas se consideran de varios días:</p>` +
-        (d.multiDay.length ? `<div style="overflow-x:auto"><table class="table" style="font-size:12px"><thead><tr><th>Ruta</th><th>Dueño</th><th>Actividad</th><th class="num">km</th><th class="num">D+</th><th class="num">h estimadas</th><th class="num">h movimiento</th><th>Motivo</th><th class="num">Días aprox.</th></tr></thead><tbody>` +
+        (d.multiDay.length ? `<div style="overflow-x:auto"><table class="table" style="font-size:12px"><thead><tr><th>Ruta</th><th>Dueño</th><th>Actividad</th><th class="num">km</th><th class="num">D+</th><th class="num">h total</th><th class="num">h estimadas</th><th class="num">h movimiento</th><th>Motivo</th><th class="num">Días aprox.</th></tr></thead><tbody>` +
           d.multiDay.map(m => `<tr><td><a href="/track?id=${m.id}" target="_blank">${esc(m.name)}</a></td><td>@${esc(m.owner || '—')}</td><td>${esc(m.activity || '—')}</td>
-            <td class="num">${fmt(m.km)}</td><td class="num">${fmt(m.gain)}</td><td class="num">${m.estHours}</td><td class="num">${m.movingHours ?? '—'}</td>
+            <td class="num">${fmt(m.km)}</td><td class="num">${fmt(m.gain)}</td><td class="num">${m.elapsedHours ?? '—'}</td><td class="num">${m.estHours}</td><td class="num">${m.movingHours ?? '—'}</td>
             <td>${REASON[m.reason] || m.reason}</td><td class="num">${m.estDays}</td></tr>`).join('') + '</tbody></table></div>' : '');
       $('gm-preview-card').hidden = false;
       $('gm-preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) { $('gm-error').textContent = e.message; }
     finally { btn.disabled = false; }
+  });
+  $('gm-backfill').addEventListener('click', function () {
+    this.disabled = true;
+    streamScript('/api/db/backfill-elapsed', 'Tiempos de las rutas').finally(() => { this.disabled = false; });
   });
   $('gm-families').addEventListener('change', e => {
     if (e.target.dataset.k === 'enabled') e.target.closest('tr').classList.toggle('gm-off', !e.target.checked);

@@ -14,7 +14,7 @@ const fs   = require('fs');
 const path = require('path');
 const { openSql } = require('../repo/sql');
 const { newUid, sha256, putFile, deleteTrackFile } = require('./store');
-const { parseGpx, computeMetrics, computeTimes, elapsedSeconds, inferActivity, sierraFromBbox,
+const { parseGpx, computeMetrics, computeTimes, elapsedSeconds, timeSegments, inferActivity, sierraFromBbox,
         extractSierraFromNominatim, locationFromNominatim, computeIBP } = require('../domain');
 const { CACHE_DIR, slugify }      = require('./osm-strategy-batch');
 const { fetchTrackPts, filterWaysToBbox, applyWaysToTrack } = require('./osm-shared');
@@ -76,7 +76,7 @@ function parseTrack(content, filePath) {
   const m = computeMetrics(p.points);
   if (!m) return null;
   return { name: p.name, date: p.date, url: p.url, ...m, points: p.points, waypoints: p.waypoints,
-           times: computeTimes(p.points), elapsed: elapsedSeconds(p.points) };
+           times: computeTimes(p.points), elapsed: elapsedSeconds(p.points), segments: timeSegments(p.points) };
 }
 
 // ── Recoger GPX de _TEMP_ (excluye _REVIEW_) ─────────────────────────
@@ -238,7 +238,8 @@ function collectTempGpx(dir) {
       const newId = await importTrack(track, relFile, act, sierra, province, ccaa, ibp);
       await db.run('UPDATE tracks SET uid=?, sha256=?, zone=COALESCE(zone, sierra) WHERE id=?', [uid, hash, newId]);
       if (track.times) await db.run('UPDATE tracks SET moving_time=?, stopped_time=? WHERE id=?', [track.times.moving, track.times.stopped, newId]);
-      if (track.elapsed) await db.run('UPDATE tracks SET elapsed_time=? WHERE id=?', [track.elapsed, newId]);
+      if (track.elapsed) await db.run('UPDATE tracks SET elapsed_time=?, time_segments=? WHERE id=?',
+        [track.elapsed, track.segments ? JSON.stringify(track.segments) : null, newId]);
       if (needsReview) await db.run('UPDATE tracks SET tags=? WHERE id=?', [JSON.stringify(['revisar']), newId]);
       importedIds.push(newId);
       imported++;

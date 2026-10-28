@@ -33,6 +33,54 @@ test('multiDayInfo: measured moving time and name keywords', () => {
   assert.equal(multiDayInfo(T({ name: 'Travesia de 3 dias por Picos' }), cfg).reason, 'nombre');
 });
 
+const H = 3600;
+const seg = (startH, endH, km) => ({ s: startH * H, e: endH * H, km });
+
+test('multiDayInfo: trusted recording times decide on their own', () => {
+  // Long MTB marathon in one go: the estimate says >12 h, the clock says one day
+  const oneDay = multiDayInfo(T({ activity: 'MTB', distance: 131, elevation_gain: 3468, time_segments: [seg(0, 9, 131)] }), cfg);
+  assert.equal(oneDay.multiDay, false);
+  // A single-day stage of a multi-day trip is one day, whatever the name says
+  assert.equal(multiDayInfo(T({ name: 'Travesia de 3 dias: etapa 1', time_segments: JSON.stringify([seg(0, 7, 14)]) }), cfg).multiDay, false);
+  // Three days with nights in between (stored as a JSON string, as in the DB)
+  const trip = multiDayInfo(T({ distance: 60, time_segments: JSON.stringify([seg(0, 8, 20), seg(22, 30, 25), seg(46, 52, 15)]) }), cfg);
+  assert.equal(trip.reason, 'días con actividad');
+  assert.equal(trip.estDays, 3);
+  assert.equal(trip.elapsedHours, 52);
+});
+
+test('multiDayInfo: a lunch stop is not a night, and idle "days" do not count', () => {
+  assert.equal(multiDayInfo(T({ time_segments: [seg(0, 4, 10), seg(5.5, 9, 9)] }), cfg).multiDay, false);
+  // GPS left on in the hut overnight with no movement the next morning
+  assert.equal(multiDayInfo(T({ time_segments: [seg(0, 6, 15), seg(20, 20.5, 0.1)] }), cfg).multiDay, false);
+});
+
+test('multiDayInfo: GPS left on overnight (one long session) spans several days', () => {
+  const r = multiDayInfo(T({ distance: 36, time_segments: [seg(0, 31.6, 36)] }), cfg);
+  assert.equal(r.multiDay, true);
+  assert.equal(r.estDays, 2);
+  assert.equal(multiDayInfo(T({ distance: 60, time_segments: [seg(0, 16, 60)] }), cfg).multiDay, false);   // long but one day
+});
+
+test('multiDayInfo: files glued from different dates fall back to the estimate', () => {
+  const glued = [seg(0, 3, 8), seg(3 + 24 * 400, 3 + 24 * 400 + 3, 7)];   // ~400 days apart
+  const r = multiDayInfo(T({ distance: 15, elevation_gain: 800, time_segments: glued }), cfg);
+  assert.equal(r.timesTrusted, false);
+  assert.equal(r.multiDay, false);   // 15 km / 800 m is a day hike
+  const big = multiDayInfo(T({ activity: 'Montañismo', distance: 151.4, elevation_gain: 12078, time_segments: glued }), cfg);
+  assert.equal(big.reason, 'distancia y desnivel');
+});
+
+test('timeSegments: splits at long gaps and measures each session', () => {
+  const { timeSegments } = require('./metrics');
+  const p = (lat, sec) => ({ lat, lon: 0, time: sec * 1000 });
+  const segs = timeSegments([p(0, 0), p(0.01, 600), p(0.02, 9 * H), p(0.03, 9 * H + 600)]);
+  assert.equal(segs.length, 2);
+  assert.deepEqual(segs.map(s => [s.s, s.e]), [[0, 600], [9 * H, 9 * H + 600]]);
+  assert.ok(Math.abs(segs[0].km - 1.11) < 0.02);
+  assert.equal(timeSegments([p(0, 0)]), null);
+});
+
 test('multiDayInfo: disabled detection never flags', () => {
   const off = mergeConfig({ multiDay: { enabled: false } });
   assert.equal(multiDayInfo(T({ distance: 500, elevation_gain: 9000 }), off).multiDay, false);

@@ -17,6 +17,7 @@ const JOBS = {
   'calc-ibp':          { label: 'Calcular IBP' },
   'export-folders':    { label: 'Exportar en carpetas' },
   'extract-urls':      { label: 'Extraer URLs' },
+  'backfill-elapsed':  { label: 'Tiempos de las rutas (días con actividad)' },
 };
 
 // Job types that add new GPX files to S3 — automatically trigger a local sync after success
