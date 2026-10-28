@@ -507,14 +507,15 @@ function initMap(t, color) {
   }
 
   const lls = t.points.map(p => [p[0], p[1]]);
-  const line = L.polyline(lls, { color, weight: 4, opacity: .9 }).addTo(map);
+  L.polyline(lls, { color:'#111', weight:9, opacity:0.75, lineCap:'round', lineJoin:'round', interactive:false }).addTo(map);
+  const line = L.polyline(lls, { color, weight:5, opacity:1, lineCap:'round', lineJoin:'round' }).addTo(map);
 
-  const mk = (bg) => L.divIcon({
-    html: `<div style="width:12px;height:12px;border-radius:50%;background:${bg};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`,
-    className: '', iconSize: [12,12], iconAnchor: [6,6]
+  const mk = (bg, sz=14) => L.divIcon({
+    html: `<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${bg};border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)"></div>`,
+    className: '', iconSize: [sz,sz], iconAnchor: [sz/2,sz/2]
   });
-  L.marker(lls[0], { icon: mk('#22c55e') }).addTo(map);
-  L.marker(lls[lls.length-1], { icon: mk('#ef4444') }).addTo(map);
+  L.marker(lls[0], { icon: mk('#22c55e', 14), zIndexOffset: 10 }).addTo(map);
+  L.marker(lls[lls.length-1], { icon: mk('#ef4444', 14), zIndexOffset: 10 }).addTo(map);
 
   map.fitBounds(t.bounds && t.bounds[0] ? t.bounds : L.latLngBounds(lls), { padding: [30,30] });
   return { map, line };

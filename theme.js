@@ -42,6 +42,7 @@
     };
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
       if (!me) { nav.querySelector('#nav-perfil')?.remove(); return; }
+      window.gpxMe = me;
       window.gpxSetNavUser(me);
       // Admin is admin-only (the server refuses it too); the catalog is open to everyone
       if (me.role !== 'admin') nav.querySelectorAll('a[href="/admin"], a.admin-only').forEach(a => a.remove());
