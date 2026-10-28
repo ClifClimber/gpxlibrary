@@ -202,7 +202,6 @@ tr.inactive td { opacity: .4; }
   <a href="/">Visor</a>
   <a href="/editor">Catálogo</a>
   <a href="/compare">Comparar</a>
-  <a href="/multidia" class="admin-only">Varios días</a>
   <a href="/admin" class="active">Admin</a>
   <a href="/perfil" id="nav-perfil" class="nav-user" title="Mi perfil"></a>
 </nav>
@@ -223,6 +222,7 @@ tr.inactive td { opacity: .4; }
     <button class="seg-tab" data-tab="activities">Actividades</button>
     <button class="seg-tab" data-tab="params">Parámetros</button>
     <button class="seg-tab" data-tab="gami">Gamificación</button>
+    <button class="seg-tab" data-tab="multidia">Varios días</button>
     <button class="seg-tab" data-tab="jobs">Trabajos</button>
     <button class="seg-tab" data-tab="logs">Logs</button>
     <button class="seg-tab" data-tab="about">Acerca de</button>
@@ -1049,38 +1049,7 @@ tr.inactive td { opacity: .4; }
         <button class="btn btn-ghost btn-sm" id="gm-reset">Restablecer valores por defecto</button>
       </div>
       <div class="card-body">
-        <p class="section-desc" style="margin-top:0">Todo lo que da puntos en Perfil → Logros. Los cambios se aplican a todos los usuarios en cuanto se guardan; usa <b>Vista previa</b> para ver el efecto antes. Las rutas planeadas nunca cuentan.</p>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-head"><h2>Rutas de varios días</h2></div>
-      <div class="card-body gm-form">
-        <div class="gm-checks">
-          <label><input type="checkbox" id="gm-md-enabled"> Detectar rutas de varios días</label>
-          <label><input type="checkbox" id="gm-md-records"> No cuentan para los récords de un día (ruta más larga, mayor desnivel)</label>
-          <label><input type="checkbox" id="gm-md-totals"> No cuentan tampoco para los totales (km, desnivel, rutas, provincias…)</label>
-        </div>
-        <div class="gm-row gm-row4">
-          <div><label class="field-label">Parada que separa días (h)</label><input class="input" type="number" step="0.5" min="1" id="gm-md-night"></div>
-          <div><label class="field-label">Tramo continuo máx. (h)</label><input class="input" type="number" step="0.5" min="1" id="gm-md-cont"></div>
-          <div><label class="field-label">Hueco máximo fiable (h)</label><input class="input" type="number" step="1" min="2" id="gm-md-maxgap"></div>
-          <div><label class="field-label">Km mínimos para contar un día</label><input class="input" type="number" step="0.5" min="0" id="gm-md-minkm"></div>
-        </div>
-        <div class="gm-row">
-          <div><label class="field-label">Horas en movimiento máx. (sin horas fiables)</label><input class="input" type="number" step="0.5" min="1" id="gm-md-movh"></div>
-          <div><label class="field-label">Horas estimadas máx. (sin horas fiables)</label><input class="input" type="number" step="0.5" min="1" id="gm-md-dayh"></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span class="section-desc" style="margin:0;flex:1;min-width:240px">Si el GPX tiene horas fiables se cuentan los <b>días con actividad</b> (tramos separados por paradas largas, como las noches) y eso decide. Un salto mayor que el hueco máximo indica ficheros unidos de fechas distintas: entonces se ignoran las horas. Las rutas importadas antes de esta versión hay que procesarlas una vez:</span>
-          <button class="btn btn-ghost btn-sm" id="gm-backfill">Calcular tiempos de las rutas</button>
-        </div>
-        <div><label class="field-label">Palabras clave en el nombre (expresión regular)</label><input class="input" type="text" id="gm-md-kw" spellcheck="false" style="font-family:ui-monospace,Consolas,monospace;font-size:12px"></div>
-        <p class="section-desc" style="margin:0">Una ruta es de varios días si su nombre encaja con las palabras clave, si el tiempo en movimiento supera el máximo o si las <b>horas estimadas</b> = km ÷ velocidad + desnivel ÷ ritmo de subida superan el máximo. El tiempo guardado no incluye las paradas largas (noches), por eso se combina con la estimación.</p>
-        <table class="table" style="font-size:13px">
-          <thead><tr><th>Grupo</th><th class="num">km/h</th><th class="num">m de subida/h</th><th>Actividades (separadas por comas; «A pie» = el resto)</th></tr></thead>
-          <tbody id="gm-groups"></tbody>
-        </table>
+        <p class="section-desc" style="margin-top:0">Todo lo que da puntos en Perfil → Logros. Los cambios se aplican a todos los usuarios en cuanto se guardan. Las rutas planeadas nunca cuentan. La configuración de <b>detección de rutas de varios días</b> está en la pestaña <a href="#" id="gm-link-multidia">Varios días</a>.</p>
       </div>
     </div>
 
@@ -1112,8 +1081,125 @@ tr.inactive td { opacity: .4; }
       <span id="gm-state" class="gm-state"></span>
       <span class="gm-dirty" id="gm-dirty" hidden>● Cambios sin guardar</span>
       <span class="um-error" id="gm-error" style="min-height:0;flex:1"></span>
-      <a href="/multidia" class="btn btn-ghost btn-sm" target="_blank">Ver rutas de varios días →</a>
       <button class="btn btn-primary btn-sm" id="gm-save">Guardar</button>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tab-multidia">
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <h2>Configuración — Rutas de varios días</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="gm-dirty" id="md-dirty" hidden>● Cambios sin guardar</span>
+          <button class="btn btn-primary btn-sm" id="md-save">Guardar</button>
+        </div>
+      </div>
+      <div class="card-body gm-form">
+
+        <div class="gm-checks">
+          <label title="Activa toda la lógica de detección. Si está desactivado, ninguna ruta se marca como varios días.">
+            <input type="checkbox" id="gm-md-enabled"> <strong>Detectar rutas de varios días</strong>
+          </label>
+          <label title="Impide que una travesía de 5 días «gane» como la ruta más larga del usuario.">
+            <input type="checkbox" id="gm-md-records"> No cuentan para los récords de un día (ruta más larga, mayor desnivel)
+          </label>
+          <label title="Excluye estas rutas también de los totales acumulados: km, desnivel, nº de rutas, provincias visitadas…">
+            <input type="checkbox" id="gm-md-totals"> No cuentan tampoco para los totales (km, desnivel, rutas, provincias…)
+          </label>
+        </div>
+
+        <p class="section-desc" style="margin:4px 0 0">
+          Una ruta se detecta como «varios días» por alguno de estos tres motivos — de mayor a menor fiabilidad:
+          <b>(1)</b> el GPX tiene horas fiables y hay ≥ 2 días con actividad (tramos separados por noches),
+          <b>(2)</b> el nombre encaja con las palabras clave,
+          <b>(3)</b> el tiempo en movimiento o las horas estimadas superan el máximo.
+        </p>
+
+        <h3 style="font-size:13px;font-weight:600;margin:12px 0 6px;color:var(--ink-2)">Horas fiables del GPX</h3>
+        <p class="section-desc" style="margin:0 0 8px">
+          El sistema lee las marcas de tiempo del GPX para contar cuántos «días» distintos tiene la ruta. Un día = un tramo de actividad separado del siguiente por una pausa larga (la noche). Si hay un salto enorme entre puntos, probablemente son rutas de días distintos unidas en un fichero: en ese caso las horas no son fiables y se usan los otros métodos.
+        </p>
+        <div class="gm-row gm-row4">
+          <div>
+            <label class="field-label" title="Una pausa mayor que este valor entre tramos se interpreta como una noche. Por ejemplo 5 h: si el GPX para a las 20:00 y reanuda a las 7:00, eso es un nuevo día.">Parada que separa días (h)</label>
+            <input class="input" type="number" step="0.5" min="1" id="gm-md-night">
+          </div>
+          <div>
+            <label class="field-label" title="Si un tramo sin pausa supera este valor, es sospechoso (GPS olvidado encendido). Se ignora al calcular días.">Tramo continuo máx. (h)</label>
+            <input class="input" type="number" step="0.5" min="1" id="gm-md-cont">
+          </div>
+          <div>
+            <label class="field-label" title="Si hay un salto entre dos puntos GPS mayor que este valor, el fichero probablemente son varias rutas unidas: se descartan las horas y se usan los métodos de fallback (movimiento o estimación).">Hueco máximo fiable (h)</label>
+            <input class="input" type="number" step="1" min="2" id="gm-md-maxgap">
+          </div>
+          <div>
+            <label class="field-label" title="Al dividir el GPX en días, se ignoran los días con menos km que este valor (p. ej. el último día muy corto).">Km mínimos para contar un día</label>
+            <input class="input" type="number" step="0.5" min="0" id="gm-md-minkm">
+          </div>
+        </div>
+
+        <h3 style="font-size:13px;font-weight:600;margin:12px 0 6px;color:var(--ink-2)">Métodos de fallback (cuando no hay horas fiables)</h3>
+        <p class="section-desc" style="margin:0 0 8px">
+          Si el GPX no tiene marcas de tiempo fiables, se compara el tiempo de movimiento guardado en la BD y las horas estimadas (km ÷ velocidad + desnivel ÷ ritmo de subida) con estos umbrales. Si alguno los supera, la ruta es de varios días.
+        </p>
+        <div class="gm-row">
+          <div>
+            <label class="field-label" title="Tiempo de movimiento real (sin paradas) guardado en la BD. Si supera este máximo → varios días. Útil cuando el GPS se apagó por la noche.">Horas en movimiento máx.</label>
+            <input class="input" type="number" step="0.5" min="1" id="gm-md-movh">
+          </div>
+          <div>
+            <label class="field-label" title="Horas calculadas con la velocidad típica de cada actividad: km ÷ km/h + desnivel ÷ m/h. Si supera este máximo → varios días. Menos preciso pero sirve cuando no hay tiempo de movimiento.">Horas estimadas máx.</label>
+            <input class="input" type="number" step="0.5" min="1" id="gm-md-dayh">
+          </div>
+        </div>
+
+        <h3 style="font-size:13px;font-weight:600;margin:12px 0 6px;color:var(--ink-2)">Detección por nombre</h3>
+        <div>
+          <label class="field-label" title="Expresión regular que se compara con el nombre de la ruta (sin distinguir mayúsculas). Ejemplos: «travesía|GR\d|camino» detecta cualquier ruta con esas palabras. Déjalo vacío para no usar este método.">Palabras clave en el nombre (expresión regular)</label>
+          <input class="input" type="text" id="gm-md-kw" spellcheck="false" style="font-family:ui-monospace,Consolas,monospace;font-size:12px">
+        </div>
+
+        <h3 style="font-size:13px;font-weight:600;margin:12px 0 6px;color:var(--ink-2)">Velocidades por actividad</h3>
+        <p class="section-desc" style="margin:0 0 6px">
+          Para calcular las horas estimadas, cada ruta usa el grupo de velocidad de su actividad: horas = km ÷ km/h + D+ ÷ (m de subida/h). El grupo «A pie» (o el que no tiene actividades listadas) se aplica al resto.
+        </p>
+        <table class="table" style="font-size:13px">
+          <thead><tr><th>Grupo</th><th class="num">km/h</th><th class="num">m de subida/h</th><th>Actividades (separadas por comas; «A pie» = el resto)</th></tr></thead>
+          <tbody id="gm-groups"></tbody>
+        </table>
+
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">
+          <span class="section-desc" style="margin:0;flex:1;min-width:240px">Las rutas importadas antes de la versión que añadió las marcas de tiempo hay que procesarlas una vez para extraer sus horas del GPX:</span>
+          <button class="btn btn-ghost btn-sm" id="gm-backfill">Calcular tiempos de las rutas</button>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="stats-grid" id="md-stats" style="margin-bottom:16px"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Rutas detectadas</h2>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <input class="input" type="search" id="md-f-search" placeholder="Buscar nombre…" style="width:180px;height:32px;font-size:13px">
+          <select class="select" id="md-f-owner" style="height:32px;font-size:13px"><option value="">Todos los dueños</option></select>
+          <select class="select" id="md-f-activity" style="height:32px;font-size:13px"><option value="">Todas las actividades</option></select>
+          <select class="select" id="md-f-reason" style="height:32px;font-size:13px">
+            <option value="">Todos los motivos</option>
+            <option value="días con actividad">Horas del GPX</option>
+            <option value="nombre">Nombre</option>
+            <option value="tiempo en movimiento">Movimiento</option>
+            <option value="distancia y desnivel">Estimación</option>
+            <option value="declarado">Declarado</option>
+          </select>
+          <span id="md-count" style="font-size:13px;color:var(--muted)"></span>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div id="md-tbl-area"><div style="padding:40px;text-align:center;color:var(--muted)">Cargando…</div></div>
+      </div>
     </div>
   </div>
 
@@ -2684,6 +2770,7 @@ loadActivities();
   const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const fmt = n => Number(n || 0).toLocaleString('es');
   let gCfg = null, loaded = false;
+  let loadPromise = null;
 
   async function load() {
     loaded = true;
@@ -2753,6 +2840,11 @@ loadActivities();
       })),
     };
   }
+  window.gamiRead = read;
+  window.gamiEnsureLoaded = () => {
+    if (!loadPromise) loadPromise = load();
+    return loadPromise;
+  };
 
   async function send(url, method, body) {
     $('gm-error').textContent = '';
@@ -2781,13 +2873,13 @@ loadActivities();
 
   $('gm-save').addEventListener('click', async () => {
     const btn = $('gm-save'); btn.disabled = true; btn.textContent = 'Guardando…';
-    try { const d = await send('/api/admin/gamification', 'PUT', read()); render(d.config); setDirty(false); toast('✓ Parámetros de gamificación guardados'); load(); }
+    try { const d = await send('/api/admin/gamification', 'PUT', read()); render(d.config); setDirty(false); toast('✓ Parámetros de gamificación guardados'); loadPromise = load(); }
     catch (e) { fail(e); }
     finally { btn.disabled = false; btn.textContent = 'Guardar'; }
   });
   $('gm-reset').addEventListener('click', async () => {
     if (!confirm('¿Volver a los valores por defecto? Se perderán los cambios guardados.')) return;
-    try { const d = await send('/api/admin/gamification', 'DELETE'); render(d.config); toast('Valores por defecto restablecidos'); load(); }
+    try { const d = await send('/api/admin/gamification', 'DELETE'); render(d.config); toast('Valores por defecto restablecidos'); loadPromise = load(); }
     catch (e) { fail(e); }
   });
   $('gm-backfill').addEventListener('click', function () {
@@ -2797,7 +2889,133 @@ loadActivities();
   $('gm-families').addEventListener('change', e => {
     if (e.target.dataset.k === 'enabled') e.target.closest('tr').classList.toggle('gm-off', !e.target.checked);
   });
-  document.querySelector('#admin-tabs [data-tab="gami"]').addEventListener('click', () => { if (!loaded) load(); });
+  document.querySelector('#admin-tabs [data-tab="gami"]').addEventListener('click', () => { window.gamiEnsureLoaded(); });
+  $('gm-link-multidia').addEventListener('click', e => { e.preventDefault(); document.querySelector('#admin-tabs [data-tab="multidia"]').click(); });
+})();
+</script>
+
+<script>
+// Tab: Varios días
+(function () {
+  const REASON_LABEL = {
+    'días con actividad': 'Horas del GPX',
+    'nombre': 'Nombre',
+    'tiempo en movimiento': 'Movimiento',
+    'distancia y desnivel': 'Estimación',
+    'declarado': 'Declarado',
+  };
+  let allRoutes = [], loaded = false;
+
+  function fmt(n) {
+    if (n == null) return '—';
+    return typeof n === 'number' ? n.toLocaleString('es-ES', { maximumFractionDigits: 1 }) : n;
+  }
+
+  async function apiFetch(url, method = 'GET', body) {
+    const r = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    return d;
+  }
+
+  async function load() {
+    $('md-tbl-area').innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando…</div>';
+    try {
+      const d = await apiFetch('/api/admin/gamification/multiday');
+      allRoutes = d.multiDay;
+      buildFilters(d);
+      renderStats(d);
+      renderTable();
+    } catch (e) {
+      $('md-tbl-area').innerHTML = `<div style="padding:40px;text-align:center;color:var(--muted)">${esc(e.message)}</div>`;
+    }
+  }
+
+  function buildFilters(d) {
+    const owners = [...new Set(d.multiDay.map(r => r.owner).filter(Boolean))].sort();
+    const acts   = [...new Set(d.multiDay.map(r => r.activity).filter(Boolean))].sort();
+    $('md-f-owner').innerHTML    = '<option value="">Todos los dueños</option>'   + owners.map(o => `<option>${esc(o)}</option>`).join('');
+    $('md-f-activity').innerHTML = '<option value="">Todas las actividades</option>' + acts.map(a => `<option>${esc(a)}</option>`).join('');
+  }
+
+  function renderStats(d) {
+    const total = d.multiDay.length;
+    if (!total) { $('md-stats').innerHTML = ''; return; }
+    const totalDays = d.multiDay.reduce((s, r) => s + (r.estDays || 0), 0);
+    const maxDays   = Math.max(...d.multiDay.map(r => r.estDays || 0));
+    $('md-stats').innerHTML = [
+      { val: total,          lbl: `de ${fmt(d.totalTracks)} rutas` },
+      { val: totalDays,      lbl: 'días estimados en total' },
+      { val: maxDays,        lbl: 'días máx. de una ruta' },
+    ].map(s => `<div class="stat"><div class="val">${fmt(s.val)}</div><div class="lbl">${esc(s.lbl)}</div></div>`).join('');
+  }
+
+  function renderTable() {
+    const search = $('md-f-search').value.trim().toLowerCase();
+    const owner  = $('md-f-owner').value;
+    const act    = $('md-f-activity').value;
+    const reason = $('md-f-reason').value;
+    const rows = allRoutes.filter(r =>
+      (!search || r.name.toLowerCase().includes(search)) &&
+      (!owner  || r.owner === owner) &&
+      (!act    || r.activity === act) &&
+      (!reason || r.reason === reason)
+    );
+    $('md-count').textContent = rows.length === allRoutes.length
+      ? `${rows.length} rutas` : `${rows.length} de ${allRoutes.length}`;
+    if (!rows.length) {
+      $('md-tbl-area').innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Ninguna ruta coincide con los filtros.</div>';
+      return;
+    }
+    $('md-tbl-area').innerHTML = `<div style="overflow-x:auto"><table class="table" style="font-size:13px">
+      <thead><tr>
+        <th>Ruta</th><th>Dueño</th><th>Actividad</th>
+        <th class="num">km</th><th class="num">D+</th>
+        <th class="num">h total</th><th class="num">h estim.</th><th class="num">h movim.</th>
+        <th>Motivo</th><th class="num" style="font-weight:700">Días</th>
+      </tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td><a href="/track?id=${r.id}" target="_blank">${esc(r.name)}</a></td>
+        <td>${r.owner ? '@' + esc(r.owner) : '—'}</td>
+        <td>${esc(r.activity || '—')}</td>
+        <td class="num">${fmt(r.km)}</td>
+        <td class="num">${fmt(r.gain)}</td>
+        <td class="num">${r.elapsedHours ?? '—'}</td>
+        <td class="num">${fmt(r.estHours)}</td>
+        <td class="num">${r.movingHours ?? '—'}</td>
+        <td><span class="tag">${esc(REASON_LABEL[r.reason] || r.reason)}</span></td>
+        <td class="num" style="font-weight:700">${r.estDays}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+
+  $('md-f-search').addEventListener('input', renderTable);
+  $('md-f-owner').addEventListener('change', renderTable);
+  $('md-f-activity').addEventListener('change', renderTable);
+  $('md-f-reason').addEventListener('change', renderTable);
+
+  // Save: ensure gami config is loaded (so XP/families fields are populated), then save all
+  $('md-save').addEventListener('click', async () => {
+    const btn = $('md-save'); btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      await window.gamiEnsureLoaded();
+      await apiFetch('/api/admin/gamification', 'PUT', window.gamiRead());
+      $('md-dirty').hidden = true;
+      const gmDirty = document.getElementById('gm-dirty'); if (gmDirty) gmDirty.hidden = true;
+      toast('✓ Configuración de varios días guardada');
+      loaded = false; load();
+    } catch (e) { toast(e.message, true); }
+    finally { btn.disabled = false; btn.textContent = 'Guardar'; }
+  });
+
+  // Mark dirty when config fields change
+  $('tab-multidia').addEventListener('input', e => { if (e.target.closest('.gm-form')) $('md-dirty').hidden = false; });
+  $('tab-multidia').addEventListener('change', e => { if (e.target.closest('.gm-form')) $('md-dirty').hidden = false; });
+
+  document.querySelector('#admin-tabs [data-tab="multidia"]').addEventListener('click', () => {
+    window.gamiEnsureLoaded();  // populate gm-md-* and gm-groups before user edits them
+    if (!loaded) { loaded = true; load(); }
+  });
 })();
 </script>
 
