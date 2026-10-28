@@ -9,6 +9,7 @@
   let parsed = null;         // { name, pts:[[lat,lon,ele]], wpts:[{lat,lon,name}], distKm, gain }
   let map = null, polyline = null, overlay = null;
   let trackId = null;        // set once imported on the server
+  let editingExisting = false;   // step 3 is editing a route the user already had
   let privacy = 'public';
 
   // ── Auth ──
@@ -46,6 +47,8 @@
 
   function readFile(file) {
     $('step1-err').textContent = '';
+    trackId = null; editingExisting = false;       // a new file starts a new import
+    $('dup-panel').hidden = true; $('b2-next').hidden = false; $('import-log').textContent = '';
     if (!/\.gpx$/i.test(file.name)) { $('step1-err').textContent = 'Elige un archivo .gpx'; return; }
     const reader = new FileReader();
     reader.onload = () => {
@@ -115,38 +118,79 @@
     const btn = $('b2-next'); btn.disabled = true;
     const log = $('import-log'); log.textContent = 'Subiendo GPX…';
     try {
-      const day = new Date().toISOString().slice(0, 10);
-      const filename = `${day}_${slugify(parsed.name)}.gpx`;
-      const up = await fetch('/api/import/upload', {
-        method: 'POST', headers: { 'Content-Type': 'application/gpx+xml', 'X-Filename': filename }, body: gpxText,
-      });
-      if (!up.ok) throw new Error('Error al subir (HTTP ' + up.status + ')');
-      const { filename: savedName } = await up.json();
-      log.textContent = 'Importando (ubicación, zona, dificultad)…';
-      const resp = await fetch('/api/db/import-temp', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: [savedName] }),
-      });
-      if (!resp.ok || !resp.body) throw new Error('Error al importar (HTTP ' + resp.status + ')');
-      const reader = resp.body.getReader(), dec = new TextDecoder();
-      let buf = '', code = null;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const parts = buf.split('\n\n'); buf = parts.pop();
-        for (const part of parts) {
-          const dl = part.split('\n').find(l => l.startsWith('data:')); if (!dl) continue;
-          let evt; try { evt = JSON.parse(dl.slice(5)); } catch { continue; }
-          if (evt.text?.startsWith('IMPORTED_IDS:')) trackId = +evt.text.split(':')[1].split(',')[0];
-          else if (evt.type === 'done') code = evt.code;
-        }
-      }
-      if (!trackId) throw new Error(code === 0 ? 'La ruta no se importó (¿ya existía un fichero idéntico?)' : 'La importación falló');
+      const r = await runImport(false);
+      if (r.dupId) { showDuplicate(r.dupId); log.textContent = ''; return; }
+      if (!r.id) throw new Error(r.code === 0 ? 'La ruta no se importó' : 'La importación falló');
+      trackId = r.id;
       await loadTrackIntoForm();
       goStep(3);
     } catch (err) {
       log.innerHTML = '<span style="color:var(--danger)">✗ ' + esc(err.message) + '</span>';
     } finally { btn.disabled = false; }
+  }
+
+  // Upload the GPX and import it. Returns { id } of the new track, or { dupId } when the user
+  // already has the same file (allowDup imports it again as a separate copy).
+  async function runImport(allowDup) {
+    const log = $('import-log');
+    log.textContent = 'Subiendo GPX…';
+    const day = new Date().toISOString().slice(0, 10);
+    const up = await fetch('/api/import/upload', {
+      method: 'POST', headers: { 'Content-Type': 'application/gpx+xml', 'X-Filename': `${day}_${slugify(parsed.name)}.gpx` }, body: gpxText,
+    });
+    if (!up.ok) throw new Error('Error al subir (HTTP ' + up.status + ')');
+    const { filename: savedName } = await up.json();
+    log.textContent = 'Importando (ubicación, zona, dificultad)…';
+    const resp = await fetch('/api/db/import-temp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: [savedName], allow_dup: allowDup }),
+    });
+    if (!resp.ok || !resp.body) throw new Error('Error al importar (HTTP ' + resp.status + ')');
+    const reader = resp.body.getReader(), dec = new TextDecoder();
+    let buf = '', code = null, id = null, dupId = null;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split('\n\n'); buf = parts.pop();
+      for (const part of parts) {
+        const dl = part.split('\n').find(l => l.startsWith('data:')); if (!dl) continue;
+        let evt; try { evt = JSON.parse(dl.slice(5)); } catch { continue; }
+        if (evt.text?.startsWith('IMPORTED_IDS:')) id = +evt.text.split(':')[1].split(',')[0];
+        else if (evt.text?.startsWith('DUPLICATE_OWN:')) dupId = +evt.text.split(':')[1];
+        else if (evt.type === 'done') code = evt.code;
+      }
+    }
+    return { id, dupId, code };
+  }
+
+  // The user already has this exact route: edit that one, or import a second copy with another name
+  async function showDuplicate(dupId) {
+    let name = '';
+    try { name = (await fetch(`/api/tracks/${dupId}`).then(r => r.json())).name || ''; } catch {}
+    $('dup-name').textContent = name || `#${dupId}`;
+    $('dup-name').href = `/track?id=${dupId}`;
+    $('dup-copy-name').value = (parsed.name || name) + ' (copia)';
+    $('dup-panel').hidden = false;
+    $('b2-next').hidden = true;
+    $('dup-edit').onclick = async () => {
+      trackId = dupId; editingExisting = true;
+      await loadTrackIntoForm();
+      goStep(3);
+    };
+    $('dup-copy').onclick = async () => {
+      const newName = $('dup-copy-name').value.trim();
+      if (!newName) { $('dup-copy-name').focus(); return; }
+      $('dup-copy').disabled = true;
+      try {
+        const r = await runImport(true);
+        if (!r.id) throw new Error('La importación falló');
+        trackId = r.id;
+        await loadTrackIntoForm();
+        $('f-name').value = newName;
+        goStep(3);
+      } catch (err) { $('import-log').innerHTML = '<span style="color:var(--danger)">✗ ' + esc(err.message) + '</span>'; }
+      finally { $('dup-copy').disabled = false; }
+    };
   }
 
   function slugify(s) { return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60) || 'ruta'; }
@@ -175,7 +219,38 @@
       const fill = $('wpt-fill'); fill.hidden = false;
       fill.onclick = () => { const cur = $('f-desc').value.trim(); $('f-desc').value = (cur ? cur + '\n\n' : '') + 'Pasa por: ' + wNames.slice(0, 12).join(', ') + '.'; fill.hidden = true; };
     }
-    renderPhotos([]);
+    // Existing photos (when editing a route the user already had) and its privacy
+    renderPhotos(await fetch(`/api/tracks/${trackId}/photos`).then(r => (r.ok ? r.json() : [])).catch(() => []));
+    privacy = t.visibility === 'private' ? 'private' : 'public';
+    document.querySelectorAll('#f-priv .priv-opt').forEach(o => o.classList.toggle('sel', o.dataset.v === privacy));
+    // Duration: what the user declared before, else preselect what the automatic detection says
+    try {
+      const d = await fetch(`/api/tracks/${trackId}/days`).then(r => r.json());
+      const det = d.detected || {};
+      const REASON = { 'días con actividad': 'según las horas del GPX', 'nombre': 'por el nombre',
+                       'tiempo en movimiento': 'por el tiempo en movimiento', 'distancia y desnivel': 'por distancia y desnivel' };
+      if (d.declared != null) setDays(d.declared === 1 ? '1' : 'multi', d.declared >= 2 ? d.declared : '');
+      else setDays(det.multiDay ? 'multi' : '1', det.multiDay ? det.days : '');
+      $('pc-days').textContent = det.multiDay ? `detectado: ${det.days} días ${REASON[det.reason] || ''}` : 'detectado: un día';
+    } catch { setDays('1', ''); }
+  }
+
+  // ── Duración ──
+  function setDays(mode, n) {
+    document.querySelectorAll('#f-days .priv-opt').forEach(o => o.classList.toggle('sel', o.dataset.v === mode));
+    $('f-days-num-wrap').hidden = mode !== 'multi';
+    $('f-days-num').value = mode === 'multi' && n ? n : '';
+  }
+  $('f-days').addEventListener('click', e => {
+    const opt = e.target.closest('.priv-opt'); if (!opt) return;
+    setDays(opt.dataset.v, $('f-days-num').value);
+    if (opt.dataset.v === 'multi') $('f-days-num').focus();
+  });
+  // Value for tracks.days_declared: 1 one day · N days · 0 several without a number
+  function daysDeclared() {
+    if (document.querySelector('#f-days .priv-opt.sel')?.dataset.v !== 'multi') return 1;
+    const n = parseInt($('f-days-num').value);
+    return n >= 2 ? Math.min(n, 365) : 0;
   }
 
   // ── Privacidad ──
@@ -271,6 +346,7 @@
         notes: $('f-desc').value.trim(),
         activity: $('f-activity').value.trim(),
         sierra: $('f-sierra').value.trim(),
+        days_declared: daysDeclared(),
       };
       await fetch(`/api/tracks/${trackId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
       await fetch(`/api/profile/tracks/${trackId}/visibility`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: privacy }) });

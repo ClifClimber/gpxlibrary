@@ -98,6 +98,7 @@ const USER_API = [
   ['GET',    /^\/api\/photos\/\d+$/],
   ['DELETE', /^\/api\/photos\/\d+$/],
   ['PATCH',  /^\/api\/tracks\/\d+\/cover$/],
+  ['GET',    /^\/api\/tracks\/\d+\/days$/],
   ['GET',    /^\/api\/lists(\/shared)?$/],
   ['POST',   /^\/api\/lists$/],
   ['PATCH',  /^\/api\/lists\/\d+$/],
@@ -692,7 +693,7 @@ async function gamificationConfig() { return mergeConfig(await getSetting('gamif
 // Completed (non-planned) tracks of a user, in the shape computeAchievements expects
 async function userCompletedTracks(uid) {
   return sqlDb().all(
-    `SELECT id, name, activity, distance, elevation_gain, moving_time, time_segments, province, circular, date
+    `SELECT id, name, activity, distance, elevation_gain, moving_time, time_segments, days_declared, province, circular, date
      FROM tracks WHERE owner_id = ? AND NOT planned`, [uid]);
 }
 async function userAchievements(uid, cfg) {
@@ -766,6 +767,13 @@ async function apiPatchTrack(req, res, id) {
     const body   = await parseBody(req);
     const fields = Object.keys(body).filter(k => EDITABLE_FIELDS.has(k));
     if (!fields.length) { res.writeHead(400); res.end('No editable fields'); return; }
+    if ('days_declared' in body) {   // NULL auto · 0 several (no number) · 1 one day · N days
+      const v = body.days_declared;
+      body.days_declared = v === null || v === '' ? null : Number(v);
+      if (body.days_declared !== null && !(Number.isInteger(body.days_declared) && body.days_declared >= 0 && body.days_declared <= 365)) {
+        res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Días no válidos' }));
+      }
+    }
     // The GPX is immutable: metadata lives only in the DB (it is applied on download).
     await repo.updateTrack(id, body);
     invalidateCatalogCache();
@@ -1712,6 +1720,19 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true, id: row.id, url: `/api/photos/${row.id}`, thumb: `/api/photos/${row.id}?size=thumb`, is_cover: isCover }));
   }
 
+  // Duration of a route: declared by the user or detected (same rules as achievements)
+  const daysMatch = pathname.match(/^\/api\/tracks\/(\d+)\/days$/);
+  if (daysMatch && method === 'GET') {
+    const t = await sqlDb().get(
+      `SELECT id, name, activity, distance, elevation_gain, moving_time, time_segments, days_declared, owner_id, visibility
+       FROM tracks WHERE id = ?`, [parseInt(daysMatch[1])]);
+    if (!t || (!isAdmin && t.visibility !== 'public' && t.owner_id !== req.user.sub)) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+    const cfg = await gamificationConfig();
+    const detected = multiDayInfo({ ...t, days_declared: null }, cfg);
+    res.writeHead(200, J);
+    return res.end(JSON.stringify({ declared: t.days_declared, detected: { multiDay: detected.multiDay, days: detected.estDays, reason: detected.reason } }));
+  }
+
   // Choose the cover photo of a route (owner or admin)
   const coverMatch = pathname.match(/^\/api\/tracks\/(\d+)\/cover$/);
   if (coverMatch && method === 'PATCH') {
@@ -1812,6 +1833,7 @@ const server = http.createServer(async (req, res) => {
     if (files) args.push('--files', files.join('|'));
     if (src)   args.push('--src', src);
     if (keep)  args.push('--keep');
+    if (body.allow_dup === true) args.push('--allow-dup');   // the user chose to keep a second copy of their own route
     return apiRunScript(res, path.join(ROOT,'scripts','import-from-temp.js'), args, req.user);
   }
 
@@ -2196,7 +2218,7 @@ const server = http.createServer(async (req, res) => {
     catch (e) { res.writeHead(400, J); return res.end(JSON.stringify({ error: e.message })); }
     const db = sqlDb();
     const tracks = await db.all(
-      `SELECT t.id, t.name, t.activity, t.distance, t.elevation_gain, t.moving_time, t.time_segments, u.username AS owner
+      `SELECT t.id, t.name, t.activity, t.distance, t.elevation_gain, t.moving_time, t.time_segments, t.days_declared, u.username AS owner
        FROM tracks t LEFT JOIN users u ON u.id = t.owner_id WHERE NOT t.planned`);
     const multiDay = tracks.map(t => ({ t, i: multiDayInfo(t, cfg) })).filter(x => x.i.multiDay)
       .sort((a, b) => b.i.estHours - a.i.estHours)

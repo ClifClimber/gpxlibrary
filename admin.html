@@ -157,6 +157,11 @@ tr.inactive td { opacity: .4; }
 #gm-groups .num .input, #gm-families .num .input { width: 86px; text-align: right; }
 #gm-families .gm-icon { width: 46px; text-align: center; font-size: 16px; }
 #gm-families tr.gm-off td:not(:first-child) { opacity: .45; }
+.gm-bar { position: sticky; bottom: 12px; z-index: 50; margin-top: 16px; display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap; padding: 10px 14px; border-radius: var(--radius); }
+.gm-state { font-size: 12px; color: var(--muted); }
+.gm-dirty { font-size: 12px; font-weight: 600; color: var(--warn); }
+#gm-save[disabled] { opacity: .6; }
 .gm-pv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
 @media (max-width: 700px) { .gm-row, .gm-row4 { grid-template-columns: 1fr 1fr; } }
 
@@ -633,7 +638,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.8.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.9.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">27 octubre 2026</div>
         </div>
       </div>
@@ -652,8 +657,25 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.8.0</span>
+            <span class="cl-version">v2.9.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">28 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Gamificación configurable</b> en Admin → Gamificación: XP y niveles, insignias (activar, nombre, icono, umbrales) y detección de rutas de varios días, con vista previa y barra de acciones siempre visible</li>
+            <li><b>Rutas de varios días</b>: se cuentan los días con actividad a partir de las horas del GPX (las noches separan días; los ficheros unidos de fechas distintas se descartan) o, sin horas fiables, por distancia y desnivel. No cuentan como récord de un día; nueva insignia «Travesías de varios días»</li>
+            <li><b>Duración al subir</b>: en Upload Trail eliges «Un día» o «Varios días» (con número o sin él); manda sobre la detección automática</li>
+            <li><b>Rutas repetidas</b>: si el GPX ya existe pero es público o de otro usuario, se importa como tuyo; si ya es tuyo, puedes editar el que tienes o importarlo como copia con otro nombre</li>
+            <li><b>Foto de portada</b> por ruta (la primera, o la que elijas con ☆) y portada en la lista del visor; las fotos se reducen en el navegador y se guarda una miniatura</li>
+            <li>El mapa de la vista previa de Upload Trail se centra en la ruta</li>
+            <li><b>Copias de seguridad completas</b>: ahora incluyen usuarios, listas, comparticiones, fotos y ajustes (antes una restauración vaciaba las listas)</li>
+            <li>Las rutas de Sonia pasan a ser rutas base sin dueño</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.8.0</span>
             <span class="cl-date">28 oct 2026</span>
           </div>
           <ul class="cl-list">
@@ -1003,14 +1025,10 @@ tr.inactive td { opacity: .4; }
     <div class="card" style="margin-bottom:16px">
       <div class="card-head">
         <h2>Gamificación</h2>
-        <span id="gm-state" style="font-size:12px;color:var(--muted)"></span>
         <button class="btn btn-ghost btn-sm" id="gm-reset">Restablecer valores por defecto</button>
-        <button class="btn btn-ghost btn-sm" id="gm-preview">Vista previa</button>
-        <button class="btn btn-primary btn-sm" id="gm-save">Guardar</button>
       </div>
       <div class="card-body">
         <p class="section-desc" style="margin-top:0">Todo lo que da puntos en Perfil → Logros. Los cambios se aplican a todos los usuarios en cuanto se guardan; usa <b>Vista previa</b> para ver el efecto antes. Las rutas planeadas nunca cuentan.</p>
-        <div class="um-error" id="gm-error"></div>
       </div>
     </div>
 
@@ -1071,6 +1089,15 @@ tr.inactive td { opacity: .4; }
     <div class="card" id="gm-preview-card" hidden>
       <div class="card-head"><h2>Vista previa (sin guardar)</h2></div>
       <div class="card-body" id="gm-preview-body"></div>
+    </div>
+
+    <!-- Acciones siempre visibles -->
+    <div class="gm-bar floating">
+      <span id="gm-state" class="gm-state"></span>
+      <span class="gm-dirty" id="gm-dirty" hidden>● Cambios sin guardar</span>
+      <span class="um-error" id="gm-error" style="min-height:0;flex:1"></span>
+      <button class="btn btn-ghost btn-sm" id="gm-preview">Vista previa</button>
+      <button class="btn btn-primary btn-sm" id="gm-save">Guardar</button>
     </div>
   </div>
 
@@ -2659,6 +2686,7 @@ loadActivities();
       const d = await fetch('/api/admin/gamification').then(r => r.json());
       if (d.error) throw new Error(d.error);
       render(d.config);
+      setDirty(false);
       $('gm-state').textContent = d.customized ? `Personalizado · ${d.updated.at}${d.updated.updated_by ? ' por @' + d.updated.updated_by : ''}` : 'Valores por defecto';
     } catch (e) { $('gm-error').textContent = e.message; }
   }
@@ -2723,20 +2751,29 @@ loadActivities();
 
   async function send(url, method, body) {
     $('gm-error').textContent = '';
-    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    let r;
+    try { r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }); }
+    catch { throw new Error('No se pudo contactar con el servidor (¿se está reiniciando?). Vuelve a intentarlo.'); }
     const d = await r.json().catch(() => ({}));
+    if (r.status === 401) throw new Error('La sesión ha caducado: vuelve a entrar.');
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     return d;
   }
+  const fail = e => { $('gm-error').textContent = e.message; toast(e.message, true); };
+  const setDirty = on => { $('gm-dirty').hidden = !on; };
+  $('tab-gami').addEventListener('input', e => { if (e.target.closest('.card') && !e.target.closest('#gm-preview-card')) setDirty(true); });
+  $('tab-gami').addEventListener('change', e => { if (e.target.closest('.card') && !e.target.closest('#gm-preview-card')) setDirty(true); });
 
   $('gm-save').addEventListener('click', async () => {
-    try { const d = await send('/api/admin/gamification', 'PUT', read()); render(d.config); toast('Parámetros de gamificación guardados'); load(); }
-    catch (e) { $('gm-error').textContent = e.message; }
+    const btn = $('gm-save'); btn.disabled = true; btn.textContent = 'Guardando…';
+    try { const d = await send('/api/admin/gamification', 'PUT', read()); render(d.config); setDirty(false); toast('✓ Parámetros de gamificación guardados'); load(); }
+    catch (e) { fail(e); }
+    finally { btn.disabled = false; btn.textContent = 'Guardar'; }
   });
   $('gm-reset').addEventListener('click', async () => {
     if (!confirm('¿Volver a los valores por defecto? Se perderán los cambios guardados.')) return;
     try { const d = await send('/api/admin/gamification', 'DELETE'); render(d.config); toast('Valores por defecto restablecidos'); load(); }
-    catch (e) { $('gm-error').textContent = e.message; }
+    catch (e) { fail(e); }
   });
   $('gm-preview').addEventListener('click', async () => {
     const btn = $('gm-preview'); btn.disabled = true;
@@ -2752,7 +2789,7 @@ loadActivities();
             <td>${REASON[m.reason] || m.reason}</td><td class="num">${m.estDays}</td></tr>`).join('') + '</tbody></table></div>' : '');
       $('gm-preview-card').hidden = false;
       $('gm-preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch (e) { $('gm-error').textContent = e.message; }
+    } catch (e) { fail(e); }
     finally { btn.disabled = false; }
   });
   $('gm-backfill').addEventListener('click', function () {

@@ -38,6 +38,7 @@ const srcIdx  = process.argv.indexOf('--src');
 const SRC_DIR = srcIdx !== -1 ? path.resolve(process.argv[srcIdx + 1]) : TEMP_DIR;
 const ownerIdx = process.argv.indexOf('--owner');   // user who imports: owner of newly created tracks
 const OWNER_ID = ownerIdx !== -1 ? parseInt(process.argv[ownerIdx + 1]) || null : null;
+const ALLOW_DUP = process.argv.includes('--allow-dup');   // import even if this owner already has the same file
 
 // ── Sierras (cargadas desde BD en tiempo de ejecución) ──────────────
 let SIERRAS = [];
@@ -187,11 +188,15 @@ function collectTempGpx(dir) {
       if (content.includes('�')) content = buf.toString('latin1');
     } catch (e) { console.log(`  ✗ No se puede leer: ${e.message}`); errors++; continue; }
 
-    const dup = !FORCE && await db.get('SELECT id, name FROM tracks WHERE sha256=? LIMIT 1', [hash]);
+    // Duplicates (byte-identical GPX) are per owner: someone else's or a public base route can be
+    // imported again as your own; your own copy is reported (DUPLICATE_OWN) unless --allow-dup.
+    const dup = FORCE || ALLOW_DUP ? null : OWNER_ID
+      ? await db.get('SELECT id, name FROM tracks WHERE sha256=? AND owner_id=? LIMIT 1', [hash, OWNER_ID])
+      : await db.get('SELECT id, name FROM tracks WHERE sha256=? LIMIT 1', [hash]);
     if (dup) {
-      // Byte-identical to a stored original, so the temp copy is redundant.
       if (!KEEP_SRC) { try { fs.unlinkSync(filePath); } catch {} }
       console.log(`  ↩ Ya existe en BD (mismo contenido que id=${dup.id} «${dup.name}»)${KEEP_SRC ? '' : ' · copia descartada'}`);
+      if (OWNER_ID) console.log(`DUPLICATE_OWN:${dup.id}`);
       skipped++; continue;
     }
 

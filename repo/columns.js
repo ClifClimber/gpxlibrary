@@ -9,6 +9,7 @@ const TRACK_COLS = [
   'activity', 'province', 'ccaa', 'sierra', 'notes', 'url',
   'road_types', 'surface_types', 'road_type_seq', 'moving_time', 'stopped_time', 'tags',
   'ibp_bicycle', 'ibp_hiking', 'ibp_running', 'circular', 'waypoints_json', 'owner_id', 'visibility',
+  'days_declared',
 ];
 
 const LIST_COLS = [
@@ -29,7 +30,7 @@ const CATALOG_COLS = [
 ];
 
 // Fields a client may change through PATCH / bulk update.
-const EDITABLE_FIELDS = new Set(['name', 'activity', 'province', 'ccaa', 'sierra', 'notes', 'url', 'tags']);
+const EDITABLE_FIELDS = new Set(['name', 'activity', 'province', 'ccaa', 'sierra', 'notes', 'url', 'tags', 'days_declared']);
 
 const CONFIG_TABLES = {
   config_activities: { order: ['sort_order', 'name'], cols: ['name', 'color', 'keywords', 'sort_order', 'active'] },

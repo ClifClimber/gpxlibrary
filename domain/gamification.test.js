@@ -55,6 +55,18 @@ test('multiDayInfo: a lunch stop is not a night, and idle "days" do not count', 
   assert.equal(multiDayInfo(T({ time_segments: [seg(0, 6, 15), seg(20, 20.5, 0.1)] }), cfg).multiDay, false);
 });
 
+test('multiDayInfo: the duration declared by the user wins over detection', () => {
+  const huge = { activity: 'Montañismo', distance: 151.4, elevation_gain: 12078 };
+  assert.equal(multiDayInfo(T({ ...huge, days_declared: 1 }), cfg).multiDay, false);
+  const three = multiDayInfo(T({ distance: 10, days_declared: 3, time_segments: [seg(0, 4, 10)] }), cfg);
+  assert.equal(three.reason, 'declarado');
+  assert.equal(three.estDays, 3);
+  const several = multiDayInfo(T({ distance: 10, days_declared: 0 }), cfg);   // "varios" without a number
+  assert.equal(several.multiDay, true);
+  assert.ok(several.estDays >= 2);
+  assert.equal(multiDayInfo(T({ ...huge, days_declared: null }), cfg).reason, 'distancia y desnivel');
+});
+
 test('multiDayInfo: GPS left on overnight (one long session) spans several days', () => {
   const r = multiDayInfo(T({ distance: 36, time_segments: [seg(0, 31.6, 36)] }), cfg);
   assert.equal(r.multiDay, true);

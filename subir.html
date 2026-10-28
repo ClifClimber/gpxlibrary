@@ -53,6 +53,17 @@
 .priv-opt { flex: 1; border: 1.5px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; cursor: pointer; font-size: 13px; text-align: center; }
 .priv-opt.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 
+.dup-panel { margin-top: 16px; padding: 14px 16px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.dup-title { font-weight: 600; margin-bottom: 4px; }
+.dup-panel p { font-size: 13px; color: var(--ink-2); margin-bottom: 10px; }
+.dup-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.dup-actions .input { flex: 1; min-width: 180px; }
+.dup-or { font-size: 12px; color: var(--muted); }
+.days-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.days-num { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.days-num .input { width: 76px; }
+.days-num small { color: var(--muted); }
+
 /* Photos */
 .ph-grid { display: flex; flex-wrap: wrap; gap: 10px; }
 .ph-thumb { position: relative; width: 92px; height: 70px; border-radius: 8px; overflow: hidden; background: var(--soft); }
@@ -124,6 +135,16 @@
         <div class="pv-stat"><div class="v" id="pv-wptn">—</div><div class="l">Puntos de paso</div></div>
       </div>
       <div class="pv-wpts" id="pv-wpts"></div>
+      <div class="dup-panel" id="dup-panel" hidden>
+        <div class="dup-title">⚠️ Ya tienes esta ruta: <a id="dup-name" target="_blank"></a></div>
+        <p>El fichero es idéntico a una ruta tuya. ¿Qué quieres hacer?</p>
+        <div class="dup-actions">
+          <button class="btn btn-outline" id="dup-edit">Editar la que ya tengo</button>
+          <span class="dup-or">o</span>
+          <input type="text" class="input" id="dup-copy-name" maxlength="200" placeholder="Nombre de la copia">
+          <button class="btn btn-primary" id="dup-copy">Importar como copia</button>
+        </div>
+      </div>
       <div class="wz-foot">
         <button class="btn btn-outline" id="b2-back">Atrás</button>
         <button class="btn btn-primary" id="b2-next">Continuar</button>
@@ -165,6 +186,19 @@
           <div class="priv-toggle" id="f-priv">
             <div class="priv-opt sel" data-v="public">🌐 Pública</div>
             <div class="priv-opt" data-v="private">🔒 Privada</div>
+          </div>
+        </div>
+      </div>
+      <div class="wz-field">
+        <label>Duración <span class="precalc" id="pc-days"></span></label>
+        <div class="days-row">
+          <div class="priv-toggle" id="f-days" style="flex:1">
+            <div class="priv-opt sel" data-v="1">☀️ Un día</div>
+            <div class="priv-opt" data-v="multi">🏕️ Varios días</div>
+          </div>
+          <div class="days-num" id="f-days-num-wrap" hidden>
+            <input type="number" class="input" id="f-days-num" min="2" max="365" placeholder="nº">
+            <span>días <small>(opcional)</small></span>
           </div>
         </div>
       </div>

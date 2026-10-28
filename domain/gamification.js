@@ -137,6 +137,15 @@ function multiDayInfo(t, cfg) {
   const elapsedHours = Array.isArray(segs) && segs.length ? (segs[segs.length - 1].e - segs[0].s) / 3600 : null;
   const r1 = n => (n == null ? null : Math.round(n * 10) / 10);
   const days = activeDays(segs, md);
+  // What the user declared when uploading/editing wins: 1 one day · N days · 0 several (no number)
+  if (t.days_declared != null && t.days_declared !== '') {
+    const dd = Number(t.days_declared);
+    const multiDay = md.enabled && dd !== 1;
+    const guess = days && days >= 2 ? days : Math.max(2, Math.ceil(estHours / md.maxDayHours));
+    return { multiDay, reason: multiDay ? 'declarado' : null, group: g.id, estHours: r1(estHours),
+             movingHours: r1(movingHours), elapsedHours: r1(elapsedHours), timesTrusted: days != null,
+             declared: dd, estDays: dd >= 2 ? dd : dd === 0 ? guess : 1 };
+  }
   if (days != null) {
     const multiDay = md.enabled && days >= 2;
     return { multiDay, reason: multiDay ? 'días con actividad' : null, group: g.id, estHours: r1(estHours),
