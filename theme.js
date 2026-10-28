@@ -44,7 +44,7 @@
       if (!me) { nav.querySelector('#nav-perfil')?.remove(); return; }
       window.gpxSetNavUser(me);
       // Admin is admin-only (the server refuses it too); the catalog is open to everyone
-      if (me.role !== 'admin') nav.querySelectorAll('a[href="/admin"]').forEach(a => a.remove());
+      if (me.role !== 'admin') nav.querySelectorAll('a[href="/admin"], a.admin-only').forEach(a => a.remove());
       // "Upload Trail" chip next to the user (import/draw a single track)
       if (!nav.querySelector('#nav-upload')) {
         const up = document.createElement('a');

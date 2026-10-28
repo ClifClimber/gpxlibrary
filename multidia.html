@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rutas de varios días — GPX Library</title>
+  <link rel="stylesheet" href="/shared.css">
+  <script src="/theme.js"></script>
+  <style>
+    .md-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .md-filters .input, .md-filters .select { height: 32px; font-size: 13px; }
+    .md-count { font-size: 13px; color: var(--muted); }
+    .tbl-wrap { overflow-x: auto; }
+    .reason-tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+    .col-days { font-weight: 600; }
+    th.num, td.num { text-align: right; }
+    .empty-msg { padding: 40px; text-align: center; color: var(--muted); font-size: 14px; }
+    .stat-val { font-size: 22px; font-weight: 700; }
+    .stat-lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">GPX Library</span>
+  <a href="/">Visor</a>
+  <a href="/editor">Catálogo</a>
+  <a href="/compare">Comparar</a>
+  <a href="/admin" class="admin-only">Admin</a>
+</nav>
+
+<main class="page">
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">Rutas de varios días</h1>
+      <div class="page-sub">Detectadas automáticamente según la configuración de <a href="/admin#gami">Gamificación</a></div>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-outline btn-sm" id="btn-refresh">Actualizar</button>
+    </div>
+  </div>
+
+  <section class="card" id="stats-card" hidden>
+    <div class="card-body">
+      <div class="stats-grid" id="stats-grid"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div class="md-filters">
+        <input class="input" type="search" id="f-search" placeholder="Buscar nombre…" style="width:180px">
+        <select class="select" id="f-owner"><option value="">Todos los dueños</option></select>
+        <select class="select" id="f-activity"><option value="">Todas las actividades</option></select>
+        <select class="select" id="f-reason">
+          <option value="">Todos los motivos</option>
+          <option value="días con actividad">Horas del GPX</option>
+          <option value="nombre">Nombre</option>
+          <option value="tiempo en movimiento">Movimiento</option>
+          <option value="distancia y desnivel">Estimación</option>
+          <option value="declarado">Declarado</option>
+        </select>
+      </div>
+      <span class="md-count" id="md-count"></span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div id="tbl-area">
+        <div class="empty-msg">Cargando…</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+(async () => {
+  let allRoutes = [];
+
+  const REASON_LABEL = {
+    'días con actividad': 'Horas del GPX',
+    'nombre': 'Nombre',
+    'tiempo en movimiento': 'Movimiento',
+    'distancia y desnivel': 'Estimación',
+    'declarado': 'Declarado',
+  };
+
+  function fmt(n) {
+    if (n == null) return '—';
+    return typeof n === 'number' ? n.toLocaleString('es-ES', { maximumFractionDigits: 1 }) : n;
+  }
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function load() {
+    document.getElementById('tbl-area').innerHTML = '<div class="empty-msg">Cargando…</div>';
+    try {
+      const d = await fetch('/api/admin/gamification/multiday').then(r => {
+        if (!r.ok) throw new Error(r.statusText);
+        return r.json();
+      });
+      allRoutes = d.multiDay;
+      buildFilters(d);
+      renderStats(d);
+      renderTable();
+    } catch (e) {
+      document.getElementById('tbl-area').innerHTML = `<div class="empty-msg">Error: ${esc(e.message)}</div>`;
+    }
+  }
+
+  function buildFilters(d) {
+    const owners = [...new Set(d.multiDay.map(r => r.owner).filter(Boolean))].sort();
+    const acts   = [...new Set(d.multiDay.map(r => r.activity).filter(Boolean))].sort();
+    const oSel = document.getElementById('f-owner');
+    const aSel = document.getElementById('f-activity');
+    oSel.innerHTML = '<option value="">Todos los dueños</option>' + owners.map(o => `<option>${esc(o)}</option>`).join('');
+    aSel.innerHTML = '<option value="">Todas las actividades</option>' + acts.map(a => `<option>${esc(a)}</option>`).join('');
+  }
+
+  function renderStats(d) {
+    const card = document.getElementById('stats-card');
+    const grid = document.getElementById('stats-grid');
+    const total = d.multiDay.length;
+    if (!total) { card.hidden = true; return; }
+    const totalDays = d.multiDay.reduce((s, r) => s + (r.estDays || 0), 0);
+    const maxDays   = Math.max(...d.multiDay.map(r => r.estDays || 0));
+    grid.innerHTML = [
+      { val: total,          lbl: `de ${fmt(d.totalTracks)} rutas` },
+      { val: totalDays,      lbl: 'días estimados en total' },
+      { val: maxDays,        lbl: 'días máx. de una ruta' },
+    ].map(s => `<div class="stat"><div class="val stat-val">${fmt(s.val)}</div><div class="lbl stat-lbl">${esc(s.lbl)}</div></div>`).join('');
+    card.hidden = false;
+  }
+
+  function renderTable() {
+    const search = document.getElementById('f-search').value.trim().toLowerCase();
+    const owner  = document.getElementById('f-owner').value;
+    const act    = document.getElementById('f-activity').value;
+    const reason = document.getElementById('f-reason').value;
+
+    let rows = allRoutes.filter(r =>
+      (!search || r.name.toLowerCase().includes(search)) &&
+      (!owner  || r.owner === owner) &&
+      (!act    || r.activity === act) &&
+      (!reason || r.reason === reason)
+    );
+
+    document.getElementById('md-count').textContent = rows.length === allRoutes.length
+      ? `${rows.length} rutas` : `${rows.length} de ${allRoutes.length}`;
+
+    if (!rows.length) {
+      document.getElementById('tbl-area').innerHTML = '<div class="empty-msg">Ninguna ruta coincide con los filtros.</div>';
+      return;
+    }
+
+    document.getElementById('tbl-area').innerHTML = `
+      <div class="tbl-wrap">
+        <table class="table">
+          <thead><tr>
+            <th>Ruta</th>
+            <th>Dueño</th>
+            <th>Actividad</th>
+            <th class="num">km</th>
+            <th class="num">D+</th>
+            <th class="num">h total</th>
+            <th class="num">h estimadas</th>
+            <th class="num">h movimiento</th>
+            <th>Motivo</th>
+            <th class="num col-days">Días aprox.</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(r => `<tr>
+              <td><a href="/track?id=${r.id}" target="_blank">${esc(r.name)}</a></td>
+              <td>${r.owner ? '@' + esc(r.owner) : '—'}</td>
+              <td>${esc(r.activity || '—')}</td>
+              <td class="num">${fmt(r.km)}</td>
+              <td class="num">${fmt(r.gain)}</td>
+              <td class="num">${r.elapsedHours ?? '—'}</td>
+              <td class="num">${fmt(r.estHours)}</td>
+              <td class="num">${r.movingHours ?? '—'}</td>
+              <td><span class="reason-tag">${esc(REASON_LABEL[r.reason] || r.reason)}</span></td>
+              <td class="num col-days">${r.estDays}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  document.getElementById('f-search').addEventListener('input', renderTable);
+  document.getElementById('f-owner').addEventListener('change', renderTable);
+  document.getElementById('f-activity').addEventListener('change', renderTable);
+  document.getElementById('f-reason').addEventListener('change', renderTable);
+  document.getElementById('btn-refresh').addEventListener('click', load);
+
+  load();
+})();
+</script>
+</body>
+</html>

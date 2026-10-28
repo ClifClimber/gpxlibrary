@@ -170,7 +170,6 @@ tr.inactive td { opacity: .4; }
 .gm-state { font-size: 12px; color: var(--muted); }
 .gm-dirty { font-size: 12px; font-weight: 600; color: var(--warn); }
 #gm-save[disabled] { opacity: .6; }
-.gm-pv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
 @media (max-width: 700px) { .gm-row, .gm-row4 { grid-template-columns: 1fr 1fr; } }
 
 /* Usuarios */
@@ -203,6 +202,7 @@ tr.inactive td { opacity: .4; }
   <a href="/">Visor</a>
   <a href="/editor">Catálogo</a>
   <a href="/compare">Comparar</a>
+  <a href="/multidia" class="admin-only">Varios días</a>
   <a href="/admin" class="active">Admin</a>
   <a href="/perfil" id="nav-perfil" class="nav-user" title="Mi perfil"></a>
 </nav>
@@ -1107,17 +1107,12 @@ tr.inactive td { opacity: .4; }
       </div>
     </div>
 
-    <div class="card" id="gm-preview-card" hidden>
-      <div class="card-head"><h2>Vista previa (sin guardar)</h2></div>
-      <div class="card-body" id="gm-preview-body"></div>
-    </div>
-
     <!-- Acciones siempre visibles -->
     <div class="gm-bar floating">
       <span id="gm-state" class="gm-state"></span>
       <span class="gm-dirty" id="gm-dirty" hidden>● Cambios sin guardar</span>
       <span class="um-error" id="gm-error" style="min-height:0;flex:1"></span>
-      <button class="btn btn-ghost btn-sm" id="gm-preview">Vista previa</button>
+      <a href="/multidia" class="btn btn-ghost btn-sm" target="_blank">Ver rutas de varios días →</a>
       <button class="btn btn-primary btn-sm" id="gm-save">Guardar</button>
     </div>
   </div>
@@ -2771,8 +2766,8 @@ loadActivities();
   }
   const fail = e => { $('gm-error').textContent = e.message; toast(e.message, true); };
   const setDirty = on => { $('gm-dirty').hidden = !on; };
-  $('tab-gami').addEventListener('input', e => { if (e.target.closest('.card') && !e.target.closest('#gm-preview-card')) setDirty(true); });
-  $('tab-gami').addEventListener('change', e => { if (e.target.closest('.card') && !e.target.closest('#gm-preview-card')) setDirty(true); });
+  $('tab-gami').addEventListener('input', e => { if (e.target.closest('.card')) setDirty(true); });
+  $('tab-gami').addEventListener('change', e => { if (e.target.closest('.card')) setDirty(true); });
   // Badge icon: monochrome picker from icons.js
   $('gm-families').addEventListener('click', e => {
     const btn = e.target.closest('[data-k="icon"]');
@@ -2794,23 +2789,6 @@ loadActivities();
     if (!confirm('¿Volver a los valores por defecto? Se perderán los cambios guardados.')) return;
     try { const d = await send('/api/admin/gamification', 'DELETE'); render(d.config); toast('Valores por defecto restablecidos'); load(); }
     catch (e) { fail(e); }
-  });
-  $('gm-preview').addEventListener('click', async () => {
-    const btn = $('gm-preview'); btn.disabled = true;
-    try {
-      const d = await send('/api/admin/gamification/preview', 'POST', read());
-      const REASON = { 'días con actividad': 'horas del GPX', 'nombre': 'nombre', 'tiempo en movimiento': 'movimiento', 'distancia y desnivel': 'estimación' };
-      $('gm-preview-body').innerHTML =
-        `<div class="gm-pv-grid">${d.perUser.map(u => `<div class="stat"><div class="val">Nv ${u.level}</div><div class="lbl">@${esc(u.username)} · ${fmt(u.xp)} XP · ${u.unlocked}/${u.total}</div></div>`).join('')}</div>` +
-        `<p class="section-desc" style="margin:0 0 8px"><b>${d.multiDay.length}</b> de ${fmt(d.totalTracks)} rutas se consideran de varios días:</p>` +
-        (d.multiDay.length ? `<div style="overflow-x:auto"><table class="table" style="font-size:12px"><thead><tr><th>Ruta</th><th>Dueño</th><th>Actividad</th><th class="num">km</th><th class="num">D+</th><th class="num">h total</th><th class="num">h estimadas</th><th class="num">h movimiento</th><th>Motivo</th><th class="num">Días aprox.</th></tr></thead><tbody>` +
-          d.multiDay.map(m => `<tr><td><a href="/track?id=${m.id}" target="_blank">${esc(m.name)}</a></td><td>@${esc(m.owner || '—')}</td><td>${esc(m.activity || '—')}</td>
-            <td class="num">${fmt(m.km)}</td><td class="num">${fmt(m.gain)}</td><td class="num">${m.elapsedHours ?? '—'}</td><td class="num">${m.estHours}</td><td class="num">${m.movingHours ?? '—'}</td>
-            <td>${REASON[m.reason] || m.reason}</td><td class="num">${m.estDays}</td></tr>`).join('') + '</tbody></table></div>' : '');
-      $('gm-preview-card').hidden = false;
-      $('gm-preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch (e) { fail(e); }
-    finally { btn.disabled = false; }
   });
   $('gm-backfill').addEventListener('click', function () {
     this.disabled = true;
