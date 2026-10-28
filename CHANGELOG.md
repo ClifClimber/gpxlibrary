@@ -4,6 +4,29 @@
 
 ---
 
+## v2.11.0 — 2026-10-28
+
+### Iconos PNG ilustrados por actividad
+
+- **Migración 014**: nueva columna `icon_img text` en `config_activities`
+- **Servidor**: `POST /api/config/activities/:id/icon-image` (guarda en `PHOTOS_DIR/act-icons/`), `DELETE` para eliminar, `GET /api/activity-icons/:file` para servir; `USER_API` incluye la ruta de lectura
+- **`icons.js`**: `gpxIcon()` ahora renderiza `<img>` cuando la clave empieza por `/`; el estilo inline se elimina para que cada página controle la presentación
+- **`shared.css`**: clase base `.gi-img` con `object-fit:contain; border-radius:3px`
+- **Visor — lista**: icono PNG cuadrado (30×30), sin fondo de color, sin radio circular cuando hay `icon_img`; fallback a SVG si no hay icono
+- **Visor — mapa**: marcador PNG redondo en B&N (`filter:grayscale(1)`) sin fondo de color ni borde blanco cuando hay `icon_img`; fallback al marcador de color habitual
+- **`visor.js`**: `actConfig` incluye `icon_img`; `makeActivityIcon` usa `act-marker-img` y `background:transparent` cuando hay icono PNG; `actIconInner` prioriza `icon_img`
+- **`ACT_PHOTOS`** ampliado para cubrir todas las actividades con las fotos stock disponibles
+- **Admin → Actividades**: tabla muestra solo el icono PNG (28 px) sin el dot SVG de color; formulario elimina el selector SVG, mantiene los campos «Imagen por defecto» e «Icono PNG ilustrado»
+
+### Tarjeta flotante en el mapa al hacer hover en la lista
+
+- Al pasar el ratón por encima de una ruta en el panel lateral, aparece una tarjeta sobre el mapa junto al punto de inicio
+- La tarjeta muestra: foto de portada (o foto stock de actividad), nombre de la ruta, sierra/provincia, badge de dificultad IBP con sus colores y distancia + tiempo en movimiento
+- Delay de 120 ms para evitar parpadeos en hover rápido; se oculta al salir o al activar la ruta
+- Posicionamiento adaptativo: se desplaza a la izquierda si la tarjeta no cabe a la derecha de la pantalla
+
+---
+
 ## v2.6.0 — 2026-10-26
 
 ### Solo PostgreSQL + S3 (eliminado SQLite y almacén local)
