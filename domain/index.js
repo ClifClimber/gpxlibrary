@@ -8,4 +8,5 @@ module.exports = {
   ...require('./ibp'),
   ...require('./simplify'),
   ...require('./gpx-export'),
+  ...require('./gamification'),
 };

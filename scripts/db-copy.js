@@ -49,6 +49,44 @@ const CONFIG = {
   config_sierras:    ['id', 'name', 'sw_lat', 'sw_lon', 'ne_lat', 'ne_lon', 'active'],
 };
 
+// Multi-user tables copied generically (all columns). `users` is restored before `tracks`
+// (tracks.owner_id → users); the rest after, since they reference tracks and users.
+const EXTRA_PRE  = ['users'];
+const EXTRA_POST = ['user_lists', 'user_list_tracks', 'user_list_shares', 'track_photos', 'app_settings'];
+
+async function pgColumns(pool, table) {
+  return (await pool.query(
+    'SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position', [table]
+  )).rows.map(r => r.column_name);
+}
+const toSqliteValue = v => (v == null ? null : v instanceof Date ? v.toISOString()
+  : typeof v === 'boolean' ? (v ? 1 : 0) : typeof v === 'object' ? JSON.stringify(v) : v);
+
+// Postgres → SQLite for one extra table (skipped if it doesn't exist yet in Postgres)
+async function dumpExtra(pool, db, table) {
+  if (!(await pool.query('SELECT to_regclass($1) AS t', [table])).rows[0].t) return 0;
+  const cols = await pgColumns(pool, table);
+  db.exec(`CREATE TABLE IF NOT EXISTS ${table} (${cols.map(c => `"${c}"`).join(', ')})`);
+  const rows = (await pool.query(`SELECT ${cols.map(c => `"${c}"`).join(',')} FROM ${table}`)).rows;
+  const ins = db.prepare(`INSERT INTO ${table} (${cols.map(c => `"${c}"`).join(',')}) VALUES (${cols.map(() => '?').join(',')})`);
+  for (const r of rows) ins.run(...cols.map(c => toSqliteValue(r[c])));
+  return rows.length;
+}
+
+// SQLite → Postgres for one extra table (only the columns both sides have)
+async function loadExtra(client, db, table) {
+  const pgCols = new Set((await client.query(
+    'SELECT column_name FROM information_schema.columns WHERE table_name = $1', [table])).rows.map(r => r.column_name));
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name).filter(c => pgCols.has(c));
+  const rows = db.prepare(`SELECT ${cols.map(c => `"${c}"`).join(',')} FROM ${table}`).all();
+  const q = `INSERT INTO ${table} (${cols.map(c => `"${c}"`).join(',')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(',')})`;
+  for (const r of rows) await client.query(q, cols.map(c => (r[c] == null ? null : String(r[c]))));
+  if (rows.length && pgCols.has('id'))
+    await client.query(`SELECT setval(pg_get_serial_sequence('${table}','id'), GREATEST((SELECT max(id) FROM ${table}),1))`);
+  return rows.length;
+}
+const sqliteHas = (db, table) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
+
 async function getTrackCols(pool) {
   return (await pool.query(
     "SELECT column_name FROM information_schema.columns WHERE table_name='tracks' ORDER BY ordinal_position"
@@ -129,6 +167,10 @@ async function toSqlite(pool) {
     }
     if (++done % 100 === 0) console.log(`  … ${done} / ${tracks.length}`);
   }
+  for (const table of [...EXTRA_PRE, ...EXTRA_POST]) {
+    const n = await dumpExtra(pool, db, table);
+    if (n) console.log(`  ${table}: ${n}`);
+  }
   db.exec('COMMIT');
   db.close();
 
@@ -159,7 +201,10 @@ async function toPostgres(pool) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('TRUNCATE tracks, config_activities, config_sierras RESTART IDENTITY CASCADE');
+    // Backups made before the multi-user tables existed don't carry them: keep the current ones then.
+    const extras = [...EXTRA_PRE, ...EXTRA_POST].filter(t => sqliteHas(db, t));
+    await client.query(`TRUNCATE tracks, config_activities, config_sierras${extras.map(t => ', ' + t).join('')} RESTART IDENTITY CASCADE`);
+    for (const table of EXTRA_PRE.filter(t => extras.includes(t))) console.log(`  ${table}: ${await loadExtra(client, db, table)}`);
     for (const [table, c] of Object.entries(CONFIG)) {
       const rows = db.prepare(`SELECT ${c.join(',')} FROM ${table}`).all();
       for (const r of rows) {
@@ -179,6 +224,7 @@ async function toPostgres(pool) {
       if (++done % 100 === 0) console.log(`  … ${done} / ${tracks.length}`);
     }
     await client.query(`SELECT setval(pg_get_serial_sequence('tracks','id'), GREATEST((SELECT max(id) FROM tracks),1))`);
+    for (const table of EXTRA_POST.filter(t => extras.includes(t))) console.log(`  ${table}: ${await loadExtra(client, db, table)}`);
     await client.query('COMMIT');
     console.log(`✓ ${tracks.length} rutas cargadas en Postgres`);
   } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); db.close(); }

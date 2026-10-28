@@ -14,7 +14,8 @@ const path   = require('path');
 const zlib   = require('zlib');
 const { pipeline } = require('stream/promises');
 const { spawn } = require('child_process');
-const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampleEvenly } = require('./domain');
+const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampleEvenly,
+        DEFAULT_CONFIG: GAMI_DEFAULTS, mergeConfig, validateConfig, multiDayInfo, computeAchievements } = require('./domain');
 const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
 const { openSql } = require('./repo/sql');
@@ -675,6 +676,25 @@ async function apiDeleteTrack(res, id) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
   }
+}
+
+// ── Gamificación: configuración editable (app_settings 'gamification') + cálculo ──
+async function getSetting(key) {
+  const r = await sqlDb().get('SELECT value FROM app_settings WHERE key = ?', [key]).catch(() => null);
+  try { return r ? JSON.parse(r.value) : null; } catch { return null; }
+}
+async function gamificationConfig() { return mergeConfig(await getSetting('gamification')); }
+// Completed (non-planned) tracks of a user, in the shape computeAchievements expects
+async function userCompletedTracks(uid) {
+  return sqlDb().all(
+    `SELECT id, name, activity, distance, elevation_gain, moving_time, province, circular, date
+     FROM tracks WHERE owner_id = ? AND NOT planned`, [uid]);
+}
+async function userAchievements(uid, cfg) {
+  const db = sqlDb();
+  const photos = (await db.get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM track_photos WHERE owner_id = ?', [uid])).n;
+  const lists  = (await db.get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM user_lists WHERE owner_id = ?', [uid])).n;
+  return computeAchievements(await userCompletedTracks(uid), { photos, lists }, cfg);
 }
 
 // Access level of a user to a list: 'owner' | 'editor' | 'viewer' | null (+ exists flag).
@@ -1367,52 +1387,8 @@ const server = http.createServer(async (req, res) => {
   // Logros (gamificación): se calculan al vuelo a partir de las rutas hechas (no planeadas)
   if (pathname === '/api/profile/achievements' && method === 'GET') {
     if (!requireAuth(req, res)) return;
-    const db = sqlDb();
-    const uid = req.user.sub;
-    const a = await db.get(
-      `SELECT CAST(COUNT(*) AS INTEGER) AS routes,
-              COALESCE(SUM(distance), 0) AS km,
-              CAST(COALESCE(SUM(elevation_gain), 0) AS INTEGER) AS gain,
-              COALESCE(MAX(distance), 0) AS max_km,
-              CAST(COALESCE(MAX(elevation_gain), 0) AS INTEGER) AS max_gain,
-              CAST(COUNT(DISTINCT province) AS INTEGER) AS provinces,
-              CAST(COUNT(DISTINCT activity) AS INTEGER) AS activities,
-              CAST(SUM(CASE WHEN circular = 1 THEN 1 ELSE 0 END) AS INTEGER) AS circular,
-              CAST(COUNT(DISTINCT CASE WHEN length(date) >= 4 THEN left(date, 4) END) AS INTEGER) AS years
-       FROM tracks WHERE owner_id = ? AND NOT planned`, [uid]);
-    const photos = (await db.get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM track_photos WHERE owner_id = ?', [uid])).n;
-    const lists  = (await db.get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM user_lists WHERE owner_id = ?', [uid])).n;
-    const v = { ...a, km: Math.round(Number(a.km)), max_km: Math.round(Number(a.max_km) * 10) / 10, photos, lists };
-    // Familias de logros con niveles crecientes
-    const FAMILIES = [
-      { id: 'routes',     icon: '🥾', name: 'Rutas completadas',    unit: 'rutas', tiers: [1, 10, 50, 100, 250] },
-      { id: 'km',         icon: '📏', name: 'Kilómetros recorridos', unit: 'km',    tiers: [100, 500, 1000, 5000, 10000] },
-      { id: 'gain',       icon: '⛰️', name: 'Desnivel acumulado',   unit: 'm',     tiers: [1000, 8849, 50000, 100000, 300000] },
-      { id: 'max_km',     icon: '🏁', name: 'Ruta más larga',        unit: 'km',    tiers: [21, 42, 70, 100, 150] },
-      { id: 'max_gain',   icon: '🧗', name: 'Mayor desnivel en una ruta', unit: 'm', tiers: [500, 1000, 1500, 2000, 3000] },
-      { id: 'provinces',  icon: '🗺️', name: 'Provincias exploradas', unit: 'provincias', tiers: [2, 5, 10, 20, 35] },
-      { id: 'activities', icon: '🎽', name: 'Multideporte',          unit: 'actividades', tiers: [2, 3, 5, 7, 9] },
-      { id: 'circular',   icon: '🔄', name: 'Rutas circulares',      unit: 'rutas', tiers: [5, 25, 50, 100, 200] },
-      { id: 'years',      icon: '📅', name: 'Años en ruta',          unit: 'años',  tiers: [1, 3, 5, 10, 20] },
-      { id: 'photos',     icon: '📷', name: 'Fotógrafo',             unit: 'fotos', tiers: [1, 10, 25, 100, 250] },
-      { id: 'lists',      icon: '📚', name: 'Coleccionista',         unit: 'listas', tiers: [1, 3, 5, 10, 20] },
-    ];
-    const TIER_NAMES = ['Bronce', 'Plata', 'Oro', 'Platino', 'Leyenda'];
-    const achievements = FAMILIES.map(f => {
-      const value = Number(v[f.id]) || 0;
-      const level = f.tiers.filter(t => value >= t).length;   // 0..5
-      const next = f.tiers[level] ?? null;
-      const prev = level ? f.tiers[level - 1] : 0;
-      return { id: f.id, icon: f.icon, name: f.name, unit: f.unit, value, level, tier: level ? TIER_NAMES[level - 1] : null,
-               next, progress: next ? Math.min(1, (value - prev) / (next - prev)) : 1, max: level === f.tiers.length };
-    });
-    // XP y nivel global: cada nivel de logro suma, más km y desnivel
-    const xp = Math.round(v.km + v.gain / 50 + achievements.reduce((s, x) => s + x.level * 100, 0));
-    const lvl = Math.floor(Math.sqrt(xp / 100)) + 1;
-    const xpCur = (lvl - 1) ** 2 * 100, xpNext = lvl ** 2 * 100;
     res.writeHead(200, J);
-    return res.end(JSON.stringify({ xp, level: lvl, xpCur, xpNext, unlocked: achievements.reduce((s, x) => s + x.level, 0),
-                                    total: FAMILIES.length * 5, achievements }));
+    return res.end(JSON.stringify(await userAchievements(req.user.sub, await gamificationConfig())));
   }
 
   if (pathname === '/api/profile/stats' && method === 'GET') {
@@ -2141,6 +2117,55 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(job ? 200 : 404, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify(job ? { ...job, label: JOBS[job.type]?.label || job.type } : { error: 'Not found' }));
   }
+  // ── Admin: parámetros de gamificación ─────────────────────────────
+  if (pathname === '/api/admin/gamification' && method === 'GET') {
+    if (!requireAdmin(req, res)) return;
+    const stored = await sqlDb().get("SELECT to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI') AS at, updated_by FROM app_settings WHERE key = 'gamification'").catch(() => null);
+    res.writeHead(200, J);
+    return res.end(JSON.stringify({ config: await gamificationConfig(), defaults: GAMI_DEFAULTS, customized: !!stored, updated: stored || null }));
+  }
+  if (pathname === '/api/admin/gamification' && method === 'PUT') {
+    if (!requireAdmin(req, res)) return;
+    let cfg;
+    try { cfg = validateConfig(mergeConfig(await parseBody(req))); }
+    catch (e) { res.writeHead(400, J); return res.end(JSON.stringify({ error: e.message })); }
+    await sqlDb().run(
+      `INSERT INTO app_settings (key, value, updated_at, updated_by) VALUES ('gamification', ?, NOW(), ?)
+       ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = NOW(), updated_by = excluded.updated_by`,
+      [JSON.stringify(cfg), req.user.username]);
+    appendLog('info', 'gamification', 'Parámetros de gamificación guardados', { by: req.user.username });
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, config: cfg }));
+  }
+  if (pathname === '/api/admin/gamification' && method === 'DELETE') {
+    if (!requireAdmin(req, res)) return;
+    await sqlDb().run("DELETE FROM app_settings WHERE key = 'gamification'");
+    appendLog('info', 'gamification', 'Parámetros de gamificación restablecidos', { by: req.user.username });
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, config: mergeConfig(null) }));
+  }
+  // Preview with an unsaved config: which routes count as multi-day and how each user ends up
+  if (pathname === '/api/admin/gamification/preview' && method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    let cfg;
+    try { cfg = validateConfig(mergeConfig(await parseBody(req))); }
+    catch (e) { res.writeHead(400, J); return res.end(JSON.stringify({ error: e.message })); }
+    const db = sqlDb();
+    const tracks = await db.all(
+      `SELECT t.id, t.name, t.activity, t.distance, t.elevation_gain, t.moving_time, u.username AS owner
+       FROM tracks t LEFT JOIN users u ON u.id = t.owner_id WHERE NOT t.planned`);
+    const multiDay = tracks.map(t => ({ t, i: multiDayInfo(t, cfg) })).filter(x => x.i.multiDay)
+      .sort((a, b) => b.i.estHours - a.i.estHours)
+      .map(({ t, i }) => ({ id: t.id, name: t.name, owner: t.owner, activity: t.activity,
+                            km: Math.round(t.distance * 10) / 10, gain: t.elevation_gain,
+                            estHours: i.estHours, movingHours: i.movingHours, reason: i.reason, estDays: i.estDays }));
+    const users = await db.all('SELECT id, username FROM users WHERE active ORDER BY username');
+    const perUser = [];
+    for (const u of users) {
+      const a = await userAchievements(u.id, cfg);
+      perUser.push({ username: u.username, level: a.level, xp: a.xp, unlocked: a.unlocked, total: a.total });
+    }
+    res.writeHead(200, J); return res.end(JSON.stringify({ multiDay, perUser, totalTracks: tracks.length }));
+  }
+
   if (pathname === '/api/admin/version' && method === 'GET') {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
     res.writeHead(200, { 'Content-Type': 'application/json' });

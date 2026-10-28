@@ -534,6 +534,10 @@
           <div class="ach-prog">${prog}</div>
         </div>`;
       }).join('');
+      const md = d.multiDayRoutes || [];
+      $('ach-multiday').hidden = !md.length;
+      if (md.length) $('ach-multiday').innerHTML = `🏕️ Rutas detectadas como de varios días (${md.length}): ` +
+        md.slice(0, 8).map(m => `<a href="/track?id=${m.id}" target="_blank">${esc(m.name)}</a> (~${m.estDays} días)`).join(', ') + (md.length > 8 ? '…' : '');
     } catch {}
   }
 

@@ -66,4 +66,12 @@ function computeTimes(points) {
   return moving + stopped > 0 ? { moving: Math.round(moving), stopped: Math.round(stopped) } : null;
 }
 
-module.exports = { computeMetrics, computeTimes, ELE_NOISE_M, CIRCULAR_KM };
+/** Seconds between the first and last timestamped point (includes nights and long stops); null without times. */
+function elapsedSeconds(points) {
+  const ts = (points || []).map(p => p.time).filter(t => t != null && Number.isFinite(Number(t)));
+  if (ts.length < 2) return null;
+  const s = Math.round((Math.max(...ts) - Math.min(...ts)) / 1000);
+  return s > 0 ? s : null;
+}
+
+module.exports = { computeMetrics, computeTimes, elapsedSeconds, ELE_NOISE_M, CIRCULAR_KM };

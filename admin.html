@@ -145,6 +145,20 @@ tr.inactive td { opacity: .4; }
 
 @media (max-width: 700px) { .bbox-grid { grid-template-columns: 1fr 1fr; } }
 
+/* Gamificación */
+.gm-form { display: flex; flex-direction: column; gap: 12px; }
+.gm-checks { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.gm-checks label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.gm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.gm-row4 { grid-template-columns: repeat(4, 1fr); }
+.gm-row .input { width: 100%; }
+#gm-groups .input, #gm-families .input { height: 30px; font-size: 12px; padding: 0 8px; }
+#gm-groups .num .input, #gm-families .num .input { width: 86px; text-align: right; }
+#gm-families .gm-icon { width: 46px; text-align: center; font-size: 16px; }
+#gm-families tr.gm-off td:not(:first-child) { opacity: .45; }
+.gm-pv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+@media (max-width: 700px) { .gm-row, .gm-row4 { grid-template-columns: 1fr 1fr; } }
+
 /* Usuarios */
 .um-user { display: flex; align-items: center; gap: 10px; min-width: 170px; }
 .um-avatar { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; object-fit: cover; display: flex; align-items: center; justify-content: center;
@@ -194,6 +208,7 @@ tr.inactive td { opacity: .4; }
     <button class="seg-tab" data-tab="tracks">Gestión de Tracks</button>
     <button class="seg-tab" data-tab="activities">Actividades</button>
     <button class="seg-tab" data-tab="params">Parámetros</button>
+    <button class="seg-tab" data-tab="gami">Gamificación</button>
     <button class="seg-tab" data-tab="jobs">Trabajos</button>
     <button class="seg-tab" data-tab="logs">Logs</button>
     <button class="seg-tab" data-tab="about">Acerca de</button>
@@ -982,6 +997,72 @@ tr.inactive td { opacity: .4; }
   </div>
 
   <!-- ── Tab: Usuarios (solo admin) ── -->
+  <!-- ── Tab: Gamificación ── -->
+  <div class="tab-panel" id="tab-gami">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <h2>Gamificación</h2>
+        <span id="gm-state" style="font-size:12px;color:var(--muted)"></span>
+        <button class="btn btn-ghost btn-sm" id="gm-reset">Restablecer valores por defecto</button>
+        <button class="btn btn-ghost btn-sm" id="gm-preview">Vista previa</button>
+        <button class="btn btn-primary btn-sm" id="gm-save">Guardar</button>
+      </div>
+      <div class="card-body">
+        <p class="section-desc" style="margin-top:0">Todo lo que da puntos en Perfil → Logros. Los cambios se aplican a todos los usuarios en cuanto se guardan; usa <b>Vista previa</b> para ver el efecto antes. Las rutas planeadas nunca cuentan.</p>
+        <div class="um-error" id="gm-error"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>Rutas de varios días</h2></div>
+      <div class="card-body gm-form">
+        <div class="gm-checks">
+          <label><input type="checkbox" id="gm-md-enabled"> Detectar rutas de varios días</label>
+          <label><input type="checkbox" id="gm-md-records"> No cuentan para los récords de un día (ruta más larga, mayor desnivel)</label>
+          <label><input type="checkbox" id="gm-md-totals"> No cuentan tampoco para los totales (km, desnivel, rutas, provincias…)</label>
+        </div>
+        <div class="gm-row">
+          <div><label class="field-label">Horas estimadas máx. en un día</label><input class="input" type="number" step="0.5" min="1" id="gm-md-dayh"></div>
+          <div><label class="field-label">Horas en movimiento máx. en un día</label><input class="input" type="number" step="0.5" min="1" id="gm-md-movh"></div>
+        </div>
+        <div><label class="field-label">Palabras clave en el nombre (expresión regular)</label><input class="input" type="text" id="gm-md-kw" spellcheck="false" style="font-family:ui-monospace,Consolas,monospace;font-size:12px"></div>
+        <p class="section-desc" style="margin:0">Una ruta es de varios días si su nombre encaja con las palabras clave, si el tiempo en movimiento supera el máximo o si las <b>horas estimadas</b> = km ÷ velocidad + desnivel ÷ ritmo de subida superan el máximo. El tiempo guardado no incluye las paradas largas (noches), por eso se combina con la estimación.</p>
+        <table class="table" style="font-size:13px">
+          <thead><tr><th>Grupo</th><th class="num">km/h</th><th class="num">m de subida/h</th><th>Actividades (separadas por comas; «A pie» = el resto)</th></tr></thead>
+          <tbody id="gm-groups"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>Experiencia (XP) y nivel</h2></div>
+      <div class="card-body gm-form">
+        <div class="gm-row gm-row4">
+          <div><label class="field-label">XP por km</label><input class="input" type="number" step="0.1" min="0" id="gm-xp-km"></div>
+          <div><label class="field-label">Metros de desnivel por 1 XP</label><input class="input" type="number" step="1" min="1" id="gm-xp-gain"></div>
+          <div><label class="field-label">XP por nivel de insignia</label><input class="input" type="number" step="1" min="0" id="gm-xp-tier"></div>
+          <div><label class="field-label">Base de nivel</label><input class="input" type="number" step="1" min="1" id="gm-xp-base"></div>
+        </div>
+        <p class="section-desc" style="margin:0">XP = km × XP/km + desnivel ÷ metros/XP + niveles de insignia × XP/nivel. El nivel <i>n</i> se alcanza con base × (n−1)² XP.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>Insignias</h2></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="table" style="font-size:13px">
+          <thead><tr><th>Activa</th><th>Icono</th><th>Nombre</th><th>Unidad</th><th class="num">Bronce</th><th class="num">Plata</th><th class="num">Oro</th><th class="num">Platino</th><th class="num">Leyenda</th></tr></thead>
+          <tbody id="gm-families"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="gm-preview-card" hidden>
+      <div class="card-head"><h2>Vista previa (sin guardar)</h2></div>
+      <div class="card-body" id="gm-preview-body"></div>
+    </div>
+  </div>
+
   <div class="tab-panel" id="tab-users">
     <div class="stats-grid" id="users-stats" style="margin-bottom:16px"></div>
 
@@ -2550,6 +2631,117 @@ loadActivities();
   document.addEventListener('keydown', e => { if (e.key === 'Escape') ['user-modal', 'del-user-modal'].forEach(hide); });
 
   document.querySelector('#admin-tabs [data-tab="users"]').addEventListener('click', loadUsers);
+})();
+</script>
+
+<script>
+// ── Gamificación (parámetros editables) ──────────────────────────────
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const fmt = n => Number(n || 0).toLocaleString('es');
+  let gCfg = null, loaded = false;
+
+  async function load() {
+    loaded = true;
+    try {
+      const d = await fetch('/api/admin/gamification').then(r => r.json());
+      if (d.error) throw new Error(d.error);
+      render(d.config);
+      $('gm-state').textContent = d.customized ? `Personalizado · ${d.updated.at}${d.updated.updated_by ? ' por @' + d.updated.updated_by : ''}` : 'Valores por defecto';
+    } catch (e) { $('gm-error').textContent = e.message; }
+  }
+
+  function render(cfg) {
+    gCfg = cfg;
+    const md = cfg.multiDay;
+    $('gm-md-enabled').checked = md.enabled;
+    $('gm-md-records').checked = md.excludeFromRecords;
+    $('gm-md-totals').checked = md.excludeFromTotals;
+    $('gm-md-dayh').value = md.maxDayHours;
+    $('gm-md-movh').value = md.maxMovingHours;
+    $('gm-md-kw').value = md.keywords;
+    $('gm-groups').innerHTML = md.groups.map(g => `<tr data-g="${esc(g.id)}">
+      <td><b>${esc(g.name)}</b></td>
+      <td class="num"><input class="input" type="number" step="0.5" min="0.1" data-k="kmh" value="${g.kmh}"></td>
+      <td class="num"><input class="input" type="number" step="10" min="1" data-k="climbMh" value="${g.climbMh}"></td>
+      <td>${g.id === 'foot' ? '<span style="color:var(--muted);font-size:12px">el resto de actividades</span>'
+        : `<input class="input" type="text" data-k="activities" value="${esc(g.activities.join(', '))}" style="width:100%">`}</td></tr>`).join('');
+    $('gm-xp-km').value = cfg.xp.perKm;
+    $('gm-xp-gain').value = cfg.xp.gainPerXp;
+    $('gm-xp-tier').value = cfg.xp.perTier;
+    $('gm-xp-base').value = cfg.xp.levelBase;
+    $('gm-families').innerHTML = cfg.families.map(f => `<tr data-f="${esc(f.id)}" class="${f.enabled ? '' : 'gm-off'}">
+      <td><input type="checkbox" data-k="enabled" ${f.enabled ? 'checked' : ''}></td>
+      <td><input class="input gm-icon" type="text" data-k="icon" value="${esc(f.icon)}" maxlength="4"></td>
+      <td><input class="input" type="text" data-k="name" value="${esc(f.name)}" style="min-width:180px"></td>
+      <td style="color:var(--muted);font-size:12px">${esc(f.unit)}</td>
+      ${f.tiers.map((t, i) => `<td class="num"><input class="input" type="number" min="0" step="any" data-tier="${i}" value="${t}"></td>`).join('')}
+    </tr>`).join('');
+  }
+
+  // Form → config object (the server merges and validates it again)
+  function read() {
+    return {
+      xp: { perKm: +$('gm-xp-km').value, gainPerXp: +$('gm-xp-gain').value, perTier: +$('gm-xp-tier').value, levelBase: +$('gm-xp-base').value },
+      multiDay: {
+        enabled: $('gm-md-enabled').checked, excludeFromRecords: $('gm-md-records').checked, excludeFromTotals: $('gm-md-totals').checked,
+        maxDayHours: +$('gm-md-dayh').value, maxMovingHours: +$('gm-md-movh').value, keywords: $('gm-md-kw').value,
+        groups: [...document.querySelectorAll('#gm-groups tr')].map(tr => {
+          const g = { id: tr.dataset.g, kmh: +tr.querySelector('[data-k="kmh"]').value, climbMh: +tr.querySelector('[data-k="climbMh"]').value };
+          const a = tr.querySelector('[data-k="activities"]');
+          if (a) g.activities = a.value.split(',').map(s => s.trim()).filter(Boolean);
+          return g;
+        }),
+      },
+      families: [...document.querySelectorAll('#gm-families tr')].map(tr => ({
+        id: tr.dataset.f,
+        enabled: tr.querySelector('[data-k="enabled"]').checked,
+        icon: tr.querySelector('[data-k="icon"]').value,
+        name: tr.querySelector('[data-k="name"]').value,
+        tiers: [...tr.querySelectorAll('[data-tier]')].map(i => +i.value),
+      })),
+    };
+  }
+
+  async function send(url, method, body) {
+    $('gm-error').textContent = '';
+    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    return d;
+  }
+
+  $('gm-save').addEventListener('click', async () => {
+    try { const d = await send('/api/admin/gamification', 'PUT', read()); render(d.config); toast('Parámetros de gamificación guardados'); load(); }
+    catch (e) { $('gm-error').textContent = e.message; }
+  });
+  $('gm-reset').addEventListener('click', async () => {
+    if (!confirm('¿Volver a los valores por defecto? Se perderán los cambios guardados.')) return;
+    try { const d = await send('/api/admin/gamification', 'DELETE'); render(d.config); toast('Valores por defecto restablecidos'); load(); }
+    catch (e) { $('gm-error').textContent = e.message; }
+  });
+  $('gm-preview').addEventListener('click', async () => {
+    const btn = $('gm-preview'); btn.disabled = true;
+    try {
+      const d = await send('/api/admin/gamification/preview', 'POST', read());
+      const REASON = { 'nombre': 'nombre', 'tiempo en movimiento': 'tiempo', 'distancia y desnivel': 'estimación' };
+      $('gm-preview-body').innerHTML =
+        `<div class="gm-pv-grid">${d.perUser.map(u => `<div class="stat"><div class="val">Nv ${u.level}</div><div class="lbl">@${esc(u.username)} · ${fmt(u.xp)} XP · ${u.unlocked}/${u.total}</div></div>`).join('')}</div>` +
+        `<p class="section-desc" style="margin:0 0 8px"><b>${d.multiDay.length}</b> de ${fmt(d.totalTracks)} rutas se consideran de varios días:</p>` +
+        (d.multiDay.length ? `<div style="overflow-x:auto"><table class="table" style="font-size:12px"><thead><tr><th>Ruta</th><th>Dueño</th><th>Actividad</th><th class="num">km</th><th class="num">D+</th><th class="num">h estimadas</th><th class="num">h movimiento</th><th>Motivo</th><th class="num">Días aprox.</th></tr></thead><tbody>` +
+          d.multiDay.map(m => `<tr><td><a href="/track?id=${m.id}" target="_blank">${esc(m.name)}</a></td><td>@${esc(m.owner || '—')}</td><td>${esc(m.activity || '—')}</td>
+            <td class="num">${fmt(m.km)}</td><td class="num">${fmt(m.gain)}</td><td class="num">${m.estHours}</td><td class="num">${m.movingHours ?? '—'}</td>
+            <td>${REASON[m.reason] || m.reason}</td><td class="num">${m.estDays}</td></tr>`).join('') + '</tbody></table></div>' : '');
+      $('gm-preview-card').hidden = false;
+      $('gm-preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) { $('gm-error').textContent = e.message; }
+    finally { btn.disabled = false; }
+  });
+  $('gm-families').addEventListener('change', e => {
+    if (e.target.dataset.k === 'enabled') e.target.closest('tr').classList.toggle('gm-off', !e.target.checked);
+  });
+  document.querySelector('#admin-tabs [data-tab="gami"]').addEventListener('click', () => { if (!loaded) load(); });
 })();
 </script>
 
