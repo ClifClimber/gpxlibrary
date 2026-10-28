@@ -112,6 +112,16 @@
 .list-card-desc { font-size: 12px; color: var(--ink-2); margin-top: 4px; }
 .list-detail { display: none; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
 .list-detail.open { display: block; }
+.list-badge { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
+.list-badge.pub { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.list-badge.shared { background: var(--accent-soft); color: var(--accent); }
+.list-share { display: none; margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.list-share.open { display: block; }
+.share-row { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 4px 0; }
+.share-row .su { flex: 1; }
+.share-add { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.share-add input { flex: 1; min-width: 120px; height: 30px; padding: 0 8px; font-size: 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--input-bg); color: var(--ink); }
+.share-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); margin-bottom: 8px; cursor: pointer; }
 
 /* Stats */
 .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px; }
@@ -290,6 +300,9 @@
         Aún no tienes listas. ¡Crea una!
       </div>
     </div>
+
+    <h3 style="font-size:14px;font-weight:600;margin:22px 0 10px" id="shared-title" hidden>Compartidas conmigo</h3>
+    <div class="lists-grid" id="shared-grid"></div>
   </div>
 
   <!-- ── Tab: Planeadas ── -->

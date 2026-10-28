@@ -224,6 +224,7 @@
       if (!r.ok) return;
       gListas = await r.json();
       renderListas();
+      loadSharedLists();
     } catch {}
   }
 
@@ -235,17 +236,98 @@
       <div class="list-card" data-lid="${l.id}">
         <div class="list-card-head">
           <span class="list-card-name">${esc(l.name)}</span>
+          ${l.visibility === 'public' ? '<span class="list-badge pub">Pública</span>' : ''}
+          ${l.share_count ? `<span class="list-badge shared">${l.share_count} compartida${l.share_count !== 1 ? 's' : ''}</span>` : ''}
           <span class="list-card-count">${l.track_count} ruta${l.track_count !== 1 ? 's' : ''}</span>
-          <button class="btn btn-sm btn-outline btn-danger" data-del-list="${l.id}" style="margin-left:4px" title="Eliminar lista">✕</button>
+          <button class="btn btn-sm btn-outline" data-share-list="${l.id}" style="margin-left:4px" title="Compartir">Compartir</button>
+          <button class="btn btn-sm btn-outline btn-danger" data-del-list="${l.id}" title="Eliminar lista">✕</button>
         </div>
         ${l.description ? `<div class="list-card-desc">${esc(l.description)}</div>` : ''}
+        <div class="list-share" id="list-share-${l.id}"></div>
         <div class="list-detail" id="list-detail-${l.id}">
           <div class="bar-chart" id="list-tracks-${l.id}"><span style="color:var(--muted);font-size:12px">Cargando…</span></div>
         </div>
       </div>`).join('');
   }
 
+  // ── Compartir listas ──
+  async function openSharePanel(lid) {
+    const panel = $('list-share-' + lid);
+    if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+    panel.classList.add('open');
+    const l = gListas.find(x => x.id === lid);
+    panel.innerHTML = `
+      <label class="share-toggle"><input type="checkbox" id="pub-${lid}" ${l.visibility === 'public' ? 'checked' : ''}> Lista pública (cualquier usuario con sesión puede verla)</label>
+      <div id="shares-${lid}"><span style="color:var(--muted);font-size:12px">Cargando…</span></div>
+      <div class="share-add">
+        <input type="text" id="shareu-${lid}" placeholder="usuario a invitar…" autocomplete="off">
+        <label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="sharee-${lid}"> puede editar</label>
+        <button class="btn btn-sm" data-add-share="${lid}">Invitar</button>
+      </div>`;
+    $('pub-' + lid).addEventListener('change', async e => {
+      try {
+        await api(`/api/lists/${lid}`, { method: 'PATCH', body: JSON.stringify({ visibility: e.target.checked ? 'public' : 'private' }) });
+        l.visibility = e.target.checked ? 'public' : 'private';
+        updateListBadges(lid);
+      } catch {}
+    });
+    loadShares(lid);
+  }
+
+  // Update the public/shared badges of one card without closing its panel
+  function updateListBadges(lid) {
+    const l = gListas.find(x => x.id === lid);
+    const head = document.querySelector(`.list-card[data-lid="${lid}"] .list-card-head`);
+    if (!l || !head) return;
+    head.querySelectorAll('.list-badge').forEach(b => b.remove());
+    const name = head.querySelector('.list-card-name');
+    const add = html => name.insertAdjacentHTML('afterend', html);
+    if (l.share_count) add(`<span class="list-badge shared">${l.share_count} compartida${l.share_count !== 1 ? 's' : ''}</span>`);
+    if (l.visibility === 'public') add('<span class="list-badge pub">Pública</span>');
+  }
+
+  async function loadShares(lid) {
+    const box = $('shares-' + lid); if (!box) return;
+    try {
+      const shares = await (await api(`/api/lists/${lid}/shares`)).json();
+      box.innerHTML = shares.length
+        ? shares.map(s => `<div class="share-row"><span class="su">@${esc(s.username)}${s.can_edit ? ' <span style="color:var(--muted)">(edita)</span>' : ''}</span><button class="btn btn-sm btn-outline btn-danger" data-rm-share="${lid}:${s.user_id}">Quitar</button></div>`).join('')
+        : '<span style="color:var(--muted);font-size:12px">Nadie invitado todavía</span>';
+    } catch {}
+  }
+
   $('lists-grid').addEventListener('click', async e => {
+    // Share panel toggle
+    const shareBtn = e.target.closest('[data-share-list]');
+    if (shareBtn) { e.stopPropagation(); openSharePanel(parseInt(shareBtn.dataset.shareList)); return; }
+    // Add a share
+    const addBtn = e.target.closest('[data-add-share]');
+    if (addBtn) {
+      e.stopPropagation();
+      const lid = parseInt(addBtn.dataset.addShare);
+      const username = $('shareu-' + lid).value.trim();
+      if (!username) return;
+      try {
+        const r = await api(`/api/lists/${lid}/shares`, { method: 'POST', body: JSON.stringify({ username, can_edit: $('sharee-' + lid).checked }) });
+        if (!r.ok) { const er = await r.json(); alert(er.error || 'Error'); return; }
+        $('shareu-' + lid).value = '';
+        const l = gListas.find(x => x.id === lid); if (l) l.share_count = (l.share_count || 0) + 1;
+        updateListBadges(lid); loadShares(lid);
+      } catch {}
+      return;
+    }
+    // Remove a share
+    const rmBtn = e.target.closest('[data-rm-share]');
+    if (rmBtn) {
+      e.stopPropagation();
+      const [lid, uid] = rmBtn.dataset.rmShare.split(':').map(Number);
+      try {
+        await api(`/api/lists/${lid}/shares/${uid}`, { method: 'DELETE' });
+        const l = gListas.find(x => x.id === lid); if (l) l.share_count = Math.max(0, (l.share_count || 0) - 1);
+        updateListBadges(lid); loadShares(lid);
+      } catch {}
+      return;
+    }
     // Delete list
     const delBtn = e.target.closest('[data-del-list]');
     if (delBtn) {
@@ -269,20 +351,50 @@
     if (open) loadListTracks(lid);
   });
 
-  async function loadListTracks(lid) {
-    const container = $('list-tracks-' + lid); if (!container) return;
+  async function loadListTracks(lid, readOnly) {
+    const container = $((readOnly ? 'shared-tracks-' : 'list-tracks-') + lid); if (!container) return;
     try {
       const r = await api(`/api/lists/${lid}/tracks`); if (!r.ok) return;
-      const tracks = await r.json();
+      const tracks = (await r.json()).tracks || [];
       if (!tracks.length) { container.innerHTML = '<span style="color:var(--muted);font-size:12px">Lista vacía</span>'; return; }
       container.innerHTML = tracks.map(t => `
         <div class="bar-row" style="align-items:center;gap:8px">
           <a href="/track?id=${t.id}" target="_blank" style="flex:1;font-size:13px;color:var(--ink);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.name || '(sin nombre)')}</a>
           <span style="font-size:11px;color:var(--muted)">${t.distance != null ? t.distance.toFixed(1)+' km' : ''}</span>
-          <button class="btn btn-sm btn-outline btn-danger" data-del-track="${t.id}" data-list="${lid}" style="padding:2px 8px;font-size:11px" title="Quitar de la lista">✕</button>
+          ${readOnly ? '' : `<button class="btn btn-sm btn-outline btn-danger" data-del-track="${t.id}" data-list="${lid}" style="padding:2px 8px;font-size:11px" title="Quitar de la lista">✕</button>`}
         </div>`).join('');
     } catch {}
   }
+
+  // ── Listas compartidas conmigo ──
+  async function loadSharedLists() {
+    try {
+      const r = await api('/api/lists/shared'); if (!r.ok) return;
+      const shared = await r.json();
+      const grid = $('shared-grid');
+      $('shared-title').hidden = !shared.length;
+      grid.innerHTML = shared.map(l => `
+        <div class="list-card" data-shared="${l.id}">
+          <div class="list-card-head">
+            <span class="list-card-name">${esc(l.name)}</span>
+            ${l.can_edit ? '<span class="list-badge shared">puedes editar</span>' : ''}
+            ${l.visibility === 'public' && !l.shared_with_me ? '<span class="list-badge pub">Pública</span>' : ''}
+            <span class="list-card-count">${l.track_count} ruta${l.track_count !== 1 ? 's' : ''} · de @${esc(l.owner_username)}</span>
+          </div>
+          ${l.description ? `<div class="list-card-desc">${esc(l.description)}</div>` : ''}
+          <div class="list-detail" id="shared-detail-${l.id}">
+            <div class="bar-chart" id="shared-tracks-${l.id}"><span style="color:var(--muted);font-size:12px">Cargando…</span></div>
+          </div>
+        </div>`).join('');
+    } catch {}
+  }
+
+  $('shared-grid').addEventListener('click', e => {
+    const card = e.target.closest('.list-card[data-shared]'); if (!card) return;
+    const lid = parseInt(card.dataset.shared);
+    const detail = $('shared-detail-' + lid); if (!detail) return;
+    if (detail.classList.toggle('open')) loadListTracks(lid, true);
+  });
 
   $('lists-grid').addEventListener('click', async e => {
     const btn = e.target.closest('[data-del-track]');

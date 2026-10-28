@@ -362,7 +362,7 @@ async function openListDropdown() {
     const lists = await fetch('/api/lists').then(r => r.json());
     // Which lists already contain this track
     await Promise.all(lists.map(async l => {
-      try { const ts = await fetch(`/api/lists/${l.id}/tracks`).then(r => r.json()); l.has = ts.some(t => t.id === trackId); }
+      try { const d = await fetch(`/api/lists/${l.id}/tracks`).then(r => r.json()); l.has = (d.tracks || []).some(t => t.id === trackId); }
       catch { l.has = false; }
     }));
     listsCache = lists;

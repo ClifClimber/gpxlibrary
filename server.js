@@ -96,6 +96,16 @@ const USER_API = [
   ['POST',   /^\/api\/tracks\/\d+\/photos$/],
   ['GET',    /^\/api\/photos\/\d+$/],
   ['DELETE', /^\/api\/photos\/\d+$/],
+  ['GET',    /^\/api\/lists(\/shared)?$/],
+  ['POST',   /^\/api\/lists$/],
+  ['PATCH',  /^\/api\/lists\/\d+$/],
+  ['DELETE', /^\/api\/lists\/\d+$/],
+  ['GET',    /^\/api\/lists\/\d+\/tracks$/],
+  ['POST',   /^\/api\/lists\/\d+\/tracks$/],
+  ['DELETE', /^\/api\/lists\/\d+\/tracks\/\d+$/],
+  ['GET',    /^\/api\/lists\/\d+\/shares$/],
+  ['POST',   /^\/api\/lists\/\d+\/shares$/],
+  ['DELETE', /^\/api\/lists\/\d+\/shares\/\d+$/],
 ];
 function userMayAccess(pathname, method) {
   if (ADMIN_PAGES.has(pathname)) return false;
@@ -665,6 +675,18 @@ async function apiDeleteTrack(res, id) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
   }
+}
+
+// Access level of a user to a list: 'owner' | 'editor' | 'viewer' | null (+ exists flag).
+async function listAccess(listId, userId, isAdmin = false) {
+  const l = await sqlDb().get('SELECT owner_id, visibility FROM user_lists WHERE id = ?', [listId]);
+  if (!l) return { role: null, exists: false };
+  if (l.owner_id === userId) return { role: 'owner', exists: true, list: l };
+  if (isAdmin) return { role: 'owner', exists: true, list: l };
+  const share = await sqlDb().get('SELECT can_edit FROM user_list_shares WHERE list_id = ? AND user_id = ?', [listId, userId]);
+  if (share) return { role: share.can_edit ? 'editor' : 'viewer', exists: true, list: l };
+  if (l.visibility === 'public') return { role: 'viewer', exists: true, list: l };
+  return { role: null, exists: true, list: l };
 }
 
 // True if the track belongs to ownerId (used to gate non-admin edits).
@@ -1367,15 +1389,34 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ── Listas de rutas del usuario ───────────────────────────────────
+  // Mis listas (propias)
   if (pathname === '/api/lists' && method === 'GET') {
     if (!requireAuth(req, res)) return;
     const db = sqlDb();
     const lists = await db.all(
-      `SELECT l.id, l.name, l.description,
+      `SELECT l.id, l.name, l.description, l.visibility,
               to_char(l.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS created_at,
-              CAST(COUNT(lt.track_id) AS INTEGER) AS track_count
-       FROM user_lists l LEFT JOIN user_list_tracks lt ON lt.list_id = l.id
-       WHERE l.owner_id = ? GROUP BY l.id ORDER BY l.created_at DESC`, [req.user.sub]);
+              CAST((SELECT COUNT(*) FROM user_list_tracks lt WHERE lt.list_id = l.id) AS INTEGER) AS track_count,
+              CAST((SELECT COUNT(*) FROM user_list_shares s WHERE s.list_id = l.id) AS INTEGER) AS share_count
+       FROM user_lists l WHERE l.owner_id = ? ORDER BY l.created_at DESC`, [req.user.sub]);
+    res.writeHead(200, J); return res.end(JSON.stringify(lists));
+  }
+
+  // Listas compartidas conmigo (o públicas de otros)
+  if (pathname === '/api/lists/shared' && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const db = sqlDb();
+    const lists = await db.all(
+      `SELECT l.id, l.name, l.description, l.visibility,
+              u.username AS owner_username,
+              COALESCE(s.can_edit, false) AS can_edit,
+              (s.user_id IS NOT NULL) AS shared_with_me,
+              CAST((SELECT COUNT(*) FROM user_list_tracks lt WHERE lt.list_id = l.id) AS INTEGER) AS track_count
+       FROM user_lists l
+       JOIN users u ON u.id = l.owner_id
+       LEFT JOIN user_list_shares s ON s.list_id = l.id AND s.user_id = ?
+       WHERE l.owner_id <> ? AND (s.user_id IS NOT NULL OR l.visibility = 'public')
+       ORDER BY l.created_at DESC`, [req.user.sub, req.user.sub]);
     res.writeHead(200, J); return res.end(JSON.stringify(lists));
   }
 
@@ -1385,37 +1426,69 @@ const server = http.createServer(async (req, res) => {
     if (!body.name) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'El nombre es obligatorio' })); }
     const db = sqlDb();
     const row = await db.get(
-      'INSERT INTO user_lists (owner_id, name, description) VALUES (?, ?, ?) RETURNING id, name, description',
+      'INSERT INTO user_lists (owner_id, name, description) VALUES (?, ?, ?) RETURNING id, name, description, visibility',
       [req.user.sub, body.name, body.description || null]);
-    res.writeHead(201, J); return res.end(JSON.stringify({ ...row, track_count: 0 }));
+    res.writeHead(201, J); return res.end(JSON.stringify({ ...row, track_count: 0, share_count: 0 }));
   }
 
   const listMatch = pathname.match(/^\/api\/lists\/(\d+)$/);
-  if (listMatch && method === 'PATCH') {
+  if (listMatch && (method === 'PATCH' || method === 'DELETE')) {
     if (!requireAuth(req, res)) return;
     const lid = parseInt(listMatch[1]);
-    const body = await parseBody(req);
     const db = sqlDb();
     const l = await db.get('SELECT owner_id FROM user_lists WHERE id = ?', [lid]);
     if (!l) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Lista no encontrada' })); }
     if (l.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
+    if (method === 'DELETE') { await db.run('DELETE FROM user_lists WHERE id = ?', [lid]); res.writeHead(200, J); return res.end(JSON.stringify({ ok: true })); }
+    const body = await parseBody(req);
     const updates = []; const vals = [];
     if (body.name !== undefined)        { updates.push('name = ?');        vals.push(body.name); }
     if (body.description !== undefined) { updates.push('description = ?'); vals.push(body.description || null); }
+    if (body.visibility === 'public' || body.visibility === 'private') { updates.push('visibility = ?'); vals.push(body.visibility); }
     if (!updates.length) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Nada que actualizar' })); }
     vals.push(lid);
     await db.run(`UPDATE user_lists SET ${updates.join(', ')} WHERE id = ?`, vals);
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
   }
 
-  if (listMatch && method === 'DELETE') {
+  // Gestión de comparticiones (solo el dueño)
+  const listSharesMatch = pathname.match(/^\/api\/lists\/(\d+)\/shares$/);
+  if (listSharesMatch && (method === 'GET' || method === 'POST')) {
     if (!requireAuth(req, res)) return;
-    const lid = parseInt(listMatch[1]);
+    const lid = parseInt(listSharesMatch[1]);
     const db = sqlDb();
     const l = await db.get('SELECT owner_id FROM user_lists WHERE id = ?', [lid]);
     if (!l) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Lista no encontrada' })); }
     if (l.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
-    await db.run('DELETE FROM user_lists WHERE id = ?', [lid]);
+    if (method === 'GET') {
+      const shares = await db.all(
+        `SELECT s.user_id, u.username, u.display_name, s.can_edit
+         FROM user_list_shares s JOIN users u ON u.id = s.user_id
+         WHERE s.list_id = ? ORDER BY u.username`, [lid]);
+      res.writeHead(200, J); return res.end(JSON.stringify(shares));
+    }
+    const body = await parseBody(req);
+    const uname = String(body.username || '').trim().toLowerCase();
+    const target = body.user_id ? await db.get('SELECT id FROM users WHERE id = ?', [parseInt(body.user_id)])
+                                : await db.get('SELECT id FROM users WHERE lower(username) = ?', [uname]);
+    if (!target) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Usuario no encontrado' })); }
+    if (target.id === req.user.sub) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'La lista ya es tuya' })); }
+    const canEdit = body.can_edit === true;
+    await db.run(
+      `INSERT INTO user_list_shares (list_id, user_id, can_edit) VALUES (?, ?, ?)
+       ON CONFLICT (list_id, user_id) DO UPDATE SET can_edit = excluded.can_edit`, [lid, target.id, canEdit ? 1 : 0]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+  }
+
+  const listShareUserMatch = pathname.match(/^\/api\/lists\/(\d+)\/shares\/(\d+)$/);
+  if (listShareUserMatch && method === 'DELETE') {
+    if (!requireAuth(req, res)) return;
+    const lid = parseInt(listShareUserMatch[1]);
+    const db = sqlDb();
+    const l = await db.get('SELECT owner_id FROM user_lists WHERE id = ?', [lid]);
+    if (!l) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Lista no encontrada' })); }
+    if (l.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
+    await db.run('DELETE FROM user_list_shares WHERE list_id = ? AND user_id = ?', [lid, parseInt(listShareUserMatch[2])]);
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
   }
 
@@ -1423,27 +1496,24 @@ const server = http.createServer(async (req, res) => {
   if (listTracksMatch && method === 'GET') {
     if (!requireAuth(req, res)) return;
     const lid = parseInt(listTracksMatch[1]);
-    const db = sqlDb();
-    const l = await db.get('SELECT owner_id FROM user_lists WHERE id = ?', [lid]);
-    if (!l) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Lista no encontrada' })); }
-    if (l.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
-    const tracks = await db.all(
+    const acc = await listAccess(lid, req.user.sub, req.user.role === "admin");
+    if (!acc.role) { res.writeHead(acc.exists ? 403 : 404, J); return res.end(JSON.stringify({ error: acc.exists ? 'Sin permiso' : 'Lista no encontrada' })); }
+    const tracks = await sqlDb().all(
       `SELECT t.id, t.name, t.activity, t.sierra, t.date, t.distance, t.elevation_gain, lt.position
        FROM user_list_tracks lt JOIN tracks t ON t.id = lt.track_id
        WHERE lt.list_id = ? ORDER BY lt.position ASC, t.name COLLATE "C" ASC`, [lid]);
-    res.writeHead(200, J); return res.end(JSON.stringify(tracks));
+    res.writeHead(200, J); return res.end(JSON.stringify({ role: acc.role, tracks }));
   }
 
   if (listTracksMatch && method === 'POST') {
     if (!requireAuth(req, res)) return;
     const lid = parseInt(listTracksMatch[1]);
+    const acc = await listAccess(lid, req.user.sub, req.user.role === "admin");
+    if (acc.role !== 'owner' && acc.role !== 'editor') { res.writeHead(acc.exists ? 403 : 404, J); return res.end(JSON.stringify({ error: acc.exists ? 'No puedes editar esta lista' : 'Lista no encontrada' })); }
     const body = await parseBody(req);
     const trackId = parseInt(body.track_id);
     if (!trackId) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'track_id requerido' })); }
     const db = sqlDb();
-    const l = await db.get('SELECT owner_id FROM user_lists WHERE id = ?', [lid]);
-    if (!l) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Lista no encontrada' })); }
-    if (l.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
     const maxPos = await db.get('SELECT COALESCE(MAX(position),0)+1 AS pos FROM user_list_tracks WHERE list_id = ?', [lid]);
     try {
       await db.run('INSERT INTO user_list_tracks (list_id, track_id, position) VALUES (?, ?, ?)', [lid, trackId, maxPos.pos]);
@@ -1458,12 +1528,9 @@ const server = http.createServer(async (req, res) => {
   if (listTrackMatch && method === 'DELETE') {
     if (!requireAuth(req, res)) return;
     const lid = parseInt(listTrackMatch[1]);
-    const tid = parseInt(listTrackMatch[2]);
-    const db = sqlDb();
-    const l = await db.get('SELECT owner_id FROM user_lists WHERE id = ?', [lid]);
-    if (!l) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Lista no encontrada' })); }
-    if (l.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
-    await db.run('DELETE FROM user_list_tracks WHERE list_id = ? AND track_id = ?', [lid, tid]);
+    const acc = await listAccess(lid, req.user.sub, req.user.role === "admin");
+    if (acc.role !== 'owner' && acc.role !== 'editor') { res.writeHead(acc.exists ? 403 : 404, J); return res.end(JSON.stringify({ error: acc.exists ? 'No puedes editar esta lista' : 'Lista no encontrada' })); }
+    await sqlDb().run('DELETE FROM user_list_tracks WHERE list_id = ? AND track_id = ?', [lid, parseInt(listTrackMatch[2])]);
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
   }
 
