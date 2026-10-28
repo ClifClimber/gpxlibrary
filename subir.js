@@ -22,7 +22,16 @@
       dot.classList.toggle('active', i === n);
       dot.classList.toggle('done', i < n);
     }
-    if (n === 2 && map) setTimeout(() => map.invalidateSize(), 60);
+    if (n === 2) fitRoute();
+  }
+
+  // Leaflet needs the visible size of the container to compute the zoom: resize, then frame the route
+  function fitRoute() {
+    if (!map || !polyline) return;
+    requestAnimationFrame(() => {
+      map.invalidateSize();
+      map.fitBounds(polyline.getBounds(), { padding: [24, 24], maxZoom: 16 });
+    });
   }
 
   // ── Paso 1: elegir fichero ──
@@ -44,8 +53,8 @@
       try { parsed = parseGpx(gpxText, file.name); }
       catch (err) { $('step1-err').textContent = 'No se pudo leer el GPX: ' + err.message; return; }
       if (!parsed.pts.length) { $('step1-err').textContent = 'El GPX no tiene puntos de track.'; return; }
+      goStep(2);        // show the step first so the map container has its real size
       showPreview();
-      goStep(2);
     };
     reader.readAsText(file);
   }
@@ -93,8 +102,8 @@
     const latlngs = parsed.pts.map(p => [p[0], p[1]]);
     polyline = L.polyline(latlngs, { color: '#006783', weight: 4 }).addTo(overlay);
     parsed.wpts.forEach(w => L.circleMarker([w.lat, w.lon], { radius: 4, color: '#f97316', fillOpacity: 1 }).addTo(overlay).bindTooltip(w.name || ''));
-    map.fitBounds(polyline.getBounds(), { padding: [20, 20] });
-    setTimeout(() => map.invalidateSize(), 60);
+    map.fitBounds(polyline.getBounds(), { padding: [24, 24], maxZoom: 16 });   // initial view (no animation glitch)
+    fitRoute();
   }
 
   $('b2-back').addEventListener('click', () => goStep(1));
