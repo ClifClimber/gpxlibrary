@@ -111,14 +111,16 @@ function actColor(act) {
 function getTrackColor(track) { return trackColors[track.file] || actColor(track.activity || 'Otro'); }
 
 function actIconInner(act) {
-  // Icon configured in Admin → Actividades (icons.js key), else the built-in silhouette
+  // Icon configured in Admin → Actividades (illustrated PNG > SVG key > built-in silhouette)
   const cfg = actConfig[act];
+  if (cfg?.icon_img) return window.gpxIcon(cfg.icon_img, { size: 16 });
   if (cfg?.icon && window.GPX_ICONS?.[cfg.icon]) return window.gpxIcon(cfg.icon, { size: 16 });
   return `<svg viewBox="0 0 24 24">${ACT_ICONS[act] || ACT_ICONS['Otro']}</svg>`;
 }
 function makeActivityIcon(act, color) {
+  const hasImg = !!actConfig[act]?.icon_img;
   return L.divIcon({
-    html: `<div class="act-marker" style="background:${color}">${actIconInner(act)}</div>`,
+    html: `<div class="act-marker${hasImg ? ' act-marker-img' : ''}" style="background:${hasImg ? 'transparent' : color}">${actIconInner(act)}</div>`,
     className: 'act-marker-wrap',
     iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -15],
   });
@@ -250,12 +252,72 @@ function syncClusterMarkers() {
   cluster.addLayers(vis.map(it => it.marker));
 }
 
+// ── Map preview card ─────────────────────────────────────────────
+const mpcEl = document.getElementById('map-preview-card');
+let mpcTimer = null;
+
+function fmtMovingTime(secs) {
+  if (!secs) return null;
+  const h = Math.floor(secs / 3600), m = Math.round((secs % 3600) / 60);
+  if (h === 0) return `${m} min`;
+  return m > 0 ? `${h}h ${m} min` : `${h}h`;
+}
+
+function showMapCard(i) {
+  if (!mpcEl) return;
+  const { track } = items[i];
+  const sp = track.points?.[0];
+  if (!sp) return;
+
+  const act = track.activity || 'Otro';
+  const photo = track.cover || actConfig[act]?.image || ACT_PHOTOS[act];
+  const loc = [track.sierra, track.province].filter(Boolean)[0] || '';
+  const li = gradeIdxV(track);
+  const ibp = li >= 0 ? IBP_LEVELS[li] : null;
+  const time = fmtMovingTime(track.moving_time);
+
+  mpcEl.innerHTML = `
+    <div class="mpc-photo" style="${photo ? `background-image:url('${photo}')` : ''}"></div>
+    <div class="mpc-body">
+      <div class="mpc-name">${escHtml(track.name)}</div>
+      ${loc ? `<div class="mpc-loc">${escHtml(loc)}</div>` : ''}
+      <div class="mpc-badges">
+        ${ibp ? `<span class="mpc-ibp" style="color:${ibp.color};background:${ibp.bg}">${escHtml(ibp.label)}</span>` : ''}
+      </div>
+      <div class="mpc-stats"><b>${nf1.format(track.distance)}</b> km${time ? ` · <b>${time}</b>` : ''}</div>
+    </div>`;
+
+  // Position near start point
+  const pt = map.latLngToContainerPoint([sp[0], sp[1]]);
+  const mapRect = map.getContainer().getBoundingClientRect();
+  const cardW = 280, cardH = 100;
+  let x = mapRect.left + pt.x + 16;
+  let y = mapRect.top  + pt.y - 40;
+  if (x + cardW > window.innerWidth - 8)  x = mapRect.left + pt.x - cardW - 16;
+  if (y + cardH > window.innerHeight - 8) y = window.innerHeight - cardH - 8;
+  if (y < 8) y = 8;
+
+  mpcEl.style.left = x + 'px';
+  mpcEl.style.top  = y + 'px';
+  mpcEl.style.display = 'flex';
+}
+
+function hideMapCard() {
+  if (mpcEl) mpcEl.style.display = 'none';
+}
+
 function previewTrack(i, on) {
   if (activeIdx === i) return;
   if (activeIdx !== null) return; // don't show other tracks while one is active
   const { layer } = items[i];
-  if (on) { layer.setStyle({ weight:3.5, opacity:0.9 }); layer.addTo(map); layer.bringToFront(); }
-  else layer.remove();
+  clearTimeout(mpcTimer);
+  if (on) {
+    layer.setStyle({ weight:3.5, opacity:0.9 }); layer.addTo(map); layer.bringToFront();
+    mpcTimer = setTimeout(() => showMapCard(i), 120);
+  } else {
+    layer.remove();
+    hideMapCard();
+  }
 }
 
 // ── Color pickers ────────────────────────────────────────────────────
@@ -306,7 +368,7 @@ fetch('/api/config/activities')
   .then(acts => {
     let changed = false;
     acts.forEach(a => {
-      actConfig[a.name] = { icon: a.icon, image: a.image };
+      actConfig[a.name] = { icon: a.icon, icon_img: a.icon_img, image: a.image };
       if (a.color && !actColorsCustom[a.name]) { actColorsCustom[a.name] = a.color; changed = true; }
     });
     if (changed) acts.forEach(a => { if (a.color) setActivityColor(a.name, actColorsCustom[a.name], false); });
@@ -402,6 +464,7 @@ function initDualSlider(minId, maxId, fillId, labelId, lo, hi, step, unit, onCha
 
 // ── Activate / deactivate ────────────────────────────────────────────
 function activateTrack(i, fitMap) {
+  clearTimeout(mpcTimer); hideMapCard();
   if (activeIdx !== null && items[activeIdx]) {
     const prev = items[activeIdx];
     prev.layer.remove();
@@ -726,16 +789,27 @@ const SORTERS = {
 
 // Foto representativa por actividad (si no hay, el item queda en gris claro).
 const ACT_PHOTOS = {
-  'Trail Running': '/assets/activities/trail-running.jpg',
-  'Running':       '/assets/activities/trail-running.jpg',
-  'MTB':           '/assets/activities/mtb.jpg',
-  'MTB Enduro':    '/assets/activities/mtb.jpg',
-  'Gravel':        '/assets/activities/gravel.jpg',
-  'Montañismo':    '/assets/activities/montanismo.jpg',
-  'Esquí Travesia': '/assets/activities/travesia.jpg',
-  'Alpinismo':     '/assets/activities/alpinismo.jpg',
-  'Apinismo':      '/assets/activities/alpinismo.jpg',   // así está escrita en la BD
-  'Ferratas':      '/assets/activities/ferratas.jpg',
+  'Trail Running':      '/assets/activities/trail-running.jpg',
+  'Running':            '/assets/activities/trail-running.jpg',
+  'Orientación':        '/assets/activities/trail-running.jpg',
+  'Marcha nórdica':     '/assets/activities/trail-running.jpg',
+  'MTB':                '/assets/activities/mtb.jpg',
+  'MTB Enduro':         '/assets/activities/mtb.jpg',
+  'Ciclismo de carretera': '/assets/activities/gravel.jpg',
+  'Gravel':             '/assets/activities/gravel.jpg',
+  'Montañismo':         '/assets/activities/montanismo.jpg',
+  'Crestas y Trepadas': '/assets/activities/montanismo.jpg',
+  'Raquetas de nieve':  '/assets/activities/montanismo.jpg',
+  'Esquí Travesia':     '/assets/activities/travesia.jpg',
+  'Esquí de Pista':     '/assets/activities/travesia.jpg',
+  'Alpinismo':          '/assets/activities/alpinismo.jpg',
+  'Apinismo':           '/assets/activities/alpinismo.jpg',
+  'Escalada':           '/assets/activities/ferratas.jpg',
+  'Ferratas':           '/assets/activities/ferratas.jpg',
+  'Barranquismo':       '/assets/activities/ferratas.jpg',
+  'Kayak':              '/assets/activities/ferratas.jpg',
+  'Paddle surf':        '/assets/activities/ferratas.jpg',
+  'Senderismo':         '/assets/activities/montanismo.jpg',
 };
 
 function trackItemHtml(track, ri) {

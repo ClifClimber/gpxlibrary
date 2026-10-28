@@ -62,11 +62,13 @@
 
   const escHtml = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  /** SVG markup for an icon key; unknown values (e.g. an old emoji) come back as text. */
+  /** SVG markup for an icon key; URL values render as <img>; unknown text keys come back as text. */
   function gpxIcon(key, opts = {}) {
-    const ic = ICONS[key];
     const size = opts.size || 20, cls = opts.cls || 'gi';
-    if (!ic) return key ? `<span class="${cls} gi-txt">${escHtml(key)}</span>` : '';
+    if (!key) return '';
+    if (key.startsWith('/')) return `<img src="${escHtml(key)}" width="${size}" height="${size}" class="${cls} gi-img" loading="lazy" aria-hidden="true">`;
+    const ic = ICONS[key];
+    if (!ic) return `<span class="${cls} gi-txt">${escHtml(key)}</span>`;
     return `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ic.svg}</svg>`;
   }
 

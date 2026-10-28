@@ -119,6 +119,7 @@ nav .nav-user:hover::after, nav .nav-user:focus-visible::after { opacity: 1; tra
 /* ── Iconos de línea (icons.js) y selector ───────────────────────── */
 .gi { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 .gi-txt { font-size: 1.1em; line-height: 1; }
+.gi-img { object-fit: contain; border-radius: 3px; }
 .gi-picker { position: fixed; z-index: 3000; width: 324px; max-height: 70vh; overflow-y: auto; padding: 10px 12px 12px;
   background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
 .gi-picker-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 6px 0; }

@@ -2170,9 +2170,9 @@ function actIconHtml(a, size = 15) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 }
 function renderActIconCell(a) {
+  if (a.icon_img) return `<img src="${escHtml(a.icon_img)}" width="28" height="28" style="object-fit:contain;border-radius:4px;flex-shrink:0">`;
   const bg = escHtml(a.color || '#64748b');
-  const img = a.image ? `<span class="act-img-thumb" style="background-image:url('${escHtml(a.image)}')" title="Imagen por defecto"></span>` : '';
-  return `<div style="display:flex;align-items:center;gap:8px"><div class="act-icon-dot" style="background:${bg}">${actIconHtml(a)}</div>${img}</div>`;
+  return `<div class="act-icon-dot" style="background:${bg}">${actIconHtml(a)}</div>`;
 }
 
 // ── ACTIVIDADES ─────────────────────────────────────────────────────
@@ -2329,14 +2329,10 @@ function buildActForm(act) {
   let pendingImage = null;            // data URL elegido pero aún sin subir
   let removeImage = false;
   const curImage = () => pendingImage || (removeImage ? '' : (act?.image || ''));
+  let pendingIconImg = null;          // data URL del icono PNG ilustrado
+  let removeIconImg = false;
+  const curIconImg = () => pendingIconImg || (removeIconImg ? '' : (act?.icon_img || ''));
   row4.innerHTML = `
-    <div>
-      <label>Icono</label>
-      <div class="icon-upload-wrap">
-        <button type="button" class="gi-btn" data-role="icon-btn" title="Elegir icono"></button>
-        <span class="kw-help">Se muestra en el mapa y en la lista del visor.</span>
-      </div>
-    </div>
     <div>
       <label>Imagen por defecto (rutas sin fotos)</label>
       <div class="icon-upload-wrap">
@@ -2345,18 +2341,30 @@ function buildActForm(act) {
         <button type="button" class="icon-clear-btn" data-role="img-clear">✕ Quitar</button>
         <span class="kw-help">JPG/PNG — se reduce a 1200 px.</span>
       </div>
+    </div>
+    <div>
+      <label>Icono PNG ilustrado</label>
+      <div class="icon-upload-wrap">
+        <span class="act-img-prev" data-role="ico-img-prev" style="width:48px;height:48px;background-size:contain;background-repeat:no-repeat;background-position:center"></span>
+        <label class="icon-upload-label">Subir icono<input type="file" accept="image/*" style="display:none" data-role="ico-img-file"></label>
+        <button type="button" class="icon-clear-btn" data-role="ico-img-clear">✕ Quitar</button>
+        <span class="kw-help">PNG/JPG cuadrado — icono ilustrado.</span>
+      </div>
     </div>`;
-  const iconBtn = row4.querySelector('[data-role=icon-btn]');
   const imgPrev = row4.querySelector('[data-role=img-prev]');
   const imgClear = row4.querySelector('[data-role=img-clear]');
+  const icoImgPrev = row4.querySelector('[data-role=ico-img-prev]');
+  const icoImgClear = row4.querySelector('[data-role=ico-img-clear]');
   const paintVisual = () => {
-    iconBtn.innerHTML = gpxIcon(pendingIcon, { size: 22 });
     const im = curImage();
     imgPrev.style.backgroundImage = im ? `url('${im}')` : '';
     imgPrev.classList.toggle('has-img', !!im);
     imgClear.style.display = im ? '' : 'none';
+    const ico = curIconImg();
+    icoImgPrev.style.backgroundImage = ico ? `url('${ico}')` : '';
+    icoImgPrev.classList.toggle('has-img', !!ico);
+    icoImgClear.style.display = ico ? '' : 'none';
   };
-  iconBtn.addEventListener('click', () => gpxIconPicker(iconBtn, pendingIcon, k => { pendingIcon = k; paintVisual(); }));
   row4.querySelector('[data-role=img-file]').addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
@@ -2364,6 +2372,13 @@ function buildActForm(act) {
     catch { showToast('No se pudo procesar la imagen'); }
   });
   imgClear.addEventListener('click', () => { pendingImage = null; removeImage = true; paintVisual(); });
+  row4.querySelector('[data-role=ico-img-file]').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try { pendingIconImg = await resizeToJpegDataURL(file, 256); removeIconImg = false; paintVisual(); }
+    catch { showToast('No se pudo procesar el icono'); }
+  });
+  icoImgClear.addEventListener('click', () => { pendingIconImg = null; removeIconImg = true; paintVisual(); });
   paintVisual();
   wrap.appendChild(row4);
 
@@ -2408,6 +2423,8 @@ function buildActForm(act) {
       else await send(`/api/config/activities/${id}`, 'PATCH', body);
       if (pendingImage) await send(`/api/config/activities/${id}/image`, 'POST', { data: pendingImage.split(',')[1] });
       else if (removeImage && act?.image) await send(`/api/config/activities/${id}/image`, 'DELETE');
+      if (pendingIconImg) await send(`/api/config/activities/${id}/icon-image`, 'POST', { data: pendingIconImg.split(',')[1] });
+      else if (removeIconImg && act?.icon_img) await send(`/api/config/activities/${id}/icon-image`, 'DELETE');
       showToast(isNew ? 'Actividad creada' : 'Actividad guardada');
       // Sync color to localStorage so the map viewer updates live
       try {

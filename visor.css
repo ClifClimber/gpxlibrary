@@ -50,6 +50,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 }
 .dd-ico svg { width: 14px; height: 14px; }
 .dd-ico.act svg { stroke: white; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.dd-ico.act img.gi-img { width: 26px !important; height: 26px !important; border-radius: 50%; object-fit: cover; }
 .dd-txt { min-width: 0; flex: 1; }
 .dd-name { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dd-meta { font-size: 11px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -170,7 +171,8 @@ body.panel-resizing { cursor: ew-resize; user-select: none; }
 }
 .ti-icon:hover { transform: scale(1.08); }
 .ti-icon svg { width: 16px; height: 16px; stroke: white; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.ti-icon img { width: 16px; height: 16px; object-fit: contain; }
+.ti-icon img.gi-img { width: 30px !important; height: 30px !important; border-radius: 0; object-fit: cover; }
+.ti-icon:has(img.gi-img) { border-radius: 4px; background: transparent; box-shadow: none; }
 .ti-name {
   flex: 1; min-width: 0;
   font-size: 13px; font-weight: 600; line-height: 1.3;
@@ -299,6 +301,28 @@ body.panel-resizing { cursor: ew-resize; user-select: none; }
 .act-marker:hover { transform: scale(1.2); box-shadow: 0 4px 14px rgba(0,0,0,.45); }
 .act-marker.active-marker { transform: scale(1.25); box-shadow: 0 4px 16px rgba(0,0,0,.5); outline: 3px solid white; }
 .act-marker svg { width: 14px; height: 14px; stroke: white; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.act-marker img.gi-img { width: 28px !important; height: 28px !important; border-radius: 50%; object-fit: cover; filter: grayscale(1); }
+.act-marker.act-marker-img { border: none; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+
+/* ── Map preview card (hover on list item) ───────────────────────── */
+#map-preview-card {
+  position: fixed; z-index: 1200; pointer-events: none;
+  background: var(--surface); border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,.22);
+  display: flex; gap: 0; overflow: hidden; width: 280px;
+  animation: mpc-in .12s ease;
+}
+@keyframes mpc-in { from { opacity:0; transform:scale(.95) } to { opacity:1; transform:scale(1) } }
+.mpc-photo {
+  width: 80px; flex-shrink: 0; background: var(--soft) center/cover no-repeat;
+}
+.mpc-body { padding: 10px 12px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mpc-name { font-size: 13px; font-weight: 700; line-height: 1.3; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--ink); }
+.mpc-loc { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpc-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mpc-ibp { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 20px; }
+.mpc-stats { font-size: 12px; color: var(--ink-2); }
+.mpc-stats b { color: var(--ink); }
 
 /* ── Mobile ──────────────────────────────────────────────────────── */
 @media (max-width: 760px) {

@@ -100,6 +100,7 @@ const USER_API = [
   ['PATCH',  /^\/api\/tracks\/\d+\/cover$/],
   ['GET',    /^\/api\/tracks\/\d+\/days$/],
   ['GET',    /^\/api\/activity-images\/[\w.-]+$/],
+  ['GET',    /^\/api\/activity-icons\/[\w.-]+$/],
   ['GET',    /^\/api\/lists(\/shared)?$/],
   ['POST',   /^\/api\/lists$/],
   ['PATCH',  /^\/api\/lists\/\d+$/],
@@ -2114,6 +2115,41 @@ const server = http.createServer(async (req, res) => {
   if (actImgFile && method === 'GET') {
     let buf; try { buf = fs.readFileSync(path.join(PHOTOS_DIR, 'activities', actImgFile[1])); } catch { res.writeHead(404); return res.end('Not found'); }
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400' });
+    return res.end(buf);
+  }
+
+  // Illustrated PNG icon of an activity (shows as the small activity icon). Admin only.
+  const actIconMatch = pathname.match(/^\/api\/config\/activities\/(\d+)\/icon-image$/);
+  if (actIconMatch && (method === 'POST' || method === 'DELETE')) {
+    if (!requireAdmin(req, res)) return;
+    const aid = parseInt(actIconMatch[1]);
+    const a = await sqlDb().get('SELECT icon_img FROM config_activities WHERE id = ?', [aid]);
+    if (!a) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Actividad no encontrada' })); }
+    const dir = path.join(PHOTOS_DIR, 'act-icons');
+    const removeOld = () => {
+      const m = /^\/api\/activity-icons\/([\w.-]+)$/.exec(a.icon_img || '');
+      if (m) { try { fs.unlinkSync(path.join(dir, m[1])); } catch {} }
+    };
+    let icon_img = null;
+    if (method === 'POST') {
+      const body = await parseBody(req);
+      if (!body.data) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Falta la imagen' })); }
+      const buf = Buffer.from(body.data, 'base64');
+      if (buf.length > 3 * 1024 * 1024) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'La imagen no puede superar 3 MB' })); }
+      const fname = `icon-${aid}-${Date.now()}.jpg`;
+      try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, fname), buf); }
+      catch (e) { res.writeHead(500, J); return res.end(JSON.stringify({ error: 'No se pudo guardar: ' + e.message })); }
+      icon_img = `/api/activity-icons/${fname}`;
+    }
+    removeOld();
+    await sqlDb().run('UPDATE config_activities SET icon_img = ? WHERE id = ?', [icon_img, aid]);
+    invalidateCatalogCache();
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, icon_img }));
+  }
+  const actIconFile = pathname.match(/^\/api\/activity-icons\/([\w.-]+)$/);
+  if (actIconFile && method === 'GET') {
+    let buf; try { buf = fs.readFileSync(path.join(PHOTOS_DIR, 'act-icons', actIconFile[1])); } catch { res.writeHead(404); return res.end('Not found'); }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
     return res.end(buf);
   }
 
