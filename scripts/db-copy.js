@@ -45,7 +45,7 @@ const { migrate } = require('../repo/pg-migrate');
 // Postgres columns to copy (everything except the PostGIS geometry/elevation columns)
 const SKIP_PG_COLS = new Set(['geom', 'geom_clean', 'ele', 'ele_clean']);
 const CONFIG = {
-  config_activities: ['id', 'name', 'color', 'keywords', 'sort_order', 'active'],
+  config_activities: ['id', 'name', 'color', 'keywords', 'sort_order', 'active', 'icon', 'image'],
   config_sierras:    ['id', 'name', 'sw_lat', 'sw_lon', 'ne_lat', 'ne_lon', 'active'],
 };
 
@@ -104,7 +104,7 @@ function openSqliteBackup(file, readOnly = false) {
     db.exec(`CREATE TABLE IF NOT EXISTS tracks (id INTEGER PRIMARY KEY);`);
     db.exec(`CREATE TABLE IF NOT EXISTS raw_points (track_id INTEGER, seq INTEGER, lat REAL, lon REAL, ele REAL);`);
     db.exec(`CREATE TABLE IF NOT EXISTS clean_points (track_id INTEGER, seq INTEGER, lat REAL, lon REAL, ele REAL);`);
-    db.exec(`CREATE TABLE IF NOT EXISTS config_activities (id INTEGER PRIMARY KEY, name TEXT, color TEXT, keywords TEXT, sort_order INTEGER DEFAULT 99, active INTEGER DEFAULT 1);`);
+    db.exec(`CREATE TABLE IF NOT EXISTS config_activities (id INTEGER PRIMARY KEY, name TEXT, color TEXT, keywords TEXT, sort_order INTEGER DEFAULT 99, active INTEGER DEFAULT 1, icon TEXT, image TEXT);`);
     db.exec(`CREATE TABLE IF NOT EXISTS config_sierras (id INTEGER PRIMARY KEY, name TEXT, sw_lat REAL, sw_lon REAL, ne_lat REAL, ne_lon REAL, active INTEGER DEFAULT 1);`);
   }
   return db;
@@ -205,7 +205,10 @@ async function toPostgres(pool) {
     const extras = [...EXTRA_PRE, ...EXTRA_POST].filter(t => sqliteHas(db, t));
     await client.query(`TRUNCATE tracks, config_activities, config_sierras${extras.map(t => ', ' + t).join('')} RESTART IDENTITY CASCADE`);
     for (const table of EXTRA_PRE.filter(t => extras.includes(t))) console.log(`  ${table}: ${await loadExtra(client, db, table)}`);
-    for (const [table, c] of Object.entries(CONFIG)) {
+    for (const [table, all] of Object.entries(CONFIG)) {
+      // Older backups lack newer columns (e.g. icon/image): restore only what the file has
+      const have = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map(x => x.name));
+      const c = all.filter(k => have.has(k));
       const rows = db.prepare(`SELECT ${c.join(',')} FROM ${table}`).all();
       for (const r of rows) {
         await client.query(`INSERT INTO ${table} (${c.join(',')}) VALUES (${c.map((_,i)=>`$${i+1}`).join(',')})`, c.map(k => r[k]));

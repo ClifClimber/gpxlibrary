@@ -136,3 +136,9 @@ test('validateConfig rejects unordered tiers and bad regex', () => {
   assert.throws(() => validateConfig(mergeConfig({ multiDay: { keywords: '(' } })), /expresión no válida/);
   assert.doesNotThrow(() => validateConfig(mergeConfig(null)));
 });
+
+test('mergeConfig: saved old default emoji become icon keys, custom icons are kept', () => {
+  const c = mergeConfig({ families: [{ id: 'routes', icon: '🥾' }, { id: 'km', icon: 'star' }] });
+  assert.equal(c.families.find(f => f.id === 'routes').icon, 'footprints');
+  assert.equal(c.families.find(f => f.id === 'km').icon, 'star');
+});

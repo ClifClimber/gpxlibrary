@@ -169,7 +169,9 @@ Every page must `<link rel="stylesheet" href="/shared.css">` followed by `<scrip
 
 Key component classes: `.btn` (+ modifiers), `.input`/`.select`, `.chip` (+ `.active`, `.open`), `.popover`, `.cat-pills`/`.cat-pill`, `.table`, `.stats-grid`/`.stat`, `.tag`, `.badge`, `.modal-overlay`/`.modal`, `.log-box`, `.floating`, `.card`.
 
-New pages start from `docs/page-template.html` and must be added to the `<nav>` in every page. Mark the current page's nav link with `class="active"` (the nav is light: `--nav-bg`). `theme.js` appends the theme toggle and then the user icon (`#nav-perfil`, avatar or initial, name on hover via `data-name`) at the right end; it creates the icon if the page lacks it and exposes `window.gpxSetNavUser(me)` to refresh it.
+New pages start from `docs/page-template.html` and must be added to the `<nav>` in every page.
+
+Icons: `icons.js` is a monochrome line-icon library (`currentColor`): `window.GPX_ICONS` (key → `{label, group, svg}`), `gpxIcon(key, {size, cls})` (unknown key → the text itself, so old emoji still render) and `gpxIconPicker(anchor, current, onPick)`. Activity icons (`config_activities.icon`) and badge icons (gamification `families[].icon`) store these keys. Each activity also has a default `image` (stock `/assets/activities/*.jpg` or uploaded via `POST/DELETE /api/config/activities/:id/image`, stored in `PHOTOS_DIR/activities`, served at `/api/activity-images/:file`), used by the visor when a route has no cover photo. Mark the current page's nav link with `class="active"` (the nav is light: `--nav-bg`). `theme.js` appends the theme toggle and then the user icon (`#nav-perfil`, avatar or initial, name on hover via `data-name`) at the right end; it creates the icon if the page lacks it and exposes `window.gpxSetNavUser(me)` to refresh it.
 
 ## GPX conventions
 - Originals live in the immutable store (key `{uid}.gpx` in `blob/`: local `TracksGps/store/` or S3). Never rename, move or rewrite them; name/activity/zone/notes/url live only in the DB and are applied on the fly when downloading (`applyGpxMetadata()` in `domain/gpx-export.js`).

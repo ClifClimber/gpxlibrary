@@ -33,18 +33,18 @@ const DEFAULT_CONFIG = {
     ],
   },
   families: [
-    { id: 'routes',     icon: '🥾', name: 'Rutas completadas',          unit: 'rutas',       enabled: true, tiers: [1, 10, 50, 100, 250] },
-    { id: 'km',         icon: '📏', name: 'Kilómetros recorridos',      unit: 'km',          enabled: true, tiers: [100, 500, 1000, 5000, 10000] },
-    { id: 'gain',       icon: '⛰️', name: 'Desnivel acumulado',         unit: 'm',           enabled: true, tiers: [1000, 8849, 50000, 100000, 300000] },
-    { id: 'max_km',     icon: '🏁', name: 'Ruta más larga (en un día)', unit: 'km',          enabled: true, tiers: [21, 42, 70, 100, 150] },
-    { id: 'max_gain',   icon: '🧗', name: 'Mayor desnivel en un día',   unit: 'm',           enabled: true, tiers: [500, 1000, 1500, 2000, 3000] },
-    { id: 'multiday',   icon: '🏕️', name: 'Travesías de varios días',   unit: 'travesías',   enabled: true, tiers: [1, 3, 5, 10, 20] },
-    { id: 'provinces',  icon: '🗺️', name: 'Provincias exploradas',      unit: 'provincias',  enabled: true, tiers: [2, 5, 10, 20, 35] },
-    { id: 'activities', icon: '🎽', name: 'Multideporte',               unit: 'actividades', enabled: true, tiers: [2, 3, 5, 7, 9] },
-    { id: 'circular',   icon: '🔄', name: 'Rutas circulares',           unit: 'rutas',       enabled: true, tiers: [5, 25, 50, 100, 200] },
-    { id: 'years',      icon: '📅', name: 'Años en ruta',               unit: 'años',        enabled: true, tiers: [1, 3, 5, 10, 20] },
-    { id: 'photos',     icon: '📷', name: 'Fotógrafo',                  unit: 'fotos',       enabled: true, tiers: [1, 10, 25, 100, 250] },
-    { id: 'lists',      icon: '📚', name: 'Coleccionista',              unit: 'listas',      enabled: true, tiers: [1, 3, 5, 10, 20] },
+    { id: 'routes',     icon: 'footprints', name: 'Rutas completadas',          unit: 'rutas',       enabled: true, tiers: [1, 10, 50, 100, 250] },
+    { id: 'km',         icon: 'ruler', name: 'Kilómetros recorridos',      unit: 'km',          enabled: true, tiers: [100, 500, 1000, 5000, 10000] },
+    { id: 'gain',       icon: 'mountain', name: 'Desnivel acumulado',         unit: 'm',           enabled: true, tiers: [1000, 8849, 50000, 100000, 300000] },
+    { id: 'max_km',     icon: 'flag', name: 'Ruta más larga (en un día)', unit: 'km',          enabled: true, tiers: [21, 42, 70, 100, 150] },
+    { id: 'max_gain',   icon: 'trending-up', name: 'Mayor desnivel en un día',   unit: 'm',           enabled: true, tiers: [500, 1000, 1500, 2000, 3000] },
+    { id: 'multiday',   icon: 'tent', name: 'Travesías de varios días',   unit: 'travesías',   enabled: true, tiers: [1, 3, 5, 10, 20] },
+    { id: 'provinces',  icon: 'map', name: 'Provincias exploradas',      unit: 'provincias',  enabled: true, tiers: [2, 5, 10, 20, 35] },
+    { id: 'activities', icon: 'layers', name: 'Multideporte',               unit: 'actividades', enabled: true, tiers: [2, 3, 5, 7, 9] },
+    { id: 'circular',   icon: 'loop', name: 'Rutas circulares',           unit: 'rutas',       enabled: true, tiers: [5, 25, 50, 100, 200] },
+    { id: 'years',      icon: 'calendar', name: 'Años en ruta',               unit: 'años',        enabled: true, tiers: [1, 3, 5, 10, 20] },
+    { id: 'photos',     icon: 'camera', name: 'Fotógrafo',                  unit: 'fotos',       enabled: true, tiers: [1, 10, 25, 100, 250] },
+    { id: 'lists',      icon: 'books', name: 'Coleccionista',              unit: 'listas',      enabled: true, tiers: [1, 3, 5, 10, 20] },
   ],
 };
 
@@ -71,11 +71,15 @@ function mergeConfig(stored) {
     if (!cur) continue;
     if (typeof f.enabled === 'boolean') cur.enabled = f.enabled;
     if (typeof f.name === 'string' && f.name.trim()) cur.name = f.name.trim();
-    if (typeof f.icon === 'string' && f.icon.trim()) cur.icon = f.icon.trim();
+    // Configs saved before the icon library keep the old default emoji: those switch to the new icon
+    if (typeof f.icon === 'string' && f.icon.trim() && f.icon.trim() !== LEGACY_ICONS[f.id]) cur.icon = f.icon.trim();
     if (Array.isArray(f.tiers) && f.tiers.length === 5) cur.tiers = f.tiers.map((t, i) => num(t, cur.tiers[i]));
   }
   return cfg;
 }
+
+const LEGACY_ICONS = { routes: '🥾', km: '📏', gain: '⛰️', max_km: '🏁', max_gain: '🧗', multiday: '🏕️',
+  provinces: '🗺️', activities: '🎽', circular: '🔄', years: '📅', photos: '📷', lists: '📚' };
 
 /** Throws a readable error if the config can't be used. */
 function validateConfig(cfg) {

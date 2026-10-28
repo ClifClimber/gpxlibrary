@@ -89,9 +89,9 @@ const ACT_ICONS = {
   'Otro':                  `<path fill="white" stroke="none" d="M12 2.5C8.8 2.5 6.5 5.3 6.5 8.6c0 4.9 5.5 12.9 5.5 12.9s5.5-8 5.5-12.9C17.5 5.3 15.2 2.5 12 2.5z"/>`,
 };
 
-let actIconsCustom = {};
 let actColorsCustom = {};
 let trackColors = {};
+let actConfig = {};  // {name: {icon, image, ...}}
 const PALETTE = ['#e67e22','#27ae60','#8e44ad','#2980b9','#e74c3c','#16a085','#f39c12','#c0392b','#1abc9c','#d35400','#2c3e50','#7f8c8d'];
 let actColorIdx = 0;
 const autoColors = {};
@@ -99,7 +99,6 @@ const autoColors = {};
 function loadColors() {
   try { actColorsCustom = JSON.parse(localStorage.getItem('gpx-act-colors')   || '{}'); } catch {}
   try { trackColors     = JSON.parse(localStorage.getItem('gpx-track-colors') || '{}'); } catch {}
-  try { actIconsCustom  = JSON.parse(localStorage.getItem('gpx-act-icons')    || '{}'); } catch {}
 }
 function saveActColors()   { try { localStorage.setItem('gpx-act-colors',   JSON.stringify(actColorsCustom)); } catch {} }
 function saveTrackColors() { try { localStorage.setItem('gpx-track-colors', JSON.stringify(trackColors));     } catch {} }
@@ -112,8 +111,9 @@ function actColor(act) {
 function getTrackColor(track) { return trackColors[track.file] || actColor(track.activity || 'Otro'); }
 
 function actIconInner(act) {
-  const customSrc = actIconsCustom[act];
-  if (customSrc) return `<img src="${escHtml(customSrc)}" alt="">`;
+  // Icon configured in Admin → Actividades (icons.js key), else the built-in silhouette
+  const cfg = actConfig[act];
+  if (cfg?.icon && window.GPX_ICONS?.[cfg.icon]) return window.gpxIcon(cfg.icon, { size: 16 });
   return `<svg viewBox="0 0 24 24">${ACT_ICONS[act] || ACT_ICONS['Otro']}</svg>`;
 }
 function makeActivityIcon(act, color) {
@@ -300,32 +300,28 @@ function setTrackColor(track, color, save) {
   if (activeIdx !== null && items[activeIdx].track === track) fillDetailHeader(track, color);
 }
 
-// Seed activity colors from DB if not already customised locally
+// Seed activity colors, icons, images from DB if not already customised locally
 fetch('/api/config/activities')
   .then(r => r.json())
   .then(acts => {
     let changed = false;
     acts.forEach(a => {
+      actConfig[a.name] = { icon: a.icon, image: a.image };
       if (a.color && !actColorsCustom[a.name]) { actColorsCustom[a.name] = a.color; changed = true; }
     });
     if (changed) acts.forEach(a => { if (a.color) setActivityColor(a.name, actColorsCustom[a.name], false); });
+    items.forEach(({ track, marker }) => { if (marker) marker.setIcon(makeActivityIcon(track.activity || 'Otro', getTrackColor(track))); });
+    renderList(true);
   })
   .catch(() => {});
 
-// Live sync when config.html (or another tab) changes colors/icons
+// Live sync when another tab changes colors
 window.addEventListener('storage', e => {
   if (e.key === 'gpx-act-colors' && e.newValue) {
     try {
       const newColors = JSON.parse(e.newValue);
       Object.entries(newColors).forEach(([act, color]) => { if (actColorsCustom[act] !== color) setActivityColor(act, color, false); });
       actColorsCustom = newColors;
-    } catch {}
-  }
-  if (e.key === 'gpx-act-icons' && e.newValue) {
-    try {
-      actIconsCustom = JSON.parse(e.newValue);
-      items.forEach(({ track, marker }) => { if (marker) marker.setIcon(makeActivityIcon(track.activity || 'Otro', getTrackColor(track))); });
-      renderList(true);
     } catch {}
   }
 });
@@ -751,7 +747,7 @@ function trackItemHtml(track, ri) {
     ? `<span class="ti-ibp" style="color:${IBP_LEVELS[li].color};background:${IBP_LEVELS[li].bg};border-color:${IBP_LEVELS[li].border}" title="${escHtml(gradeTitle)}">${IBP_LEVELS[li].label}</span>`
     : '';
   const meta = [track.sierra || track.zone].filter(Boolean).map(escHtml).join(' · ');
-  const photo = track.cover || ACT_PHOTOS[act];   // route cover (thumbnail) or the activity's stock photo
+  const photo = track.cover || actConfig[act]?.image || ACT_PHOTOS[act];   // route cover, config image, or fallback stock photo
   const photoHtml = photo
     ? `<div class="ti-photo" style="background-image:url('${photo}')"></div>`
     : `<div class="ti-photo ti-photo-empty"></div>`;

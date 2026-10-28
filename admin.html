@@ -6,6 +6,7 @@
 <title>Admin — GPX Library</title>
 <link rel="stylesheet" href="/shared.css">
 <script src="/theme.js"></script>
+<script src="/icons.js"></script>
 <style>
 /* Admin — maquetación propia. Tokens y componentes en shared.css */
 .page { max-width: 980px; }
@@ -130,6 +131,13 @@ tr.inactive td { opacity: .4; }
 .color-input-row input[type=color] { width: 32px; height: 28px; border: none; background: none; cursor: pointer; padding: 0; }
 .color-input-row input[type=text] { width: 100px !important; }
 
+/* Icono + imagen de actividad */
+.act-icon-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+.act-img-thumb { width:40px; height:28px; border-radius:6px; background-size:cover; background-position:center; border:1px solid var(--line); }
+.act-visual { display:grid; grid-template-columns:auto 1fr; gap:24px; margin-top:6px; }
+.act-img-prev { width:72px; height:48px; border-radius:8px; border:1px dashed var(--line); background-size:cover; background-position:center; background-color:var(--soft); }
+.act-img-prev.has-img { border-style:solid; }
+@media (max-width:700px) { .act-visual { grid-template-columns:1fr; gap:12px; } }
 /* Icono personalizado */
 .icon-upload-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 .icon-preview { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--line); object-fit: cover; display: none; }
@@ -155,7 +163,7 @@ tr.inactive td { opacity: .4; }
 .gm-row .input { width: 100%; }
 #gm-groups .input, #gm-families .input { height: 30px; font-size: 12px; padding: 0 8px; }
 #gm-groups .num .input, #gm-families .num .input { width: 86px; text-align: right; }
-#gm-families .gm-icon { width: 46px; text-align: center; font-size: 16px; }
+#gm-families .gi-btn .gi-txt { font-size: 16px; }
 #gm-families tr.gm-off td:not(:first-child) { opacity: .45; }
 .gm-bar { position: sticky; bottom: 12px; z-index: 50; margin-top: 16px; display: flex; align-items: center; gap: 10px;
   flex-wrap: wrap; padding: 10px 14px; border-radius: var(--radius); }
@@ -638,7 +646,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.9.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.10.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">27 octubre 2026</div>
         </div>
       </div>
@@ -657,8 +665,20 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.9.0</span>
+            <span class="cl-version">v2.10.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">28 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Icono e imagen por actividad</b> configurables en Admin → Actividades: el icono se elige de una biblioteca de iconos de línea y se usa en el mapa, la lista del visor y el detalle; la imagen es la portada por defecto de las rutas sin fotos</li>
+            <li><b>Insignias con iconos monocromos</b>: en Admin → Gamificación cada insignia elige su icono de la misma biblioteca; el perfil los muestra en el color de acento (gris si están bloqueadas)</li>
+            <li><b>Dificultad editable al subir</b>: Upload Trail muestra el IBP y el grado que le corresponde; el grado que elijas manda en filtros, lista y detalle</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.9.0</span>
             <span class="cl-date">28 oct 2026</span>
           </div>
           <ul class="cl-list">
@@ -1958,29 +1978,21 @@ function showToast(msg, ms=2200) {
 // ── Tabs (handled by the admin tab bar) ─────────────────────────────
 
 // ── Icon resize helper ──────────────────────────────────────────────
-function resizeImageToDataURL(file, size) {
-  size = size || 32;
+// Activity default image: scaled down to ≤ max px on the longest side, JPEG data URL
+function resizeToJpegDataURL(file, max = 1200) {
   return new Promise(function(resolve, reject) {
     const img = new Image();
     img.onload = function() {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
       const c = document.createElement('canvas');
-      c.width = size; c.height = size;
-      c.getContext('2d').drawImage(img, 0, 0, size, size);
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(img.src);
-      resolve(c.toDataURL('image/png'));
+      resolve(c.toDataURL('image/jpeg', 0.85));
     };
     img.onerror = reject;
     img.src = URL.createObjectURL(file);
   });
-}
-
-function getActIcons() {
-  try { return JSON.parse(localStorage.getItem('gpx-act-icons') || '{}'); } catch { return {}; }
-}
-function setActIcon(name, dataUrl) {
-  const icons = getActIcons();
-  if (dataUrl) icons[name] = dataUrl; else delete icons[name];
-  try { localStorage.setItem('gpx-act-icons', JSON.stringify(icons)); } catch {}
 }
 
 // ── Color picker helper ─────────────────────────────────────────────
@@ -2069,15 +2081,16 @@ const ACT_ICONS = {
 };
 const ACT_ICON_FALLBACK = `<path fill="white" stroke="none" d="M12 2.5C8.8 2.5 6.5 5.3 6.5 8.6c0 4.9 5.5 12.9 5.5 12.9s5.5-8 5.5-12.9C17.5 5.3 15.2 2.5 12 2.5z"/>`;
 
-function renderActIconCell(name, color) {
-  const icons = getActIcons();
-  const customSrc = icons[name];
-  const bg = escHtml(color || '#64748b');
-  if (customSrc) {
-    return `<div style="width:28px;height:28px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,.2);box-shadow:0 1px 4px rgba(0,0,0,.3)"><img src="${escHtml(customSrc)}" style="width:16px;height:16px;object-fit:contain;border-radius:2px"/></div>`;
-  }
-  const paths = ACT_ICONS[name] || ACT_ICON_FALLBACK;
-  return `<div style="width:28px;height:28px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,.2);box-shadow:0 1px 4px rgba(0,0,0,.3)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round">${paths}</svg></div>`;
+// Icon chosen in the form (icons.js key) on the activity color, else the old built-in silhouette
+function actIconHtml(a, size = 15) {
+  if (a.icon && window.GPX_ICONS?.[a.icon]) return gpxIcon(a.icon, { size });
+  const paths = ACT_ICONS[a.name] || ACT_ICON_FALLBACK;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+}
+function renderActIconCell(a) {
+  const bg = escHtml(a.color || '#64748b');
+  const img = a.image ? `<span class="act-img-thumb" style="background-image:url('${escHtml(a.image)}')" title="Imagen por defecto"></span>` : '';
+  return `<div style="display:flex;align-items:center;gap:8px"><div class="act-icon-dot" style="background:${bg}">${actIconHtml(a)}</div>${img}</div>`;
 }
 
 // ── ACTIVIDADES ─────────────────────────────────────────────────────
@@ -2124,7 +2137,7 @@ function renderActivities() {
       <td>
         <span class="badge-act" style="background:${escHtml(a.color||'#64748b')}">${escHtml(a.name)}</span>
       </td>
-      <td>${renderActIconCell(a.name, a.color)}</td>
+      <td>${renderActIconCell(a)}</td>
       <td style="color:var(--text2);font-size:11px">${escHtml(a.keywords||'—')}</td>
       <td style="text-align:right">
         ${cnt > 0
@@ -2227,55 +2240,50 @@ function buildActForm(act) {
   `;
   wrap.appendChild(row3);
 
-  // Row 4: icono personalizado
+  // Row 4: icono (selector icons.js) + imagen por defecto del visor
   const row4 = document.createElement('div');
-  row4.style.cssText = 'margin-top:2px';
-  const existingIcon = act ? getActIcons()[act.name] : null;
-  let pendingIconDataUrl = existingIcon || null;
-  const previewImg = document.createElement('img');
-  previewImg.className = 'icon-preview' + (existingIcon ? ' has-icon' : '');
-  previewImg.src = existingIcon || '';
-  const fileInput = document.createElement('input');
-  fileInput.type = 'file'; fileInput.accept = 'image/*'; fileInput.style.display = 'none';
-  const uploadLabel = document.createElement('label');
-  uploadLabel.className = 'icon-upload-label';
-  uploadLabel.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Subir icono';
-  uploadLabel.appendChild(fileInput);
-  const clearBtn = document.createElement('button');
-  clearBtn.type = 'button'; clearBtn.className = 'icon-clear-btn'; clearBtn.textContent = '✕ Quitar';
-  clearBtn.style.display = existingIcon ? '' : 'none';
-  const hint = document.createElement('span');
-  hint.style.cssText = 'font-size:10px;color:var(--text2)';
-  hint.textContent = 'PNG/JPG/SVG — se redimensiona a 32×32 px';
-  fileInput.addEventListener('change', async () => {
-    const file = fileInput.files[0];
+  row4.className = 'act-visual';
+  let pendingIcon = act?.icon || 'pin';
+  let pendingImage = null;            // data URL elegido pero aún sin subir
+  let removeImage = false;
+  const curImage = () => pendingImage || (removeImage ? '' : (act?.image || ''));
+  row4.innerHTML = `
+    <div>
+      <label>Icono</label>
+      <div class="icon-upload-wrap">
+        <button type="button" class="gi-btn" data-role="icon-btn" title="Elegir icono"></button>
+        <span class="kw-help">Se muestra en el mapa y en la lista del visor.</span>
+      </div>
+    </div>
+    <div>
+      <label>Imagen por defecto (rutas sin fotos)</label>
+      <div class="icon-upload-wrap">
+        <span class="act-img-prev" data-role="img-prev"></span>
+        <label class="icon-upload-label">Subir imagen<input type="file" accept="image/*" style="display:none" data-role="img-file"></label>
+        <button type="button" class="icon-clear-btn" data-role="img-clear">✕ Quitar</button>
+        <span class="kw-help">JPG/PNG — se reduce a 1200 px.</span>
+      </div>
+    </div>`;
+  const iconBtn = row4.querySelector('[data-role=icon-btn]');
+  const imgPrev = row4.querySelector('[data-role=img-prev]');
+  const imgClear = row4.querySelector('[data-role=img-clear]');
+  const paintVisual = () => {
+    iconBtn.innerHTML = gpxIcon(pendingIcon, { size: 22 });
+    const im = curImage();
+    imgPrev.style.backgroundImage = im ? `url('${im}')` : '';
+    imgPrev.classList.toggle('has-img', !!im);
+    imgClear.style.display = im ? '' : 'none';
+  };
+  iconBtn.addEventListener('click', () => gpxIconPicker(iconBtn, pendingIcon, k => { pendingIcon = k; paintVisual(); }));
+  row4.querySelector('[data-role=img-file]').addEventListener('change', async e => {
+    const file = e.target.files[0];
     if (!file) return;
-    try {
-      pendingIconDataUrl = await resizeImageToDataURL(file, 32);
-      previewImg.src = pendingIconDataUrl;
-      previewImg.classList.add('has-icon');
-      clearBtn.style.display = '';
-    } catch { showToast('No se pudo procesar la imagen'); }
+    try { pendingImage = await resizeToJpegDataURL(file, 1200); removeImage = false; paintVisual(); }
+    catch { showToast('No se pudo procesar la imagen'); }
   });
-  clearBtn.addEventListener('click', () => {
-    pendingIconDataUrl = null;
-    previewImg.src = ''; previewImg.classList.remove('has-icon');
-    clearBtn.style.display = 'none';
-    fileInput.value = '';
-  });
-  const iconWrap = document.createElement('div');
-  iconWrap.className = 'icon-upload-wrap';
-  iconWrap.appendChild(previewImg);
-  iconWrap.appendChild(uploadLabel);
-  iconWrap.appendChild(clearBtn);
-  iconWrap.appendChild(hint);
-  const iconLabel = document.createElement('label');
-  iconLabel.textContent = 'Icono personalizado (mapa)';
-  row4.appendChild(iconLabel);
-  row4.appendChild(iconWrap);
+  imgClear.addEventListener('click', () => { pendingImage = null; removeImage = true; paintVisual(); });
+  paintVisual();
   wrap.appendChild(row4);
-  wrap._getPendingIcon = () => pendingIconDataUrl;
-  wrap._getActName    = () => wrap.querySelector('[name=name]').value.trim();
 
   // Buttons
   const btns = document.createElement('div');
@@ -2304,21 +2312,22 @@ function buildActForm(act) {
       keywords: wrap.querySelector('[name=keywords]').value.trim(),
       sort_order: parseInt(wrap.querySelector('[name=sort_order]').value) || 0,
       active: wrap.querySelector('[name=active]').checked ? 1 : 0,
+      icon: pendingIcon,
     };
     try {
-      if (isNew) {
-        await fetch('/api/config/activities', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-        });
-        showToast('Actividad creada');
-      } else {
-        await fetch(`/api/config/activities/${act.id}`, {
-          method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-        });
-        showToast('Actividad guardada');
-      }
-      // Sync icon + color to localStorage so the map viewer updates live
-      setActIcon(name, wrap._getPendingIcon());
+      const send = async (url, method, payload) => {
+        const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: payload ? JSON.stringify(payload) : undefined });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+        return j;
+      };
+      let id = act?.id;
+      if (isNew) id = (await send('/api/config/activities', 'POST', body)).id;
+      else await send(`/api/config/activities/${id}`, 'PATCH', body);
+      if (pendingImage) await send(`/api/config/activities/${id}/image`, 'POST', { data: pendingImage.split(',')[1] });
+      else if (removeImage && act?.image) await send(`/api/config/activities/${id}/image`, 'DELETE');
+      showToast(isNew ? 'Actividad creada' : 'Actividad guardada');
+      // Sync color to localStorage so the map viewer updates live
       try {
         const colors = JSON.parse(localStorage.getItem('gpx-act-colors') || '{}');
         if (body.color) colors[name] = body.color;
@@ -2716,7 +2725,7 @@ loadActivities();
     $('gm-xp-base').value = cfg.xp.levelBase;
     $('gm-families').innerHTML = cfg.families.map(f => `<tr data-f="${esc(f.id)}" class="${f.enabled ? '' : 'gm-off'}">
       <td><input type="checkbox" data-k="enabled" ${f.enabled ? 'checked' : ''}></td>
-      <td><input class="input gm-icon" type="text" data-k="icon" value="${esc(f.icon)}" maxlength="4"></td>
+      <td><button type="button" class="gi-btn" data-k="icon" data-icon="${esc(f.icon)}" title="Cambiar icono">${gpxIcon(f.icon, { size: 20 })}</button></td>
       <td><input class="input" type="text" data-k="name" value="${esc(f.name)}" style="min-width:180px"></td>
       <td style="color:var(--muted);font-size:12px">${esc(f.unit)}</td>
       ${f.tiers.map((t, i) => `<td class="num"><input class="input" type="number" min="0" step="any" data-tier="${i}" value="${t}"></td>`).join('')}
@@ -2742,7 +2751,7 @@ loadActivities();
       families: [...document.querySelectorAll('#gm-families tr')].map(tr => ({
         id: tr.dataset.f,
         enabled: tr.querySelector('[data-k="enabled"]').checked,
-        icon: tr.querySelector('[data-k="icon"]').value,
+        icon: tr.querySelector('[data-k="icon"]').dataset.icon,
         name: tr.querySelector('[data-k="name"]').value,
         tiers: [...tr.querySelectorAll('[data-tier]')].map(i => +i.value),
       })),
@@ -2763,6 +2772,16 @@ loadActivities();
   const setDirty = on => { $('gm-dirty').hidden = !on; };
   $('tab-gami').addEventListener('input', e => { if (e.target.closest('.card') && !e.target.closest('#gm-preview-card')) setDirty(true); });
   $('tab-gami').addEventListener('change', e => { if (e.target.closest('.card') && !e.target.closest('#gm-preview-card')) setDirty(true); });
+  // Badge icon: monochrome picker from icons.js
+  $('gm-families').addEventListener('click', e => {
+    const btn = e.target.closest('[data-k="icon"]');
+    if (!btn) return;
+    gpxIconPicker(btn, btn.dataset.icon, k => {
+      btn.dataset.icon = k;
+      btn.innerHTML = gpxIcon(k, { size: 20 });
+      setDirty(true);
+    });
+  });
 
   $('gm-save').addEventListener('click', async () => {
     const btn = $('gm-save'); btn.disabled = true; btn.textContent = 'Guardando…';

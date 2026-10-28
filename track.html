@@ -8,6 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <link rel="stylesheet" href="/shared.css">
   <script src="/theme.js"></script>
+  <script src="/icons.js"></script>
   <link rel="stylesheet" href="/track.css">
 </head>
 <body>
@@ -168,8 +169,12 @@ function actInfo(a) {
   const base = (a && ACT[a.toLowerCase()]) || { color: '#006783', icon: '📍' };
   let custom = null;
   try { custom = JSON.parse(localStorage.getItem('gpx-act-colors') || '{}')[a]; } catch {}
-  return { color: custom || DB_ACT_COLORS[a] || base.color, icon: base.icon };
+  // Icon configured in Admin → Actividades (icons.js key), else the emoji
+  const key = DB_ACT_ICONS[a];
+  const icon = key && window.GPX_ICONS?.[key] ? gpxIcon(key, { size: 15 }) : esc(base.icon);
+  return { color: custom || DB_ACT_COLORS[a] || base.color, icon };
 }
+let DB_ACT_ICONS = {};
 
 const CYCLING_ACTS_T = ['MTB','MTB Enduro','Mtb','Gravel','Bikepacking','Ciclismo de carretera'];
 const RUNNING_ACTS_T = ['Trail Running','Running'];
@@ -284,6 +289,7 @@ if (!trackId) {
     .then(acts => {
       acts.forEach(a => {
         if (a.color) DB_ACT_COLORS[a.name] = a.color;
+        if (a.icon) DB_ACT_ICONS[a.name] = a.icon;
         const dl = document.getElementById('ef-activity-list');
         if (dl) { const o = document.createElement('option'); o.value = a.name; dl.appendChild(o); }
       });
@@ -514,7 +520,7 @@ function render(t) {
 function updateHeader(t) {
   const { icon } = actInfo(t.activity);
   document.getElementById('track-title').textContent = t.name;
-  document.getElementById('track-act').textContent = t.activity ? `${icon} ${t.activity}` : '';
+  document.getElementById('track-act').innerHTML = t.activity ? `${icon} ${esc(t.activity)}` : '';
   const date = t.date ? new Date(t.date + 'T00:00:00').toLocaleDateString('es-ES', { year:'numeric', month:'short', day:'numeric' }) : '';
   document.getElementById('track-sub').textContent = [t.sierra, t.province, date].filter(Boolean).join(' · ');
   const srcBtn = document.getElementById('source-btn');

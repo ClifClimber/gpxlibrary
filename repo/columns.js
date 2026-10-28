@@ -33,7 +33,7 @@ const CATALOG_COLS = [
 const EDITABLE_FIELDS = new Set(['name', 'activity', 'province', 'ccaa', 'sierra', 'notes', 'url', 'tags', 'days_declared', 'difficulty']);
 
 const CONFIG_TABLES = {
-  config_activities: { order: ['sort_order', 'name'], cols: ['name', 'color', 'keywords', 'sort_order', 'active'] },
+  config_activities: { order: ['sort_order', 'name'], cols: ['name', 'color', 'keywords', 'sort_order', 'active', 'icon'] },
   config_sierras:    { order: ['name'],               cols: ['name', 'sw_lat', 'sw_lon', 'ne_lat', 'ne_lon', 'active'] },
 };
 
@@ -41,8 +41,8 @@ const CONFIG_TABLES = {
 function configValues(table, body, isCreate) {
   if (table === 'config_activities') {
     return isCreate
-      ? [body.name, body.color || null, body.keywords || '', body.sort_order ?? 99, 1]
-      : [body.name, body.color ?? null, body.keywords ?? '', body.sort_order ?? 0, body.active ?? 1];
+      ? [body.name, body.color || null, body.keywords || '', body.sort_order ?? 99, 1, body.icon || 'pin']
+      : [body.name, body.color ?? null, body.keywords ?? '', body.sort_order ?? 0, body.active ?? 1, body.icon ?? null];
   }
   return [body.name, body.sw_lat ?? null, body.sw_lon ?? null, body.ne_lat ?? null, body.ne_lon ?? null, isCreate ? 1 : (body.active ?? 1)];
 }

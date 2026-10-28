@@ -1,6 +1,6 @@
 {
   "name": "gpx-library",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "description": "GPX Track Viewer with Leaflet",
   "scripts": {
     "start": "node server.js",

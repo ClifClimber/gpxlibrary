@@ -92,7 +92,7 @@ describe('postgres', () => {
 
   it('config CRUD with the same defaults', async () => {
     const a = await repo.createConfig('config_activities', { name: 'Kayak' });
-    assert.deepEqual({ ...a, id: undefined }, { id: undefined, name: 'Kayak', color: null, keywords: '', sort_order: 99, active: 1 });
+    assert.deepEqual({ ...a, id: undefined }, { id: undefined, name: 'Kayak', color: null, keywords: '', sort_order: 99, active: 1, icon: 'pin', image: null });
     const u = await repo.updateConfig('config_activities', a.id, { name: 'Kayak', color: '#123456', active: 0 });
     assert.deepEqual([u.color, u.sort_order, u.active], ['#123456', 0, 0]);
     await repo.createConfig('config_sierras', { name: 'Gredos', sw_lat: 40, sw_lon: -5.5, ne_lat: 40.4, ne_lon: -4.9 });

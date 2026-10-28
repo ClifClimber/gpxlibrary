@@ -56,7 +56,7 @@ const MIME = {
 
 // ── Archivos estáticos ─────────────────────────────────────────────
 // Public: the pages and styles at the root, the browser scripts listed here and assets/.
-const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js']);
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js']);
 function isPublicFile(rel) {
   if (rel.split('/').some(s => s.startsWith('.'))) return false;
   if (rel.startsWith('assets/')) return true;
@@ -99,6 +99,7 @@ const USER_API = [
   ['DELETE', /^\/api\/photos\/\d+$/],
   ['PATCH',  /^\/api\/tracks\/\d+\/cover$/],
   ['GET',    /^\/api\/tracks\/\d+\/days$/],
+  ['GET',    /^\/api\/activity-images\/[\w.-]+$/],
   ['GET',    /^\/api\/lists(\/shared)?$/],
   ['POST',   /^\/api\/lists$/],
   ['PATCH',  /^\/api\/lists\/\d+$/],
@@ -842,7 +843,11 @@ async function apiConfigCreate(req, res, table) {
 
 async function apiConfigUpdate(req, res, table, id) {
   try {
-    const row = await repo.updateConfig(table, id, await parseBody(req));
+    const body = await parseBody(req);
+    // Callers that don't send the icon keep the current one
+    if (table === 'config_activities' && body.icon === undefined)
+      body.icon = (await sqlDb().get('SELECT icon FROM config_activities WHERE id = ?', [id]))?.icon ?? null;
+    const row = await repo.updateConfig(table, id, body);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(row));
   } catch (e) {
@@ -2075,6 +2080,42 @@ const server = http.createServer(async (req, res) => {
     return apiConfigUpdate(req, res, 'config_activities', parseInt(actMatch[1]));
   if (actMatch && method === 'DELETE')
     return apiConfigDelete(res, 'config_activities', parseInt(actMatch[1]));
+
+  // Default image of an activity (the viewer shows it when a route has no photos). Admin only.
+  const actImgMatch = pathname.match(/^\/api\/config\/activities\/(\d+)\/image$/);
+  if (actImgMatch && (method === 'POST' || method === 'DELETE')) {
+    if (!requireAdmin(req, res)) return;
+    const aid = parseInt(actImgMatch[1]);
+    const a = await sqlDb().get('SELECT image FROM config_activities WHERE id = ?', [aid]);
+    if (!a) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Actividad no encontrada' })); }
+    const dir = path.join(PHOTOS_DIR, 'activities');
+    const removeOld = () => {   // only files we uploaded; the stock /assets images stay
+      const m = /^\/api\/activity-images\/([\w.-]+)$/.exec(a.image || '');
+      if (m) { try { fs.unlinkSync(path.join(dir, m[1])); } catch {} }
+    };
+    let image = null;
+    if (method === 'POST') {
+      const body = await parseBody(req);
+      if (!body.data) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Falta la imagen' })); }
+      const buf = Buffer.from(body.data, 'base64');
+      if (buf.length > 3 * 1024 * 1024) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'La imagen no puede superar 3 MB' })); }
+      const fname = `act-${aid}-${Date.now()}.jpg`;
+      try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, fname), buf); }
+      catch (e) { res.writeHead(500, J); return res.end(JSON.stringify({ error: 'No se pudo guardar la imagen: ' + e.message })); }
+      image = `/api/activity-images/${fname}`;
+    }
+    removeOld();
+    await sqlDb().run('UPDATE config_activities SET image = ? WHERE id = ?', [image, aid]);
+    invalidateCatalogCache();
+    appendLog('info', 'activities', image ? 'Imagen de actividad cambiada' : 'Imagen de actividad quitada', { id: aid, by: req.user.username });
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, image }));
+  }
+  const actImgFile = pathname.match(/^\/api\/activity-images\/([\w.-]+)$/);
+  if (actImgFile && method === 'GET') {
+    let buf; try { buf = fs.readFileSync(path.join(PHOTOS_DIR, 'activities', actImgFile[1])); } catch { res.writeHead(404); return res.end('Not found'); }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400' });
+    return res.end(buf);
+  }
 
   if (pathname === '/api/config/sierras' && method === 'GET')
     return apiConfigList(res, 'config_sierras');

@@ -165,7 +165,7 @@ body.panel-resizing { cursor: ew-resize; user-select: none; }
 .ti-icon {
   width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: var(--c); border: none; cursor: pointer;
+  background: var(--c); border: none; cursor: pointer; color: #fff;
   box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .1s;
 }
 .ti-icon:hover { transform: scale(1.08); }
@@ -293,7 +293,7 @@ body.panel-resizing { cursor: ew-resize; user-select: none; }
 .act-marker {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  border: 2.5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  border: 2.5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,.35); color: #fff;
   cursor: pointer; transition: transform .15s, box-shadow .15s;
 }
 .act-marker:hover { transform: scale(1.2); box-shadow: 0 4px 14px rgba(0,0,0,.45); }

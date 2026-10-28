@@ -527,7 +527,7 @@
           : `${val} / ${a.next.toLocaleString('es')} ${a.unit}`;
         const pips = [1, 2, 3, 4, 5].map(i => `<span class="ach-pip${i <= a.level ? ' on' : ''}"></span>`).join('');
         return `<div class="ach${a.level ? '' : ' locked'}">
-          <div class="ach-head"><span class="ach-icon">${a.icon}</span>
+          <div class="ach-head"><span class="ach-icon">${gpxIcon(a.icon, { size: 22 })}</span>
             <div style="min-width:0"><div class="ach-name">${esc(a.name)}</div>
             <span class="ach-tier t${a.level}">${a.tier || 'Bloqueado'}</span></div></div>
           <div class="ach-pips" title="Nivel ${a.level}/5">${pips}</div>
