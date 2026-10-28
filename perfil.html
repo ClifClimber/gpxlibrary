@@ -123,6 +123,32 @@
 .share-add input { flex: 1; min-width: 120px; height: 30px; padding: 0 8px; font-size: 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--input-bg); color: var(--ink); }
 .share-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); margin-bottom: 8px; cursor: pointer; }
 
+/* Logros */
+.lv-card { display: flex; align-items: center; gap: 18px; }
+.lv-badge { width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #fb923c, #f97316); box-shadow: 0 4px 14px color-mix(in srgb, #f97316 35%, transparent); }
+.lv-title { font-size: 16px; font-weight: 700; }
+.lv-bar { height: 10px; background: var(--soft); border-radius: 999px; overflow: hidden; margin: 8px 0 4px; }
+.lv-fill { height: 100%; width: 0; background: linear-gradient(90deg, #fb923c, #f97316); border-radius: 999px; transition: width .5s; }
+.lv-sub { font-size: 12px; color: var(--muted); }
+.ach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.ach { background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow); padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.ach-head { display: flex; align-items: center; gap: 10px; }
+.ach-icon { font-size: 26px; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--soft); }
+.ach.locked .ach-icon { filter: grayscale(1); opacity: .45; }
+.ach-name { font-size: 13px; font-weight: 600; line-height: 1.25; }
+.ach-tier { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 1px 7px; border-radius: 999px; align-self: flex-start; }
+.t1 { background: color-mix(in srgb, #b45309 16%, transparent); color: color-mix(in srgb, #b45309 80%, var(--ink)); }
+.t2 { background: color-mix(in srgb, #64748b 18%, transparent); color: color-mix(in srgb, #64748b 80%, var(--ink)); }
+.t3 { background: color-mix(in srgb, #ca8a04 18%, transparent); color: color-mix(in srgb, #a16207 80%, var(--ink)); }
+.t4 { background: color-mix(in srgb, #0891b2 16%, transparent); color: color-mix(in srgb, #0e7490 80%, var(--ink)); }
+.t5 { background: color-mix(in srgb, #7c3aed 16%, transparent); color: color-mix(in srgb, #6d28d9 80%, var(--ink)); }
+.t0 { background: var(--soft); color: var(--muted); }
+.ach-pips { display: flex; gap: 3px; }
+.ach-pip { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+.ach-pip.on { background: #f97316; }
+.ach-prog { font-size: 11px; color: var(--muted); }
+
 /* Stats */
 .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px; }
 .stat-box { background: var(--soft); border-radius: var(--radius-md); padding: 14px 16px; }
@@ -185,6 +211,7 @@
     <button class="tab-btn" data-tab="listas">Mis listas</button>
     <button class="tab-btn" data-tab="planeadas">Planeadas</button>
     <button class="tab-btn" data-tab="stats">Estadísticas</button>
+    <button class="tab-btn" data-tab="logros">Logros</button>
   </div>
 
   <!-- ── Tab: Perfil ── -->
@@ -343,6 +370,20 @@
       <h3>Por año</h3>
       <div class="bar-chart" id="chart-year"></div>
     </div>
+  </div>
+
+  <!-- ── Tab: Logros ── -->
+  <div class="tab-panel" id="tab-logros">
+    <div class="pf-card lv-card">
+      <div class="lv-badge" id="lv-num">—</div>
+      <div style="flex:1;min-width:0">
+        <div class="lv-title">Nivel <span id="lv-num2">—</span></div>
+        <div class="lv-bar"><div class="lv-fill" id="lv-fill"></div></div>
+        <div class="lv-sub" id="lv-sub">—</div>
+      </div>
+    </div>
+    <div class="ach-grid" id="ach-grid"></div>
+    <p style="font-size:12px;color:var(--muted);margin-top:10px">Las rutas marcadas como planeadas no cuentan hasta que las marques como realizadas.</p>
   </div>
 
 </main>

@@ -40,6 +40,7 @@
       if (btn.dataset.tab === 'listas' && !gListasLoaded) loadListas();
       if (btn.dataset.tab === 'planeadas' && !gPlaneadasLoaded) loadPlaneadas();
       if (btn.dataset.tab === 'stats' && !gStatsLoaded) loadStats();
+      if (btn.dataset.tab === 'logros' && !gLogrosLoaded) loadLogros();
     });
   });
 
@@ -507,6 +508,33 @@
         <div class="bar-val">${fmtKmN(valFn(d))}</div>
       </div>`;
     }).join('');
+  }
+
+  // ── Logros ───────────────────────────────────────────────────────
+  let gLogrosLoaded = false;
+  async function loadLogros() {
+    gLogrosLoaded = true;
+    try {
+      const r = await api('/api/profile/achievements'); if (!r.ok) return;
+      const d = await r.json();
+      $('lv-num').textContent = d.level;
+      $('lv-num2').textContent = d.level;
+      $('lv-fill').style.width = Math.round(((d.xp - d.xpCur) / (d.xpNext - d.xpCur)) * 100) + '%';
+      $('lv-sub').textContent = `${d.xp.toLocaleString('es')} XP · faltan ${(d.xpNext - d.xp).toLocaleString('es')} para el nivel ${d.level + 1} · ${d.unlocked}/${d.total} insignias`;
+      $('ach-grid').innerHTML = d.achievements.map(a => {
+        const val = a.value.toLocaleString('es');
+        const prog = a.max ? `¡Completado! ${val} ${a.unit}`
+          : `${val} / ${a.next.toLocaleString('es')} ${a.unit}`;
+        const pips = [1, 2, 3, 4, 5].map(i => `<span class="ach-pip${i <= a.level ? ' on' : ''}"></span>`).join('');
+        return `<div class="ach${a.level ? '' : ' locked'}">
+          <div class="ach-head"><span class="ach-icon">${a.icon}</span>
+            <div style="min-width:0"><div class="ach-name">${esc(a.name)}</div>
+            <span class="ach-tier t${a.level}">${a.tier || 'Bloqueado'}</span></div></div>
+          <div class="ach-pips" title="Nivel ${a.level}/5">${pips}</div>
+          <div class="ach-prog">${prog}</div>
+        </div>`;
+      }).join('');
+    } catch {}
   }
 
   // ── Init ─────────────────────────────────────────────────────────

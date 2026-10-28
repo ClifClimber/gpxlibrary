@@ -1364,6 +1364,57 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
   }
 
+  // Logros (gamificación): se calculan al vuelo a partir de las rutas hechas (no planeadas)
+  if (pathname === '/api/profile/achievements' && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const db = sqlDb();
+    const uid = req.user.sub;
+    const a = await db.get(
+      `SELECT CAST(COUNT(*) AS INTEGER) AS routes,
+              COALESCE(SUM(distance), 0) AS km,
+              CAST(COALESCE(SUM(elevation_gain), 0) AS INTEGER) AS gain,
+              COALESCE(MAX(distance), 0) AS max_km,
+              CAST(COALESCE(MAX(elevation_gain), 0) AS INTEGER) AS max_gain,
+              CAST(COUNT(DISTINCT province) AS INTEGER) AS provinces,
+              CAST(COUNT(DISTINCT activity) AS INTEGER) AS activities,
+              CAST(SUM(CASE WHEN circular = 1 THEN 1 ELSE 0 END) AS INTEGER) AS circular,
+              CAST(COUNT(DISTINCT CASE WHEN length(date) >= 4 THEN left(date, 4) END) AS INTEGER) AS years
+       FROM tracks WHERE owner_id = ? AND NOT planned`, [uid]);
+    const photos = (await db.get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM track_photos WHERE owner_id = ?', [uid])).n;
+    const lists  = (await db.get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM user_lists WHERE owner_id = ?', [uid])).n;
+    const v = { ...a, km: Math.round(Number(a.km)), max_km: Math.round(Number(a.max_km) * 10) / 10, photos, lists };
+    // Familias de logros con niveles crecientes
+    const FAMILIES = [
+      { id: 'routes',     icon: '🥾', name: 'Rutas completadas',    unit: 'rutas', tiers: [1, 10, 50, 100, 250] },
+      { id: 'km',         icon: '📏', name: 'Kilómetros recorridos', unit: 'km',    tiers: [100, 500, 1000, 5000, 10000] },
+      { id: 'gain',       icon: '⛰️', name: 'Desnivel acumulado',   unit: 'm',     tiers: [1000, 8849, 50000, 100000, 300000] },
+      { id: 'max_km',     icon: '🏁', name: 'Ruta más larga',        unit: 'km',    tiers: [21, 42, 70, 100, 150] },
+      { id: 'max_gain',   icon: '🧗', name: 'Mayor desnivel en una ruta', unit: 'm', tiers: [500, 1000, 1500, 2000, 3000] },
+      { id: 'provinces',  icon: '🗺️', name: 'Provincias exploradas', unit: 'provincias', tiers: [2, 5, 10, 20, 35] },
+      { id: 'activities', icon: '🎽', name: 'Multideporte',          unit: 'actividades', tiers: [2, 3, 5, 7, 9] },
+      { id: 'circular',   icon: '🔄', name: 'Rutas circulares',      unit: 'rutas', tiers: [5, 25, 50, 100, 200] },
+      { id: 'years',      icon: '📅', name: 'Años en ruta',          unit: 'años',  tiers: [1, 3, 5, 10, 20] },
+      { id: 'photos',     icon: '📷', name: 'Fotógrafo',             unit: 'fotos', tiers: [1, 10, 25, 100, 250] },
+      { id: 'lists',      icon: '📚', name: 'Coleccionista',         unit: 'listas', tiers: [1, 3, 5, 10, 20] },
+    ];
+    const TIER_NAMES = ['Bronce', 'Plata', 'Oro', 'Platino', 'Leyenda'];
+    const achievements = FAMILIES.map(f => {
+      const value = Number(v[f.id]) || 0;
+      const level = f.tiers.filter(t => value >= t).length;   // 0..5
+      const next = f.tiers[level] ?? null;
+      const prev = level ? f.tiers[level - 1] : 0;
+      return { id: f.id, icon: f.icon, name: f.name, unit: f.unit, value, level, tier: level ? TIER_NAMES[level - 1] : null,
+               next, progress: next ? Math.min(1, (value - prev) / (next - prev)) : 1, max: level === f.tiers.length };
+    });
+    // XP y nivel global: cada nivel de logro suma, más km y desnivel
+    const xp = Math.round(v.km + v.gain / 50 + achievements.reduce((s, x) => s + x.level * 100, 0));
+    const lvl = Math.floor(Math.sqrt(xp / 100)) + 1;
+    const xpCur = (lvl - 1) ** 2 * 100, xpNext = lvl ** 2 * 100;
+    res.writeHead(200, J);
+    return res.end(JSON.stringify({ xp, level: lvl, xpCur, xpNext, unlocked: achievements.reduce((s, x) => s + x.level, 0),
+                                    total: FAMILIES.length * 5, achievements }));
+  }
+
   if (pathname === '/api/profile/stats' && method === 'GET') {
     if (!requireAuth(req, res)) return;
     const db = sqlDb();
