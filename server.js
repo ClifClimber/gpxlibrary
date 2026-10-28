@@ -55,7 +55,7 @@ const MIME = {
 
 // ── Archivos estáticos ─────────────────────────────────────────────
 // Public: the pages and styles at the root, the browser scripts listed here and assets/.
-const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js']);
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js']);
 function isPublicFile(rel) {
   if (rel.split('/').some(s => s.startsWith('.'))) return false;
   if (rel.startsWith('assets/')) return true;
@@ -2101,6 +2101,8 @@ const server = http.createServer(async (req, res) => {
     return serveStatic(res, path.join(ROOT, 'trazar.html'), req);
   if (pathname === '/compare' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'compare.html'), req);
+  if (pathname === '/subir' && method === 'GET')
+    return serveStatic(res, path.join(ROOT, 'subir.html'), req);
 
   if (pathname === '/api/export/folders' && method === 'POST') {
     const body = await parseBody(req).catch(() => ({}));

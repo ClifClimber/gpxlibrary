@@ -45,6 +45,15 @@
       window.gpxSetNavUser(me);
       // Admin is admin-only (the server refuses it too); the catalog is open to everyone
       if (me.role !== 'admin') nav.querySelectorAll('a[href="/admin"]').forEach(a => a.remove());
+      // "Upload Trail" chip next to the user (import/draw a single track)
+      if (!nav.querySelector('#nav-upload')) {
+        const up = document.createElement('a');
+        up.id = 'nav-upload'; up.href = '/subir'; up.className = 'nav-upload';
+        if (location.pathname === '/subir') up.classList.add('active');
+        up.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Upload Trail</span>';
+        const uicon = nav.querySelector('#nav-perfil');
+        nav.insertBefore(up, uicon || null);   // just before the user icon
+      }
     }).catch(() => {});
 
     const btn = document.createElement('button');

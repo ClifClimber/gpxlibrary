@@ -617,7 +617,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.6.4</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.7.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">27 octubre 2026</div>
         </div>
       </div>
@@ -636,8 +636,22 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.6.4</span>
+            <span class="cl-version">v2.7.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">28 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Upload Trail</b>: nuevo chip junto al usuario que abre un asistente en 3 pasos — (1) importar un GPX o dibujar uno nuevo, (2) vista previa con mapa, distancia y puntos de paso, (3) detalles con actividad, zona y dificultad <b>precalculadas</b>, privacidad y <b>fotos</b></li>
+            <li><b>Fotos de track</b>: se guardan en un volumen Docker propio (<code>photodata</code>) con la tabla <code>track_photos</code> en Postgres; se ven en el detalle de la ruta</li>
+            <li><b>Catálogo</b> simplificado: fuera «Nueva ruta», «IBP Index», «Enriquecer datos» e «Importar tracks»</li>
+            <li><b>Importar</b> pasa a Admin → Gestión de Tracks, con selección del <b>dueño</b> al que se asignan las rutas importadas</li>
+            <li>Admin: eliminadas las pestañas Sierras/Zonas y Provincias&amp;CCAA (ya en v2.6.4)</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.6.4</span>
             <span class="cl-date">27 oct 2026</span>
           </div>
           <ul class="cl-list">

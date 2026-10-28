@@ -289,7 +289,7 @@ if (!trackId) {
       });
     })
     .catch(() => {});
-  fetch('/api/geo').then(r => r.json()).then(geo => {
+  fetch('/api/config/provinces').then(r => r.json()).then(geo => {
     [['ef-sierra-list', geo.zones], ['ef-province-list', geo.provinces], ['ef-ccaa-list', geo.ccaa]].forEach(([id, items]) => {
       const dl = document.getElementById(id);
       if (!dl || !items) return;
@@ -337,6 +337,18 @@ document.querySelectorAll('.exp-opt').forEach(opt => {
     }
   });
 });
+
+// ── Fotos del track ──────────────────────────────────────────────
+async function loadTrackPhotos(id) {
+  try {
+    const photos = await fetch(`/api/tracks/${id}/photos`).then(r => r.ok ? r.json() : []);
+    if (!photos.length) return;
+    const strip = document.createElement('div');
+    strip.id = 'track-photos';
+    strip.innerHTML = photos.map(p => `<a href="${esc(p.url)}" target="_blank" class="tp-ph"><img src="${esc(p.url)}" alt="${esc(p.caption||'')}" loading="lazy"></a>`).join('');
+    document.getElementById('content').insertAdjacentElement('afterbegin', strip);
+  } catch {}
+}
 
 // ── Añadir a lista ───────────────────────────────────────────────
 const listBtn  = document.getElementById('btn-add-list');
@@ -460,6 +472,9 @@ function render(t) {
   // Content
   document.getElementById('loading').remove();
   document.getElementById('content').insertAdjacentHTML('afterbegin', buildContent(t, color, icon));
+
+  // Fotos del track (subidas desde el asistente Upload Trail)
+  loadTrackPhotos(t.id);
 
   // File folder link
   const ffl = document.getElementById('file-folder-link');

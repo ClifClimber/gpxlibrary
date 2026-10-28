@@ -116,6 +116,12 @@ nav .nav-user::after { content: attr(data-name); position: absolute; top: calc(1
   background: var(--solid); color: var(--on-solid); font-size: 12px; font-weight: 500; white-space: nowrap; box-shadow: var(--shadow);
   opacity: 0; transform: translateY(-3px); pointer-events: none; transition: opacity .12s, transform .12s; }
 nav .nav-user:hover::after, nav .nav-user:focus-visible::after { opacity: 1; transform: none; }
+/* Chip "Upload Trail" junto al usuario */
+nav .nav-upload { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; padding: 6px 12px !important;
+  border-radius: 999px; background: var(--accent); color: #fff !important; font-weight: 600; font-size: 12px; }
+nav .nav-upload:hover { background: var(--accent); filter: brightness(1.08); color: #fff; }
+nav .nav-upload.active { background: var(--accent); }
+@media (max-width: 640px) { nav .nav-upload span { display: none; } nav .nav-upload { padding: 6px 9px !important; } }
 
 /* ── Página de contenido (páginas sin mapa) ──────────────────────── */
 .page { max-width: 1040px; margin: 0 auto; padding: 24px 20px 48px; display: flex; flex-direction: column; gap: 16px; }
