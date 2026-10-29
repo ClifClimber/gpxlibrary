@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+### Visor: qué rutas enseña el mapa
+- Por defecto el mapa solo enseña los iconos de las rutas de la página de la lista; al cambiar de página o mover el mapa cambian con ella. La línea aparece solo al pasar el ratón
+- Cada usuario puede elegir en Perfil → Mi perfil → Visor: solo la página, la página más un punto en el inicio de las demás rutas de la zona, o todas (migración 017, `users.prefs`)
+
 ### Fase 3 · bloque 2: geometrías derivadas
 - Migración 016: `geom_view` (lo que ven los demás: geometría limpia o original menos la zona de privacidad del dueño), `geom_s1` (simplificada a 15 m), `geom_s2` (150 m), `start_point`, `search_text` (sin acentos) y `derived_at`, con índices GIST, trigram y btree
 - `domain/derive.js` con tests y trabajo `track-derive` (`--ids`, `--all`, `--owner`, `--missing`), que se encola tras importar, tras limpiar y al cambiar la zona de privacidad; `search_text` se actualiza al editar la ruta. Tolerancias en metros reales (corregidas por la latitud en 3857). El visor sigue recortando al vuelo hasta los bloques 3 y 4

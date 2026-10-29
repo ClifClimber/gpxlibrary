@@ -246,8 +246,9 @@ const cluster = L.markerClusterGroup({
 cluster.addLayers(items.map(it => it.marker).filter(Boolean));
 let _clusterKey = '';
 function syncClusterMarkers() {
-  const vis = items.filter(it => it.visible && it.marker);
-  const key = vis.map(it => it.track.id).join(',');
+  // In 'page' mode only the markers of the list page go on the map
+  const vis = items.filter((it, ri) => it.visible && it.marker && (gMapMode !== 'page' || gPageRis.has(ri)));
+  const key = gMapMode + '|' + vis.map(it => it.track.id).join(',');
   if (key === _clusterKey) return;
   _clusterKey = key;
   cluster.clearLayers();
@@ -323,6 +324,28 @@ function previewTrack(i, on) {
     layer.remove(); casingLayer.remove();
     hideMapCard();
   }
+}
+
+// ── Qué marcadores enseña el mapa (preferencia del usuario, Perfil → Mi perfil) ──
+// La línea de una ruta aparece siempre solo al pasar el ratón por su icono o por su ficha.
+// page  = solo el icono de las rutas de la página de la lista (por defecto)
+// mixed = icono de las rutas de la página + un punto pequeño en el inicio de las demás de la zona
+// all   = icono de todas las rutas de la zona
+const gMapMode = ['page', 'mixed', 'all'].includes(gCurrentUser?.prefs?.map_mode) ? gCurrentUser.prefs.map_mode : 'page';
+let gPageRis = new Set();
+const dotIcon = color => L.divIcon({ html: `<div class="start-dot" style="background:${color}"></div>`,
+  className: 'start-dot-wrap', iconSize: [12, 12], iconAnchor: [6, 6] });
+function syncMapMode(force) {
+  items.forEach((it, ri) => {
+    if (!it.marker) return;
+    const kind = gMapMode === 'mixed' && !gPageRis.has(ri) ? 'dot' : 'icon';
+    if (force || it._iconKind !== kind) {
+      it._iconKind = kind;
+      const c = getTrackColor(it.track);
+      it.marker.setIcon(kind === 'dot' ? dotIcon(c) : makeActivityIcon(it.track.activity || 'Otro', c));
+    }
+  });
+  _clusterKey = ''; syncClusterMarkers();
 }
 
 // ── Color pickers ────────────────────────────────────────────────────
@@ -892,6 +915,7 @@ function renderList(force) {
   if (!visible.length) {
     list.innerHTML = '<div class="empty-state">Ninguna ruta en esta zona<p>Mueve el mapa o quita algún filtro.</p></div>';
     pagesEl.innerHTML = '';
+    gPageRis = new Set(); syncMapMode(force);
     return;
   }
   const cmp = SORTERS[sortMode] || SORTERS.name;
@@ -899,6 +923,8 @@ function renderList(force) {
   const pages = Math.ceil(visible.length / PAGE_SIZE);
   const start = _listPage * PAGE_SIZE;
   list.innerHTML = visible.slice(start, start + PAGE_SIZE).map(x => trackItemHtml(x.it.track, x.ri)).join('');
+  gPageRis = new Set(visible.slice(start, start + PAGE_SIZE).map(x => x.ri));
+  syncMapMode(force);
   if (pages <= 1) { pagesEl.innerHTML = ''; return; }
   // Build: 1 2 3 … N  (show neighbours of current page + first/last)
   const show = new Set([0, pages - 1, _listPage, _listPage - 1, _listPage + 1].filter(n => n >= 0 && n < pages));

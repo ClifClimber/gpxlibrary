@@ -72,10 +72,20 @@
     $('inp-username').value   = p.username;
     $('inp-email').value      = p.email;
     $('inp-created').value    = p.created_at || '';
+    $('sel-map-mode').value = (p.prefs && p.prefs.map_mode) || 'page';
     const sel = $('sel-privacy'), r = String(p.privacy_radius || 0);
     if (![...sel.options].some(o => o.value === r)) sel.add(new Option(`${r} m`, r));
     sel.value = r;
   }
+
+  // ── Visor map mode ───────────────────────────────────────────────
+  $('btn-save-map-mode').addEventListener('click', async () => {
+    try {
+      const r = await api('/api/profile/me', { method: 'PATCH', body: JSON.stringify({ map_mode: $('sel-map-mode').value }) });
+      if (!r.ok) { const e = await r.json(); setMsg('msg-map-mode', e.error || 'Error', false); return; }
+      setMsg('msg-map-mode', '¡Guardado!', true);
+    } catch (err) { if (err.message !== '401') setMsg('msg-map-mode', 'Error de red', false); }
+  });
 
   // ── Privacy zone ─────────────────────────────────────────────────
   $('btn-save-privacy').addEventListener('click', async () => {

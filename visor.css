@@ -385,3 +385,10 @@ body.panel-resizing { cursor: ew-resize; user-select: none; }
   transition: transform .3s ease-out, opacity .3s ease-in;
 }
 .ti-rtype { display:inline-flex; align-items:center; color: var(--muted); }
+
+/* Punto de inicio de las rutas que no están en la página (modo de mapa «Página + inicios») */
+.start-dot-wrap { background: none; border: none; }
+.start-dot {
+  width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35); opacity: .9;
+}

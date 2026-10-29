@@ -99,6 +99,10 @@ function tooMany(key, max, windowMs) {
 }
 const forgetAttempts = key => _attempts.delete(key);
 
+// What the visor map shows (users.prefs.map_mode): page = only the routes of the list page (default),
+// mixed = those plus a dot at the start of the other routes in view, all = every route in view
+const MAP_MODES = ['page', 'mixed', 'all'];
+
 // ── Zonas de privacidad ────────────────────────────────────────────
 // Radius (m) that hides the start/end of `ownerId`'s routes from `viewer`; 0 for the owner and admins.
 async function privacyRadiusFor(ownerId, viewer) {
@@ -1376,10 +1380,10 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/auth/me' && method === 'GET') {
     if (!req.user) { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'No autenticado' })); }
-    const u = await sqlDb().get('SELECT display_name, avatar_key FROM users WHERE id = ?', [req.user.sub]).catch(() => null);
+    const u = await sqlDb().get('SELECT display_name, avatar_key, prefs FROM users WHERE id = ?', [req.user.sub]).catch(() => null);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ id: req.user.sub, username: req.user.username, role: req.user.role,
-      display_name: u?.display_name || null,
+      display_name: u?.display_name || null, prefs: u?.prefs || {},
       avatar_url: u?.avatar_key ? `/api/profile/avatar/${encodeURIComponent(u.avatar_key)}` : null }));
   }
 
@@ -1562,7 +1566,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireAuth(req, res)) return;
     const db = sqlDb();
     const u = await db.get(
-      'SELECT id, username, email, display_name, bio, avatar_key, role, privacy_radius, to_char(created_at AT TIME ZONE \'UTC\', \'YYYY-MM-DD\') AS created_at FROM users WHERE id = ?',
+      'SELECT id, username, email, display_name, bio, avatar_key, role, privacy_radius, prefs, to_char(created_at AT TIME ZONE \'UTC\', \'YYYY-MM-DD\') AS created_at FROM users WHERE id = ?',
       [req.user.sub]);
     if (!u) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Usuario no encontrado' })); }
     const avatarUrl = u.avatar_key ? `/api/profile/avatar/${encodeURIComponent(u.avatar_key)}` : null;
@@ -1577,6 +1581,10 @@ const server = http.createServer(async (req, res) => {
     const updates = []; const vals = [];
     if (body.display_name !== undefined) { updates.push('display_name = ?'); vals.push(body.display_name || null); }
     if (body.bio !== undefined)          { updates.push('bio = ?');          vals.push(body.bio || null); }
+    if (body.map_mode !== undefined) {
+      if (!MAP_MODES.includes(body.map_mode)) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Modo de mapa no válido' })); }
+      updates.push("prefs = prefs || jsonb_build_object('map_mode', ?::text)"); vals.push(body.map_mode);
+    }
     if (body.privacy_radius !== undefined) {
       const r = Number(body.privacy_radius);
       if (!Number.isInteger(r) || r < 0 || r > 5000) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Zona de privacidad no válida (0–5000 m)' })); }

@@ -276,6 +276,23 @@
     </div>
 
     <div class="pf-card">
+      <h3>Visor</h3>
+      <div class="pf-field">
+        <label for="sel-map-mode">Qué rutas enseña el mapa</label>
+        <select class="select" id="sel-map-mode">
+          <option value="page">Solo las de la página de la lista</option>
+          <option value="mixed">Las de la página y un punto en el inicio de las demás</option>
+          <option value="all">Todas las rutas de la zona visible</option>
+        </select>
+        <div class="pf-hint">En todos los casos, la línea de una ruta aparece al pasar el ratón por su icono o por su ficha en la lista.</div>
+      </div>
+      <div class="pf-actions">
+        <button class="btn" id="btn-save-map-mode">Guardar</button>
+        <span class="pf-msg" id="msg-map-mode"></span>
+      </div>
+    </div>
+
+    <div class="pf-card">
       <h3>Privacidad</h3>
       <div class="pf-field">
         <label for="sel-privacy">Zona de privacidad en el inicio y el final de tus rutas</label>

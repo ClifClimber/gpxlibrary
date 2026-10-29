@@ -136,6 +136,7 @@ All long-running operations go through the job queue (`queue/`). `apiRunScript(r
 - `activateTrack(i, fitMap)` manages the active polyline + highlights the list row (`.track-item.active`).
 - Filters live in chips + popovers; `applyFilters()` shows/hides markers and updates the list.
 - `geoFilter` — Nominatim place search sets a radius circle filter.
+- Map markers follow the user preference `users.prefs.map_mode` (migration `017`, Perfil → Mi perfil → Visor, `PATCH /api/profile/me {map_mode}`, returned by `/api/auth/me`): `page` (default) only the routes of the list page, `mixed` those plus a small dot at the start of the other routes in view, `all` every route in view. Lines always appear only on hover (`syncMapMode()`).
 - Owner filters: chip «Mis rutas» is a toggle (`gMineOnly`); chip «Usuarios» is a multi-select popover (`#user-filters`) of catalog owners. «Crear ruta» is the floating `#btn-crear-ruta` (bottom centre of the map, hidden while the elevation profile is open). Activity photos for list cards: `ACT_PHOTOS` map → `assets/activities/*.jpg`.
 
 ### Track detail (`track.html`)
