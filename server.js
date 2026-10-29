@@ -61,7 +61,7 @@ const MIME = {
 
 // ── Archivos estáticos ─────────────────────────────────────────────
 // Public: the pages and styles at the root, the browser scripts listed here and assets/.
-const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js', 'visor2.js']);
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js']);
 function isPublicFile(rel) {
   if (rel.split('/').some(s => s.startsWith('.'))) return false;
   if (rel.startsWith('assets/')) return true;
@@ -2792,8 +2792,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/track' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'track.html'), req);
 
-  if (pathname === '/visor2' && method === 'GET')
-    return serveStatic(res, path.join(ROOT, 'visor2.html'), req);
+  if (pathname === '/visor2' && method === 'GET') { res.writeHead(302, { Location: '/' }); return res.end(); }   // the server-fed visor is now the main one
   if (pathname === '/trazar' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'trazar.html'), req);
   if (pathname === '/compare' && method === 'GET')

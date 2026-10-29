@@ -20,12 +20,19 @@
     return fail(r.status === 404 ? 'Lista no encontrada' : 'No tienes acceso', d.error || 'Pide al dueño que la comparta contigo.');
   }
   const list = await r.json();
-  const [{ tracks }, catalog, acts] = await Promise.all([
+  const [{ tracks }, acts] = await Promise.all([
     fetch(`/api/lists/${id}/tracks`).then(r => r.json()),
-    fetch('/api/catalog').then(r => r.json()).catch(() => []),
     fetch('/api/config/activities').then(r => r.json()).catch(() => []),
   ]);
-  const geo = new Map(catalog.map(t => [t.id, t]));
+  // Lines of the list's routes from the search (60 per request, privacy zones applied)
+  const geo = new Map();
+  const ids = tracks.map(t => t.id);
+  for (let i = 0; i < ids.length; i += 60) {
+    try {
+      const d = await fetch(`/api/search?ids=${ids.slice(i, i + 60).join(',')}&size=60`).then(r => r.json());
+      for (const it of d.items || []) geo.set(it.id, { points: it.line });
+    } catch {}
+  }
   const colorOf = Object.fromEntries((acts || []).map(a => [a.name, a.color]));
   const canEdit = list.role === 'owner' || list.role === 'editor';
 

@@ -165,7 +165,7 @@ async function runSearch(db, p, viewer, { dataVersion = null, lite = false } = {
   const itemsQ = all(
     `SELECT t.id, t.name, t.date, t.activity, t.sierra, t.ccaa, t.tags, t.distance, t.elevation_gain, t.elevation_loss,
             t.min_elevation, t.max_elevation, t.ibp_bicycle, t.ibp_hiking, t.ibp_running, t.difficulty, t.moving_time, t.stopped_time,
-            t.circular, t.owner_id, t.visibility, t.cover_photo_id, t.road_types, u.username AS owner_username,
+            t.circular, t.owner_id, t.visibility, t.cover_photo_id, t.road_types, t.file, u.username AS owner_username,
             ST_AsGeoJSON(ST_StartPoint(${s.geom}), 5) AS start,
             ST_AsGeoJSON(CASE WHEN ${s.full} THEN ST_Transform(ST_Simplify(ST_Transform(t.geom, 3857),
                                 ${TOL[p.line]} / cos(radians(ST_Y(ST_Centroid(t.geom)))), true), 4326)
@@ -209,7 +209,7 @@ async function runSearch(db, p, viewer, { dataVersion = null, lite = false } = {
     let tags = [];
     try { tags = t.tags ? JSON.parse(t.tags) : []; } catch {}
     return {
-      id: t.id, name: t.name, date: t.date, activity: t.activity || null, sierra: t.sierra || null, ccaa: t.ccaa || null, tags,
+      id: t.id, file: t.file, name: t.name, date: t.date, activity: t.activity || null, sierra: t.sierra || null, ccaa: t.ccaa || null, tags,
       distance: t.distance, elevationGain: t.elevation_gain, elevationLoss: t.elevation_loss,
       minElevation: r0(t.min_elevation), maxElevation: r0(t.max_elevation),
       ibp_bicycle: r0(t.ibp_bicycle), ibp_hiking: r0(t.ibp_hiking), ibp_running: r0(t.ibp_running), difficulty: t.difficulty ?? null,

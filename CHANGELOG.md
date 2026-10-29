@@ -6,6 +6,11 @@
 - Por defecto el mapa solo enseña los iconos de las rutas de la página de la lista; al cambiar de página o mover el mapa cambian con ella. Si las rutas de la zona con los filtros caben en 3 páginas (45), las enseña todas. La línea aparece solo al pasar el ratón
 - Cada usuario puede elegir en Perfil → Mi perfil → Visor: solo la página, la página más un punto en el inicio de las demás rutas de la zona, o todas (migración 017, `users.prefs`)
 
+### El visor ya no descarga el catálogo
+- El visor alimentado por el servidor sustituye al anterior en `/` (`/visor2` redirige allí). La primera carga pasa de unos 920 KB a unos 18 KB
+- Los colores de ruta elegidos en el visor anterior se conservan
+- La página de listas y Comparar dejan de pedir el catálogo entero; el enlace «volver» de la ficha de una ruta abre el visor con esa ruta (`?id=`)
+
 ### Fase 3 · bloque 5: visor alimentado por el servidor (en pruebas en `/visor2`)
 - `/visor2` usa `/api/search` en lugar de descargar el catálogo entero: la primera carga pasa de unos 920 KB a unos 18 KB. Convive con el visor actual hasta que lo iguale
 - `/api/search?meta=1` (años, dueños, máximos de los deslizadores y zona donde están la mayoría de las rutas) y `GET /api/tracks/:id/preview` (ficha y línea de una ruta, con las mismas reglas de privacidad)

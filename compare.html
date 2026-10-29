@@ -1385,8 +1385,8 @@ loadTracks();
         // find newly imported track by comparing catalog IDs with current compare list
         const knownIds = new Set(tracks.map(t => t.id).filter(Boolean));
         try {
-          const cat = await fetch('/api/catalog').then(r => r.json());
-          const newEntry = cat.slice().sort((a,b) => b.id - a.id).find(t => !knownIds.has(t.id));
+          const recent = await fetch('/api/search?sort=id-desc&size=10&mine=1').then(r => r.json());
+          const newEntry = (recent.items || []).find(t => !knownIds.has(t.id));
           if (newEntry) {
             addLog('↻ Añadiendo al comparador…');
             const data = await fetch('/api/tracks/' + newEntry.id).then(r => r.json());

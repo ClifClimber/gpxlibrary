@@ -412,7 +412,7 @@ function render(t) {
   }).catch(() => {});
   const traceBtn = document.getElementById('trace-btn');
   traceBtn.href = `/trazar?id=${t.id}`; traceBtn.hidden = false;
-  if (t.file) document.getElementById('back-link').href = `/?file=${encodeURIComponent(t.file)}`;
+  if (t.id) document.getElementById('back-link').href = `/?id=${t.id}`;
 
   const hasEle = t.points && t.points.some(p => p[2] != null);
   document.getElementById('profile-sheet').classList.toggle('empty', !hasEle);

@@ -101,7 +101,7 @@ Pure Node.js HTTP server. No framework. Routes:
 - `GET /track?id=N` → `track.html`
 - `GET /trazar[?id=N]` → `trazar.html` (draw a new route or edit a copy of track N)
 - `GET /editor`, `/admin` → static HTML pages (`/config` redirects to `/admin#activities`)
-- `GET /api/catalog` — visor catalog (simplified points, stats, bounds, center, tags parsed, ibp rounded; same shape as the old catalog-data.js)
+- `GET /api/catalog` — whole catalog with simplified points (no page uses it any more; reference for `scripts/search-check.js`)
 - `GET /api/search` — visor search (phase 3, `repo/search.js`): `bbox=w,s,e,n`, filters (`act`, `sierra`, `tag` repeatable; `dmin/dmax`, `emin/emax`, `gmin/gmax` grade, `year`, `q`, `near=lat,lon,km`, `rtype`, `mine`, `user`, `ids`), `sort`, `page`, `size`, `line=s1|s2`, `starts=1`. Returns one page with start point, bounds and simplified hover line, the box totals (counted up to `COUNT_CAP` = 1000, then `totalCapped` and no km/ascent) and the cascading pill counts (not limited to the box, cached per filters + data version). Same semantics as visor.js; `node scripts/search-check.js` compares both against a running server. Others' routes are matched on `geom_s1`; indexes for the sort orders in migration `018`
 - `GET /api/tracks` — full track list for the editor (no points)
 - `GET /api/tracks/:id` — full track (parses `tags`/`waypoints_json`, attaches `points` array from DB, downsampled to 800 unless `?full=1`)
@@ -126,24 +126,20 @@ Pure Node.js HTTP server. No framework. Routes:
 All long-running operations go through the job queue (`queue/`). `apiRunScript(res, scriptPath, args)` enqueues the job and relays its SSE output from the DB, so closing the browser does not stop the work. The embedded worker (`EMBEDDED_WORKER !== '0'`) starts with the server; in Docker, `EMBEDDED_WORKER=0` on `app` and the standalone `worker` service runs `node worker.js`.
 
 ### Pages
-- `/` → `index.html` + `visor.js` + `visor.css` — Leaflet map, track list, filters, elevation profile
+- `/` → `index.html` + `visor.js` + `visor.css` — Leaflet map, track list, filters, elevation profile (data from `/api/search`)
 - `/track?id=N` → `track.html` + `track.css` — detail view with tabs (Resumen, Puntos de paso, Tipos de camino, Subidas, Tiempo hoy)
 - `/editor` → `editor.html` — CRUD list, import from `_TEMP_`, tag editing
 - `/admin` → `admin.html` — tabs: Base de datos (backup/restore/vacuum, stats), Gestión de Tracks, Actividades, Sierras / Zonas, Provincias & CCAA, Parámetros (climb thresholds + Wikiloc token), **Trabajos** (job list/view/cancel/retry), Logs, Acerca de. Tabs are deep-linkable via `#tab` (e.g. `/admin#jobs`).
 - `/perfil` → `perfil.html` + `perfil.js` — user profile, tabs Mi perfil (avatar in S3 `avatars/{uid}-{ts}.ext`, name, bio, password), Mis rutas (visibility toggle), Mis listas (`user_lists`/`user_list_tracks`), Planeadas (`tracks.planned`), Estadísticas. APIs under `/api/profile/*` and `/api/lists*`.
 - `/trazar` → `trazar.html` — route drawing/editing (draw, drag/insert/delete vertices, trim, waypoints, join other tracks, undo). `?join=1,2` opens several tracks joined in order (used by Comparar → Unir). Optional trail snapping via BRouter (brouter.de) and elevation via Open-Meteo. Saving builds a GPX client-side, uploads it with `/api/import/upload`, runs `/api/db/import-temp`, then PATCHes activity/notes. Editing an existing track always saves a new copy — source GPX files are never rewritten.
 
-### Visor nuevo (`/visor2`, en pruebas)
-`visor2.html` + `visor2.js`: the visor fed by the server instead of `/api/catalog`. Moving the map or changing filters, sort or page asks `/api/search` for one page (250 ms debounce, `AbortController`, `line=s2` below zoom 11) and gets the pill counts (`facets`) and, when the map mode needs them, the start points (`starts=1`). Years, owners, slider maxima and the initial box (`core`, 5th–95th percentile) come from `/api/search?meta=1`. A route's line appears only on hover (`item.line`, or `GET /api/tracks/:id/preview` for routes that only came as a start point); the elevation profile uses `GET /api/tracks/:id`. Per-route colours are stored as `id:N` (the old visor keyed them by file). `visor.js` stays untouched until `/visor2` replaces it.
-
-### Visor (`visor.js`)
-- Loads track data by fetching `GET /api/catalog` asynchronously at startup (async IIFE). No longer depends on the global `catalog-data.js` file.
-- Polylines are only added to the map when active or being previewed (hover). When a track is active, other tracks' polylines are suppressed — `previewTrack` is a no-op when `activeIdx !== null`.
-- `activateTrack(i, fitMap)` manages the active polyline + highlights the list row (`.track-item.active`).
-- Filters live in chips + popovers; `applyFilters()` shows/hides markers and updates the list.
-- `geoFilter` — Nominatim place search sets a radius circle filter.
-- Map markers follow the user preference `users.prefs.map_mode` (migration `017`, Perfil → Mi perfil → Visor, `PATCH /api/profile/me {map_mode}`, returned by `/api/auth/me`): `page` (default) only the routes of the list page — or all of them when the routes in view fit in 3 pages (`PAGE_MODE_ALL_PAGES`), `mixed` those plus a small dot at the start of the other routes in view, `all` every route in view. Lines always appear only on hover (`syncMapMode()`).
-- Owner filters: chip «Mis rutas» is a toggle (`gMineOnly`); chip «Usuarios» is a multi-select popover (`#user-filters`) of catalog owners. «Crear ruta» is the floating `#btn-crear-ruta` (bottom centre of the map, hidden while the elevation profile is open). Activity photos for list cards: `ACT_PHOTOS` map → `assets/activities/*.jpg`.
+### Visor (`index.html` + `visor.js`)
+- Fed by the server (phase 3): it never downloads the whole catalog. Moving the map or changing filters, sort or page asks `GET /api/search` for one page (250 ms debounce, `AbortController`, `line=s2` below zoom 11) and gets the totals, the pill counts (`facets`) and, when the map mode needs them, the start points (`starts=1`). Years, owners, slider maxima and the initial box (`core`, 5th–95th percentile) come from `/api/search?meta=1`.
+- `known` (id → item) caches routes seen; a route's line appears only on hover (`item.line`, or `GET /api/tracks/:id/preview` for routes that only came as a start point). The active route and its elevation profile use `GET /api/tracks/:id`. URL: `?id=N` opens a route, `?ids=1,2` limits to those routes.
+- Map markers follow the user preference `users.prefs.map_mode` (migration `017`, Perfil → Mi perfil → Visor, `PATCH /api/profile/me {map_mode}`, returned by `/api/auth/me`): `page` (default) only the routes of the list page — or all of them when the routes in view fit in 3 pages (`PAGE_MODE_ALL_PAGES`), `mixed` those plus a small dot at the start of the other routes in view, `all` every route in view.
+- Per-route colours are stored in localStorage as `id:N` (colours from the old file-keyed visor are carried over when the route shows up, since search items include `file`).
+- `geoFilter` — Nominatim place search sets a radius (`near=`). Owner filters: chip «Mis rutas» (`mine=1`) and «Usuarios» (`user=`). «Crear ruta» is the floating `#btn-crear-ruta`. Activity photos for list cards: `ACT_PHOTOS` → `assets/activities/*.jpg`.
+- `GET /api/catalog` (whole catalog with points) is no longer used by any page; it stays only as the reference for `scripts/search-check.js`. `/visor2` redirects to `/`.
 
 ### Track detail (`track.html`)
 Tabs built dynamically by `buildContent(t)`:

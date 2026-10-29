@@ -1,23 +1,24 @@
 (async function(){
 'use strict';
 
-let CATALOG;
 let gCurrentUser = null;
+let META = { years: [], owners: [], maxDist: 0, maxEle: 0, core: null };
+let UNIVERSE = { activity: {}, sierra: {}, tags: {} };   // every pill value (counts of the unfiltered set)
+const SORT_KEYS = ['name', 'date', 'id-desc', 'dist-asc', 'dist-desc', 'ele-desc', 'ibp-asc'];
+const PAGE_SIZE = 15;
 
 try {
-  const [catRes, meRes] = await Promise.all([fetch('/api/catalog'), fetch('/api/auth/me')]);
-  if (!catRes.ok) throw new Error(`HTTP ${catRes.status}`);
-  CATALOG = await catRes.json();
+  const [meRes, metaRes, uniRes] = await Promise.all([
+    fetch('/api/auth/me'), fetch('/api/search?meta=1'), fetch('/api/search?size=1&line=s2'),
+  ]);
+  if (!metaRes.ok || !uniRes.ok) throw new Error(`HTTP ${metaRes.status}/${uniRes.status}`);
   if (meRes.ok) gCurrentUser = await meRes.json();
+  META = await metaRes.json();
+  UNIVERSE = (await uniRes.json()).facets;
 } catch (err) {
   document.getElementById('tracklist').innerHTML =
     `<div class="empty-state">⚠ No se pudo cargar el catálogo.<p>${err.message}</p></div>`;
   return;
-}
-if (!Array.isArray(CATALOG) || CATALOG.length === 0) {
-  document.getElementById('tracklist').innerHTML =
-    '<div class="empty-state">No hay tracks en la base de datos.<p>Importa tracks desde el <a href="/editor">editor</a>.</p></div>';
-  // still continue so the map renders
 }
 
 const $  = id => document.getElementById(id);
@@ -108,7 +109,9 @@ function actColor(act) {
   if (ACT_COLORS[act]) return ACT_COLORS[act];
   return autoColors[act] || (autoColors[act] = PALETTE[actColorIdx++ % PALETTE.length]);
 }
-function getTrackColor(track) { return trackColors[track.file] || actColor(track.activity || 'Otro'); }
+// Per-route colours are stored by id here (the search items carry no file path)
+const tkey = track => 'id:' + track.id;
+function getTrackColor(track) { return trackColors[tkey(track)] || actColor(track.activity || 'Otro'); }
 
 function actIconInner(act) {
   // Icon configured in Admin → Actividades (illustrated PNG > SVG key > built-in silhouette)
@@ -117,10 +120,10 @@ function actIconInner(act) {
   if (cfg?.icon && window.GPX_ICONS?.[cfg.icon]) return window.gpxIcon(cfg.icon, { size: 16 });
   return `<svg viewBox="0 0 24 24">${ACT_ICONS[act] || ACT_ICONS['Otro']}</svg>`;
 }
-function makeActivityIcon(act, color) {
+function makeActivityIcon(act, color, active) {
   const hasImg = !!actConfig[act]?.icon_img;
   return L.divIcon({
-    html: `<div class="act-marker${hasImg ? ' act-marker-img' : ''}" style="background:${hasImg ? 'transparent' : color}">${actIconInner(act)}</div>`,
+    html: `<div class="act-marker${active ? ' active-marker' : ''}${hasImg ? ' act-marker-img' : ''}" style="background:${hasImg ? 'transparent' : color}">${actIconInner(act)}</div>`,
     className: 'act-marker-wrap',
     iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -15],
   });
@@ -134,11 +137,16 @@ function escHtml(s) {
 function norm(s) {
   return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
+function showToast(msg, kind) {
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:3000;padding:10px 16px;border-radius:var(--radius);box-shadow:var(--shadow);font-size:13px;background:var(--solid);color:var(--on-solid)' +
+    (kind === 'error' ? ';background:var(--danger);color:#fff' : '');
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
 const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 });
 const nf0 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 });
-
-// Precompute a normalized search string per track (name + zone + tags)
-CATALOG.forEach(t => { t._q = norm([t.name, t.sierra, t.zone, ...(t.tags || [])].filter(Boolean).join(' ')); });
 
 // ── Map ──────────────────────────────────────────────────────────────
 const map = L.map('map', { center:[40.4,-3.7], zoom:7, zoomControl:false, renderer:L.canvas({ tolerance:4 }) });
@@ -157,7 +165,7 @@ let baseName = 'Claro';
 try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}
 tileLayers[baseName].addTo(map);
 map.on('baselayerchange', e => { try { localStorage.setItem('visor-base-layer', e.name); } catch {} });
-map.on('moveend zoomend', () => applyFilters());
+map.on('moveend', () => applyFiltersMap());
 L.control.layers(tileLayers, null, { position:'topright', collapsed:true }).addTo(map);
 L.control.zoom({ position:'topright' }).addTo(map);
 
@@ -201,7 +209,9 @@ const segHL = {
 const hoverMarker = L.circleMarker([0,0], { radius:7, color:'white', weight:2.5, fillOpacity:1, interactive:false, pane:'shadowPane' });
 
 let PS = null;
-let activeIdx = null;
+let _listPage = 0;
+let activeId = null;     // id of the active route
+let active = null;       // { item, layer, casing } of the active route (full points once loaded)
 let sliders = {};
 let geoFilter = null;   // {lat, lon, radius, name}
 let gMineOnly = false;   // chip "Mis rutas": solo las del usuario en sesión
@@ -209,32 +219,49 @@ let geoCircle = null;
 let idSet = new Set();   // filter to specific IDs (from ?ids= URL param)
 let sortMode = 'name';
 try { sortMode = localStorage.getItem('visor-sort') || 'name'; } catch {}
+if (!SORT_KEYS.includes(sortMode)) sortMode = 'name';
 
-// ── Markers + polylines ──────────────────────────────────────────────
-const items = CATALOG.map((track, i) => {
-  const color = getTrackColor(track);
-  const pts = track.points.map(p=>[p[0],p[1]]);
-  const casingLayer = L.polyline(pts, { color:'#555', weight:5.5, opacity:0.55, interactive:false, lineCap:'round', lineJoin:'round' });
-  const layer = L.polyline(pts, { color, weight:3, opacity:0.82, interactive:true, lineCap:'round', lineJoin:'round' });
-  layer.on('click', () => activateTrack(i, true));
+// ── Data held in memory ──────────────────────────────────────────────
+// known: id → item (from /api/search or /api/tracks/:id/preview), small cache so hovering is instant
+const known = new Map();
+const KNOWN_MAX = 600;
+function remember(item, overwrite) {
+  if (!overwrite && known.has(item.id)) return known.get(item.id);
+  // Colours chosen in the old visor were keyed by file: carry them over to the id key
+  if (item.file && trackColors[item.file] && !trackColors[tkey(item)]) { trackColors[tkey(item)] = trackColors[item.file]; saveTrackColors(); }
+  known.delete(item.id); known.set(item.id, item);
+  if (known.size > KNOWN_MAX) known.delete(known.keys().next().value);
+  return item;
+}
+const previewInflight = new Map();
+async function getItem(id) {
+  const k = known.get(id);
+  if (k) return k;
+  if (!previewInflight.has(id)) {
+    previewInflight.set(id, fetch(`/api/tracks/${id}/preview`).then(r => r.ok ? r.json() : null)
+      .then(it => (it ? remember(it, false) : null)).catch(() => null).finally(() => previewInflight.delete(id)));
+  }
+  return previewInflight.get(id);
+}
+
+// ── Lines (only on hover, or the active route) ───────────────────────
+function buildLines(item, latlngs) {
+  const color = getTrackColor(item);
+  const casing = L.polyline(latlngs, { color:'#555', weight:5.5, opacity:0.55, interactive:false, lineCap:'round', lineJoin:'round' });
+  const layer = L.polyline(latlngs, { color, weight:3, opacity:0.85, interactive:true, lineCap:'round', lineJoin:'round' });
+  layer.on('click', () => activateTrack(item.id, true));
   layer.on('mousemove', e => {
-    if (activeIdx !== i || !PS?.geom) return;
+    if (activeId !== item.id || !PS?.geom) return;
     let ci = 0, best = Infinity;
     PS.geom.pts.forEach((p, idx) => { const d = e.latlng.distanceTo(L.latLng(p[0],p[1])); if (d < best) { best = d; ci = idx; } });
     syncCursorSvg(ci);
   });
-  layer.on('mouseout', () => { if (activeIdx === i) hideCursor(); });
+  layer.on('mouseout', () => { if (activeId === item.id) hideCursor(); });
+  return { casing, layer };
+}
 
-  const sp = track.points[0];
-  const marker = sp ? L.marker([sp[0], sp[1]], { icon: makeActivityIcon(track.activity || 'Otro', color), title: track.name }) : null;
-  if (marker) {
-    marker.on('mouseover', () => previewTrack(i, true));
-    marker.on('mouseout',  () => previewTrack(i, false));
-    marker.on('click',     () => activateTrack(i, true));
-  }
-  return { track, layer, casingLayer, marker, visible:true };
-});
-
+// ── Markers (diffed against what the last search asks for) ───────────
+const markers = new Map();   // id → { marker, key }
 const cluster = L.markerClusterGroup({
   showCoverageOnHover: false, maxClusterRadius: 44, disableClusteringAtZoom: 12, spiderfyOnMaxZoom: true, chunkedLoading: true,
   iconCreateFunction: c => {
@@ -243,20 +270,35 @@ const cluster = L.markerClusterGroup({
     return L.divIcon({ html: `<span>${n}</span>`, className: 'track-cluster', iconSize: [sz, sz] });
   },
 }).addTo(map);
-cluster.addLayers(items.map(it => it.marker).filter(Boolean));
-let _clusterKey = '';
-function syncClusterMarkers() {
-  // In 'page' mode only the markers of the list page go on the map, unless the routes in view fit in
-  // PAGE_MODE_ALL_PAGES pages: then all of them (the map acts as the filter)
-  const nVisible = items.reduce((n, it) => n + (it.visible ? 1 : 0), 0);
-  const pageOnly = gMapMode === 'page' && nVisible > PAGE_MODE_ALL_PAGES * PAGE_SIZE;
-  const vis = items.filter((it, ri) => it.visible && it.marker && (!pageOnly || gPageRis.has(ri)));
-  const key = gMapMode + '|' + vis.map(it => it.track.id).join(',');
-  if (key === _clusterKey) return;
-  _clusterKey = key;
-  cluster.clearLayers();
-  cluster.addLayers(vis.map(it => it.marker));
+const markerColor = (id, act) => trackColors['id:' + id] || actColor(act || 'Otro');
+function markerIcon(w, id) {
+  const c = markerColor(id, w.act);
+  return w.kind === 'dot' ? dotIcon(c) : makeActivityIcon(w.act || 'Otro', c, id === activeId);
 }
+// want: Map id → { lat, lon, act, kind: 'icon'|'dot' }
+function applyMarkers(want) {
+  if (active?.item.start && !want.has(activeId)) want.set(activeId, { lat: active.item.start[0], lon: active.item.start[1], act: active.item.activity, kind: 'icon' });
+  const remove = [], add = [];
+  for (const [id, m] of markers) if (!want.has(id)) { remove.push(m.marker); markers.delete(id); }
+  for (const [id, w] of want) {
+    const key = `${w.kind}|${w.act}|${markerColor(id, w.act)}|${id === activeId}|${Object.keys(actConfig).length}`;
+    const cur = markers.get(id);
+    if (cur) {
+      if (cur.key !== key) { cur.key = key; cur.marker.setIcon(markerIcon(w, id)); }
+      cur.marker.setZIndexOffset(id === activeId ? 1000 : 0);
+      continue;
+    }
+    const marker = L.marker([w.lat, w.lon], { icon: markerIcon(w, id), zIndexOffset: id === activeId ? 1000 : 0 });
+    marker.on('mouseover', () => previewTrack(id, true));
+    marker.on('mouseout',  () => previewTrack(id, false));
+    marker.on('click',     () => activateTrack(id, true));
+    markers.set(id, { marker, key });
+    add.push(marker);
+  }
+  if (remove.length) cluster.removeLayers(remove);
+  if (add.length) cluster.addLayers(add);
+}
+function refreshMarkerIcons() { if (lastResp) syncMarkersFromResp(lastResp); }
 
 // ── Map preview card ─────────────────────────────────────────────
 const mpcEl = document.getElementById('map-preview-card');
@@ -269,18 +311,17 @@ function fmtMovingTime(secs) {
   return m > 0 ? `${h}h ${m} min` : `${h}h`;
 }
 
-function showMapCard(i) {
+function showMapCard(track) {
   if (!mpcEl) return;
-  const { track } = items[i];
-  const sp = track.points?.[0];
+  const sp = track.start;
   if (!sp) return;
 
   const act = track.activity || 'Otro';
   const photo = track.cover || actConfig[act]?.image || ACT_PHOTOS[act];
-  const loc = [track.sierra, track.province].filter(Boolean)[0] || '';
+  const loc = [track.sierra, track.ccaa].filter(Boolean)[0] || '';
   const li = gradeIdxV(track);
   const ibp = li >= 0 ? IBP_LEVELS[li] : null;
-  const time = fmtMovingTime(track.moving_time);
+  const time = fmtMovingTime(track.movingTime);
 
   mpcEl.innerHTML = `
     <div class="mpc-photo" style="${photo ? `background-image:url('${photo}')` : ''}"></div>
@@ -312,44 +353,52 @@ function hideMapCard() {
   if (mpcEl) mpcEl.style.display = 'none';
 }
 
-function previewTrack(i, on) {
-  if (activeIdx === i) return;
-  if (activeIdx !== null) return; // don't show other tracks while one is active
-  const { layer, casingLayer } = items[i];
+// Hover: the line appears only while the pointer is on the icon or the list card. Page items already carry it;
+// routes that arrive only as a start point are fetched from /preview (cached in memory).
+let hoverId = null, hoverLines = null;
+function clearHoverLines() { if (hoverLines) { hoverLines.layer.remove(); hoverLines.casing.remove(); hoverLines = null; } }
+function previewTrack(id, on) {
   clearTimeout(mpcTimer);
-  if (on) {
-    casingLayer.setStyle({ weight:5.5, opacity:0.55 });
-    layer.setStyle({ weight:3, opacity:0.85 });
-    casingLayer.addTo(map);
-    layer.addTo(map); layer.bringToFront();
-    mpcTimer = setTimeout(() => showMapCard(i), 120);
-  } else {
-    layer.remove(); casingLayer.remove();
-    hideMapCard();
+  if (!on) {
+    if (hoverId === id) hoverId = null;
+    clearHoverLines(); hideMapCard();
+    return;
   }
+  if (activeId !== null) return; // don't show other tracks while one is active
+  hoverId = id;
+  clearHoverLines();
+  const show = item => {
+    if (hoverId !== id || activeId !== null || !item) return;
+    clearHoverLines();
+    if (item.line?.length > 1) {
+      hoverLines = buildLines(item, item.line);
+      hoverLines.casing.addTo(map); hoverLines.layer.addTo(map); hoverLines.layer.bringToFront();
+    }
+    mpcTimer = setTimeout(() => { if (hoverId === id) showMapCard(item); }, 120);
+  };
+  const k = known.get(id);
+  if (k) show(k); else getItem(id).then(show);
 }
 
 // ── Qué marcadores enseña el mapa (preferencia del usuario, Perfil → Mi perfil) ──
 // La línea de una ruta aparece siempre solo al pasar el ratón por su icono o por su ficha.
-// page  = solo el icono de las rutas de la página de la lista (por defecto)
+// page  = solo el icono de las rutas de la página de la lista (por defecto); si la zona tiene ≤ 45 rutas, todas
 // mixed = icono de las rutas de la página + un punto pequeño en el inicio de las demás de la zona
 // all   = icono de todas las rutas de la zona
 const gMapMode = ['page', 'mixed', 'all'].includes(gCurrentUser?.prefs?.map_mode) ? gCurrentUser.prefs.map_mode : 'page';
-let gPageRis = new Set();
-const PAGE_MODE_ALL_PAGES = 3;
+const PAGE_MODE_ALL_MAX = 45;
 const dotIcon = color => L.divIcon({ html: `<div class="start-dot" style="background:${color}"></div>`,
   className: 'start-dot-wrap', iconSize: [12, 12], iconAnchor: [6, 6] });
-function syncMapMode(force) {
-  items.forEach((it, ri) => {
-    if (!it.marker) return;
-    const kind = gMapMode === 'mixed' && !gPageRis.has(ri) ? 'dot' : 'icon';
-    if (force || it._iconKind !== kind) {
-      it._iconKind = kind;
-      const c = getTrackColor(it.track);
-      it.marker.setIcon(kind === 'dot' ? dotIcon(c) : makeActivityIcon(it.track.activity || 'Otro', c));
-    }
-  });
-  _clusterKey = ''; syncClusterMarkers();
+function syncMarkersFromResp(r) {
+  const want = new Map();
+  const startsOf = () => (r.starts || []).forEach(([id, lat, lon, act]) => want.set(id, { lat, lon, act, kind: 'icon' }));
+  const pageItems = () => r.items.forEach(it => { if (it.start) want.set(it.id, { lat: it.start[0], lon: it.start[1], act: it.activity, kind: 'icon' }); });
+  if (gMapMode === 'page') {
+    if (r.starts && r.total <= PAGE_MODE_ALL_MAX) startsOf(); else pageItems();
+  } else if (gMapMode === 'mixed') {
+    startsOf(); want.forEach(w => { w.kind = 'dot'; }); pageItems();
+  } else { startsOf(); pageItems(); }
+  applyMarkers(want);
 }
 
 // ── Color pickers ────────────────────────────────────────────────────
@@ -366,32 +415,20 @@ function pickColor(currentColor, onInput, onFinal) {
 function setActivityColor(act, color, save) {
   actColorsCustom[act] = color;
   if (save) saveActColors();
-  items.forEach(({ track, layer, marker }) => {
-    if ((track.activity||'Otro') === act && !trackColors[track.file]) {
-      layer.setStyle({ color });
-      if (marker) marker.setIcon(makeActivityIcon(act, color));
-    }
-  });
   $$('.cat-pill[data-activity]').forEach(p => {
     if (p.dataset.activity === act) { const dot = p.querySelector('.cat-dot'); if (dot) dot.style.background = color; }
   });
-  renderList(true);
-  if (activeIdx !== null) {
-    const tr = items[activeIdx].track;
-    if ((tr.activity||'Otro') === act && !trackColors[tr.file]) fillDetailHeader(tr, color);
-  }
+  refreshMarkerIcons();
+  renderList();
+  if (active && (active.item.activity||'Otro') === act && !trackColors[tkey(active.item)]) { active.layer.setStyle({ color }); fillDetailHeader(active.item, color); }
 }
 
 function setTrackColor(track, color, save) {
-  trackColors[track.file] = color;
+  trackColors[tkey(track)] = color;
   if (save) saveTrackColors();
-  const item = items.find(it => it.track === track);
-  if (item) {
-    item.layer.setStyle({ color });
-    if (item.marker) item.marker.setIcon(makeActivityIcon(track.activity || 'Otro', color));
-  }
-  renderList(true);
-  if (activeIdx !== null && items[activeIdx].track === track) fillDetailHeader(track, color);
+  refreshMarkerIcons();
+  renderList();
+  if (active && active.item.id === track.id) { active.layer.setStyle({ color }); fillDetailHeader(track, color); }
 }
 
 // Seed activity colors, icons, images from DB if not already customised locally
@@ -404,7 +441,7 @@ fetch('/api/config/activities')
       if (a.color && !actColorsCustom[a.name]) { actColorsCustom[a.name] = a.color; changed = true; }
     });
     if (changed) acts.forEach(a => { if (a.color) setActivityColor(a.name, actColorsCustom[a.name], false); });
-    items.forEach(({ track, marker }) => { if (marker) marker.setIcon(makeActivityIcon(track.activity || 'Otro', getTrackColor(track))); });
+    refreshMarkerIcons();
     renderList(true);
   })
   .catch(() => {});
@@ -427,11 +464,6 @@ function hav(lat1, lon1, lat2, lon2) {
   const a = Math.sin(dl/2)**2 + Math.cos(lat1*D)*Math.cos(lat2*D)*Math.sin(dn/2)**2;
   return R * 2 * Math.asin(Math.sqrt(a));
 }
-function trackNearPoint(track, lat, lon, radiusKm) {
-  if (hav(lat, lon, track.center[0], track.center[1]) <= radiusKm) return true;
-  return (track.points || []).some(p => hav(lat, lon, p[0], p[1]) <= radiusKm);
-}
-
 function geoRadius() {
   const a = document.querySelector('#geo-radius .cat-pill.active');
   return a ? parseInt(a.dataset.r) : 25;
@@ -495,49 +527,59 @@ function initDualSlider(minId, maxId, fillId, labelId, lo, hi, step, unit, onCha
 }
 
 // ── Activate / deactivate ────────────────────────────────────────────
-function activateTrack(i, fitMap) {
-  clearTimeout(mpcTimer); hideMapCard();
-  if (activeIdx !== null && items[activeIdx]) {
-    const prev = items[activeIdx];
-    prev.layer.remove(); prev.casingLayer.remove();
-    prev.layer.setStyle({ weight:3, opacity:0.82 });
-    prev.casingLayer.setStyle({ weight:5.5, opacity:0.55 });
-    prev.marker?.getElement()?.querySelector('.act-marker')?.classList.remove('active-marker');
-    prev.marker?.setZIndexOffset(0);
-  }
-  activeIdx = i;
-  const { track, layer, casingLayer, marker } = items[i];
-  casingLayer.setStyle({ weight:6, opacity:0.60 });
-  layer.setStyle({ weight:3.5, opacity:1 });
-  casingLayer.addTo(map);
-  layer.addTo(map); layer.bringToFront();
-  marker?.getElement()?.querySelector('.act-marker')?.classList.add('active-marker');
-  marker?.setZIndexOffset(1000);
-  const color = getTrackColor(track);
-  fillDetailHeader(track, color);
-  showProfile(track, color);
-  if (fitMap) fitTo(L.latLngBounds(track.bounds[0], track.bounds[1]));
+// The active route is fetched on its own: the item (preview) for the header and bounds, then the points with
+// altitude (/api/tracks/:id, ≤ 800, privacy applied) for the profile and the map line.
+function dropActiveVisuals() {
+  if (active) { active.layer.remove(); active.casing.remove(); }
+  active = null;
+}
+async function activateTrack(id, fitMap) {
+  clearTimeout(mpcTimer); hideMapCard(); clearHoverLines(); hoverId = null;
+  dropActiveVisuals();
+  activeId = id;
+  const seq = ++activeSeq;
+  $('profile').classList.add('visible');     // fitPadding needs to know the profile takes room
+  const item = await getItem(id);
+  if (seq !== activeSeq) return;
+  if (!item) { activeId = null; $('profile').classList.remove('visible'); showToast('Ruta no disponible', 'error'); return; }
+  const color = getTrackColor(item);
+  const lines = buildLines(item, item.line?.length > 1 ? item.line : []);
+  lines.casing.setStyle({ weight:6, opacity:0.60 }); lines.layer.setStyle({ weight:3.5, opacity:1 });
+  lines.casing.addTo(map); lines.layer.addTo(map); lines.layer.bringToFront();
+  active = { item, ...lines };
+  fillDetailHeader(item, color);
+  if (fitMap && item.bounds) fitTo(L.latLngBounds(item.bounds[0], item.bounds[1]));
+  markActiveRow();
+  if (lastResp) syncMarkersFromResp(lastResp); else applyMarkers(new Map());
+  try {
+    const full = await fetch(`/api/tracks/${id}`).then(r => r.ok ? r.json() : null);
+    if (seq !== activeSeq || !full) return;
+    const pts = full.points || [];
+    if (pts.length > 1) { active.layer.setLatLngs(pts.map(p => [p[0], p[1]])); active.casing.setLatLngs(pts.map(p => [p[0], p[1]])); }
+    active.points = pts;
+    showProfile({ points: pts }, color);
+  } catch { if (seq === activeSeq) showProfile({ points: [] }, color); }
+}
+let activeSeq = 0;
+
+function markActiveRow() {
   $$('.track-item.active').forEach(el => el.classList.remove('active'));
-  const el = document.querySelector(`.track-item[data-idx="${i}"]`);
+  const el = activeId !== null && document.querySelector(`.track-item[data-id="${activeId}"]`);
   if (el) { el.classList.add('active'); el.scrollIntoView({ behavior:'smooth', block:'nearest' }); }
 }
 
 function deactivateTrack() {
-  if (activeIdx !== null && items[activeIdx]) {
-    const it = items[activeIdx];
-    it.layer.remove(); it.casingLayer.remove();
-    it.layer.setStyle({ weight:3, opacity:0.82 });
-    it.casingLayer.setStyle({ weight:5.5, opacity:0.55 });
-    it.marker?.getElement()?.querySelector('.act-marker')?.classList.remove('active-marker');
-    it.marker?.setZIndexOffset(0);
-  }
-  activeIdx = null;
+  const was = activeId;
+  activeSeq++;
+  dropActiveVisuals();
+  activeId = null;
   $$('.track-item.active').forEach(el => el.classList.remove('active'));
   $('profile').classList.remove('visible');
   $('sel-bar').classList.remove('visible');
   hoverMarker.remove();
   segHL.hide();
   PS = null;
+  if (was !== null && lastResp) syncMarkersFromResp(lastResp);
 }
 
 // ── Detail header ────────────────────────────────────────────────────
@@ -769,60 +811,91 @@ function readFilters() {
   };
 }
 
-// All filters except activity / sierra / tags (those are cascaded)
-function baseMatch(t, f) {
-  return t.distance >= f.distMin && t.distance <= f.distMax &&
-    t.elevationGain >= f.eleMin && t.elevationGain <= f.eleMax &&
-    (!f.year || (t.date && t.date.startsWith(f.year))) &&
-    (!f.q || t._q.includes(f.q)) &&
-    (!geoFilter || trackNearPoint(t, geoFilter.lat, geoFilter.lon, geoFilter.radius)) &&
-    (!f.ibpActive || (() => { const idx = gradeIdxV(t); return idx >= f.ibpMin && idx <= f.ibpMax; })()) &&
-    (f.rtype.size === 0 || (f.rtype.has('circular') && t.circular) || (f.rtype.has('lineal') && !t.circular)) &&
-    (!f.mineOnly || t.owner_id === gCurrentUser.id) &&
-    (f.users.size === 0 || f.users.has(t.owner_id));
-}
-const actOk    = (t, f) => f.acts.size === 0    || f.acts.has(t.activity || 'Sin clasificar');
-const sierraOk = (t, f) => f.sierras.size === 0 || f.sierras.has(t.sierra);
-const tagsOk   = (t, f) => f.tags.size === 0    || (t.tags || []).some(x => f.tags.has(x));
+// ── Server search ────────────────────────────────────────────────────
+// Every filter, the sort, the page and the visible box go to GET /api/search; the list, the totals, the pill
+// counts and the map markers all come from the answer. Newer requests cancel older ones.
+let lastResp = null, lastQs = '', lastTotal = Infinity, searchCtl = null, searchTimer = null, searchSeq = 0;
+const BOX_DELAY = 250;
 
-function applyFilters() {
+function buildQuery(f, { starts, bbox = true } = {}) {
+  const sp = new URLSearchParams();
+  if (bbox) {
+    const b = map.getBounds();
+    sp.set('bbox', [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(v => +v.toFixed(5)).join(','));
+  }
+  f.acts.forEach(v => sp.append('act', v));
+  f.sierras.forEach(v => sp.append('sierra', v));
+  f.tags.forEach(v => sp.append('tag', v));
+  f.rtype.forEach(v => sp.append('rtype', v));
+  if (f.distMin > 0) sp.set('dmin', f.distMin);
+  if (Number.isFinite(f.distMax)) sp.set('dmax', f.distMax);
+  if (f.eleMin > 0) sp.set('emin', f.eleMin);
+  if (Number.isFinite(f.eleMax)) sp.set('emax', f.eleMax);
+  if (f.ibpActive) { sp.set('gmin', f.ibpMin); sp.set('gmax', f.ibpMax); }
+  if (f.year) sp.set('year', f.year);
+  if (f.q) sp.set('q', f.q);
+  if (geoFilter) sp.set('near', [geoFilter.lat, geoFilter.lon, geoFilter.radius].join(','));
+  if (f.mineOnly) sp.set('mine', '1');
+  f.users.forEach(v => sp.append('user', v));
+  if (idSet.size) sp.set('ids', [...idSet].join(','));
+  sp.set('sort', sortMode); sp.set('page', _listPage); sp.set('size', PAGE_SIZE);
+  if (map.getZoom() < 11) sp.set('line', 's2');
+  if (starts) sp.set('starts', '1');
+  return sp.toString();
+}
+
+// Icons of every route in the box are only needed when the mode asks for them, or the box is small
+const wantStarts = () => gMapMode !== 'page' || lastTotal <= PAGE_MODE_ALL_MAX;
+
+/** Filters / box / sort / page changed: ask the server (debounced when it comes from the map) */
+function applyFilters(opts = {}) {
+  if (opts.resetPage !== false) _listPage = 0;
+  clearTimeout(searchTimer);
   const f = readFilters();
-  const vb = map.getBounds();
-  let totalDist = 0, totalEle = 0, visCount = 0;
-  items.forEach((it, i) => {
-    const t = it.track;
-    const inView = !t.bounds || vb.intersects(L.latLngBounds(t.bounds[0], t.bounds[1]));
-    const ok = inView && (idSet.size === 0 || idSet.has(t.id)) &&
-      baseMatch(t, f) && actOk(t, f) && sierraOk(t, f) && tagsOk(t, f);
-    it.visible = ok;
-    if (ok) {
-      visCount++; totalDist += t.distance || 0; totalEle += t.elevationGain || 0;
-    } else if (activeIdx === i) { it.layer.remove(); it.casingLayer.remove(); }
-  });
-  syncClusterMarkers();
-  _listPage = 0;
-  $('list-count').innerHTML = visCount === CATALOG.length
-    ? `${visCount} rutas`
-    : `${visCount} rutas <small>de ${CATALOG.length}</small>`;
-  $('list-summary').textContent = visCount
-    ? `${nf0.format(totalDist)} km · ${nf0.format(totalEle)} m de desnivel acumulado`
+  updateChips(f);
+  if (opts.delay) searchTimer = setTimeout(() => runQuery(), opts.delay);
+  else runQuery();
+}
+const applyFiltersMap = () => applyFilters({ delay: BOX_DELAY });
+
+async function runQuery(forceStarts) {
+  const f = readFilters();
+  const qs = buildQuery(f, { starts: forceStarts || wantStarts() });
+  if (qs === lastQs && lastResp) return;
+  lastQs = qs;
+  if (searchCtl) searchCtl.abort();
+  const ctl = searchCtl = new AbortController();
+  const seq = ++searchSeq;
+  try {
+    const r = await fetch('/api/search?' + qs, { signal: ctl.signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const resp = await r.json();
+    if (seq !== searchSeq) return;
+    renderResponse(resp, f);
+    // Small box but the hint said "not small": the starts of the whole box are needed for the page mode
+    if (gMapMode === 'page' && resp.total <= PAGE_MODE_ALL_MAX && !resp.starts) runQuery(true);
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    lastQs = '';
+    $('tracklist').innerHTML = `<div class="empty-state">⚠ No se pudo buscar.<p>${escHtml(e.message)}</p></div>`;
+  }
+}
+
+function renderResponse(resp, f) {
+  lastResp = resp; lastTotal = resp.total;
+  resp.items.forEach(it => remember(it, true));
+  _listPage = resp.page;
+  const more = resp.totalCapped ? 'más de ' : '';
+  $('list-count').innerHTML = `${more}${nf0.format(resp.total)} rutas`;
+  $('list-summary').textContent = resp.total && !resp.totalCapped
+    ? `${nf0.format(resp.km)} km · ${nf0.format(resp.gain)} m de desnivel acumulado`
     : '';
   renderList();
-  updateChips(f);
-  try { updateFilterCounts(f); } catch (e) { console.error('updateFilterCounts:', e); }
+  syncMarkersFromResp(resp);
+  try { updateFilterCounts(f, resp.facets); } catch (e) { console.error('updateFilterCounts:', e); }
 }
 
 // ── List ─────────────────────────────────────────────────────────────
-const SORTERS = {
-  'name':      (a, b) => a.name.localeCompare(b.name, 'es'),
-  'date':      (a, b) => (b.date || '').localeCompare(a.date || ''),
-  'id-desc':   (a, b) => (b.id || 0) - (a.id || 0),
-  'dist-asc':  (a, b) => a.distance - b.distance,
-  'dist-desc': (a, b) => b.distance - a.distance,
-  'ele-desc':  (a, b) => b.elevationGain - a.elevationGain,
-  'ibp-asc':   (a, b) => (ibpForTrackV(a) ?? 9999) - (ibpForTrackV(b) ?? 9999),
-};
-
 // Foto representativa por actividad (si no hay, el item queda en gris claro).
 const ACT_PHOTOS = {
   'Trail Running':      '/assets/activities/trail-running.jpg',
@@ -848,7 +921,7 @@ const ACT_PHOTOS = {
   'Senderismo':         '/assets/activities/montanismo.jpg',
 };
 
-function trackItemHtml(track, ri) {
+function trackItemHtml(track) {
   const c = getTrackColor(track);
   const act = track.activity || 'Otro';
   const ibp = ibpForTrackV(track), li = gradeIdxV(track);
@@ -861,7 +934,7 @@ function trackItemHtml(track, ri) {
   const ownerInitial = ownerName ? ownerName[0].toUpperCase() : '';
   const detail = track.id
     ? `<a class="track-detail-link" href="/track?id=${track.id}" target="_blank" title="Abrir página de detalle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></a>` : '';
-  return `<div class="track-item${ri === activeIdx ? ' active' : ''}" data-idx="${ri}" style="--c:${c}">
+  return `<div class="track-item${track.id === activeId ? ' active' : ''}" data-id="${track.id}" style="--c:${c}">
     <div class="ti-main">
       <div class="ti-act-row">
         <button class="ti-icon" title="${escHtml(track.activity || 'Sin actividad')}">${actIconInner(act)}</button>
@@ -904,31 +977,17 @@ const ROUTE_ICON = {
   loop: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>',
   line: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="4" cy="12" r="2"/><circle cx="20" cy="12" r="2"/><line x1="6.5" y1="12" x2="17.5" y2="12"/></svg>',
 };
-let _listKey = '';
-const PAGE_SIZE = 15;
-let _listPage = 0;
-
-function renderList(force) {
+function renderList() {
   const list = $('tracklist');
   const pagesEl = $('tracklist-pages');
-  const visible = items.map((it, ri) => ({ it, ri })).filter(x => x.it.visible);
-  const key = sortMode + '|' + activeIdx + '|' + visible.map(x => x.ri).join(',');
-  if (!force && key === _listKey) return;
-  _listKey = key;
-  _listPage = Math.min(_listPage, Math.max(0, Math.ceil(visible.length / PAGE_SIZE) - 1));
-  if (!visible.length) {
+  const r = lastResp;
+  if (!r || !r.items.length) {
     list.innerHTML = '<div class="empty-state">Ninguna ruta en esta zona<p>Mueve el mapa o quita algún filtro.</p></div>';
     pagesEl.innerHTML = '';
-    gPageRis = new Set(); syncMapMode(force);
     return;
   }
-  const cmp = SORTERS[sortMode] || SORTERS.name;
-  visible.sort((a, b) => cmp(a.it.track, b.it.track));
-  const pages = Math.ceil(visible.length / PAGE_SIZE);
-  const start = _listPage * PAGE_SIZE;
-  list.innerHTML = visible.slice(start, start + PAGE_SIZE).map(x => trackItemHtml(x.it.track, x.ri)).join('');
-  gPageRis = new Set(visible.slice(start, start + PAGE_SIZE).map(x => x.ri));
-  syncMapMode(force);
+  list.innerHTML = r.items.map(trackItemHtml).join('');
+  const pages = r.pages;
   if (pages <= 1) { pagesEl.innerHTML = ''; return; }
   // Build: 1 2 3 … N  (show neighbours of current page + first/last)
   const show = new Set([0, pages - 1, _listPage, _listPage - 1, _listPage + 1].filter(n => n >= 0 && n < pages));
@@ -943,15 +1002,16 @@ function renderList(force) {
   pagesEl.innerHTML = btns.join('');
 }
 
-function goToPage(p) { _listPage = p; _listKey = ''; renderList(); }
+function goToPage(p) { _listPage = p; applyFilters({ resetPage: false }); }
 
 const tracklistEl = $('tracklist');
 tracklistEl.addEventListener('click', e => {
   const item = e.target.closest('.track-item'); if (!item) return;
   if (e.target.closest('.track-detail-link')) return;
-  const idx = +item.dataset.idx;
+  const id = +item.dataset.id;
   if (e.target.closest('.ti-icon')) {
-    const track = items[idx].track;
+    const track = known.get(id);
+    if (!track) return;
     pickColor(getTrackColor(track), c => setTrackColor(track, c, false), c => setTrackColor(track, c, true));
     return;
   }
@@ -960,7 +1020,7 @@ tracklistEl.addEventListener('click', e => {
     openSaveToListPicker(e.target.closest('.ti-save-btn'), +e.target.closest('.ti-save-btn').dataset.id);
     return;
   }
-  activateTrack(idx, true);
+  activateTrack(id, true);
 });
 
 // IDs de tracks ya guardados en alguna lista (para colorear el botón)
@@ -1061,7 +1121,7 @@ $('tracklist-pages').addEventListener('click', e => {
 let hoveredIdx = null;
 tracklistEl.addEventListener('mouseover', e => {
   const item = e.target.closest('.track-item');
-  const idx = item ? +item.dataset.idx : null;
+  const idx = item ? +item.dataset.id : null;
   if (idx === hoveredIdx) return;
   if (hoveredIdx !== null) previewTrack(hoveredIdx, false);
   hoveredIdx = idx;
@@ -1072,30 +1132,23 @@ tracklistEl.addEventListener('mouseleave', () => {
   hoveredIdx = null;
 });
 
-$('sort-select').value = SORTERS[sortMode] ? sortMode : 'name';
+$('sort-select').value = sortMode;
 $('sort-select').addEventListener('change', e => {
   sortMode = e.target.value;
   try { localStorage.setItem('visor-sort', sortMode); } catch {}
-  _listPage = 0; renderList();
+  applyFilters();
 });
 
 // ── Cascading pill counts ────────────────────────────────────────────
-function updateFilterCounts(f) {
-  const base = CATALOG.filter(t => baseMatch(t, f));
-  const actCounts = {}, sierraCounts = {}, tagCounts = {};
-  base.forEach(t => {
-    if (sierraOk(t, f) && tagsOk(t, f)) { const a = t.activity || 'Sin clasificar'; actCounts[a] = (actCounts[a] || 0) + 1; }
-    if (actOk(t, f) && tagsOk(t, f) && t.sierra) sierraCounts[t.sierra] = (sierraCounts[t.sierra] || 0) + 1;
-    if (actOk(t, f) && sierraOk(t, f)) (t.tags || []).forEach(tag => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; });
-  });
+function updateFilterCounts(f, facets) {
   const upd = (sel, key, counts, active) => $$(sel).forEach(pill => {
     const v = pill.dataset[key], n = counts[v] || 0;
     const c = pill.querySelector('.cat-count'); if (c) c.textContent = n;
     pill.classList.toggle('pill-empty', n === 0 && !active.has(v));
   });
-  upd('#cat-filters .cat-pill', 'activity', actCounts, f.acts);
-  upd('#sierra-filters .cat-pill', 'sierra', sierraCounts, f.sierras);
-  upd('#tag-filters .cat-pill', 'tag', tagCounts, f.tags);
+  upd('#cat-filters .cat-pill', 'activity', facets.activity, f.acts);
+  upd('#sierra-filters .cat-pill', 'sierra', facets.sierra, f.sierras);
+  upd('#tag-filters .cat-pill', 'tag', facets.tags, f.tags);
 }
 
 // ── Chip labels ──────────────────────────────────────────────────────
@@ -1122,7 +1175,7 @@ function updateChips(f) {
   if (f.year) more.push(f.year);
   if (f.tags.size) more.push(f.tags.size === 1 ? '#' + [...f.tags][0] : `${f.tags.size} etiquetas`);
   setChip('more', more.join(' · '), more.length);
-  const userName = id => CATALOG.find(t => t.owner_id === id)?.owner_username || 'Usuario';
+  const userName = id => META.owners.find(o => o.id === id)?.username || 'Usuario';
   setChip('users', multiLabel(f.users, 'Usuarios', userName), f.users.size);
   $('chip-my-tracks').classList.toggle('active', f.mineOnly);
   $('clear-filters-btn').hidden = countActiveFilters(f) === 0;
@@ -1136,8 +1189,7 @@ function countActiveFilters(f) {
 
 // ── Build filter UI ──────────────────────────────────────────────────
 function buildFilters() {
-  const acts = {};
-  CATALOG.forEach(t => { const a = t.activity || 'Sin clasificar'; acts[a] = (acts[a] || 0) + 1; });
+  const acts = UNIVERSE.activity;
   $('cat-filters').innerHTML = Object.keys(acts).sort((a, b) => a.localeCompare(b, 'es')).map(act => {
     const c = actColor(act);
     return `<div class="cat-pill" data-activity="${escHtml(act)}"><span class="cat-dot" title="Cambiar color" style="background:${c}"></span>${escHtml(act)}<span class="cat-count">${acts[act]}</span></div>`;
@@ -1152,8 +1204,7 @@ function buildFilters() {
     pill.classList.toggle('active'); applyFilters();
   });
 
-  const sierras = {};
-  CATALOG.forEach(t => { if (t.sierra) sierras[t.sierra] = (sierras[t.sierra] || 0) + 1; });
+  const sierras = UNIVERSE.sierra;
   if (Object.keys(sierras).length) {
     $('chip-sierra').hidden = false;
     $('sierra-filters').innerHTML = Object.keys(sierras).sort((a, b) => a.localeCompare(b, 'es')).map(s =>
@@ -1167,12 +1218,7 @@ function buildFilters() {
   }
 
   // Chip "Usuarios": selección múltiple de propietarios presentes en el catálogo
-  const owners = new Map();  // id → { name, n }
-  CATALOG.forEach(t => {
-    if (!t.owner_id || !t.owner_username) return;
-    const o = owners.get(t.owner_id) || { name: t.owner_username, n: 0 };
-    o.n++; owners.set(t.owner_id, o);
-  });
+  const owners = new Map(META.owners.map(o => [o.id, { name: o.username, n: o.n }]));
   if (owners.size > 1) {
     $('chip-users').hidden = false;
     $('user-filters').innerHTML = [...owners.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name, 'es')).map(([id, o]) =>
@@ -1183,8 +1229,7 @@ function buildFilters() {
     });
   }
 
-  const tagMap = {};
-  CATALOG.forEach(t => (t.tags || []).forEach(tag => { tagMap[tag] = (tagMap[tag] || 0) + 1; }));
+  const tagMap = UNIVERSE.tags;
   if (Object.keys(tagMap).length) {
     $('tags-section-title').hidden = false;
     $('tag-filters').innerHTML = Object.keys(tagMap).sort((a, b) => a.localeCompare(b, 'es')).map(tag =>
@@ -1196,7 +1241,7 @@ function buildFilters() {
     pill.classList.toggle('active'); applyFilters();
   }));
 
-  const years = [...new Set(CATALOG.map(t => t.date ? t.date.substring(0,4) : null).filter(Boolean))].sort().reverse();
+  const years = META.years;
   years.forEach(y => { const o = document.createElement('option'); o.value = o.textContent = y; $('year-filter').appendChild(o); });
   $('year-filter').addEventListener('change', applyFilters);
 
@@ -1217,10 +1262,10 @@ function buildFilters() {
     applyFilters();
   });
 
-  const maxDist = Math.max(Math.ceil(Math.max(...CATALOG.map(t => t.distance || 0)) / 10) * 10, 50);
-  const maxEle  = Math.max(Math.ceil(Math.max(...CATALOG.map(t => t.elevationGain || 0)) / 500) * 500, 1000);
-  sliders.dist = initDualSlider('dist-rs-min','dist-rs-max','dist-rs-fill','dist-rs-label', 0, maxDist, 5, 'km', applyFilters);
-  sliders.ele  = initDualSlider('ele-rs-min', 'ele-rs-max', 'ele-rs-fill', 'ele-rs-label',  0, maxEle, 100, 'm', applyFilters);
+  const maxDist = Math.max(Math.ceil(META.maxDist / 10) * 10, 50);
+  const maxEle  = Math.max(Math.ceil(META.maxEle / 500) * 500, 1000);
+  sliders.dist = initDualSlider('dist-rs-min','dist-rs-max','dist-rs-fill','dist-rs-label', 0, maxDist, 5, 'km', applyFiltersMap);
+  sliders.ele  = initDualSlider('ele-rs-min', 'ele-rs-max', 'ele-rs-fill', 'ele-rs-label',  0, maxEle, 100, 'm', applyFiltersMap);
 }
 
 function updateIbpSlider() {
@@ -1304,17 +1349,36 @@ function highlight(name, q) {
   return escHtml(name.slice(0, i)) + '<mark>' + escHtml(name.slice(i, i + q.length)) + '</mark>' + escHtml(name.slice(i + q.length));
 }
 
+let routeResults = [], routeSeq = 0, routeCtl = null, routeTimer = null;
+function queryRoutes() {
+  clearTimeout(routeTimer);
+  const q = norm(searchInp.value.trim());
+  if (!q) { routeResults = []; return; }
+  routeTimer = setTimeout(async () => {
+    if (routeCtl) routeCtl.abort();
+    const ctl = routeCtl = new AbortController(), seq = ++routeSeq;
+    try {
+      const r = await fetch(`/api/search?q=${encodeURIComponent(q)}&size=8&line=s2`, { signal: ctl.signal });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (seq !== routeSeq) return;
+      routeResults = d.items.map(it => remember(it, true));
+      if (document.activeElement === searchInp) renderSearchResults();
+    } catch {}
+  }, 150);
+}
+
 function renderSearchResults() {
   const raw = searchInp.value.trim();
   const q = norm(raw);
   if (!q) { closeSearch(); return; }
-  const routes = items.map((it, i) => ({ t: it.track, i })).filter(x => x.t._q.includes(q))
+  const routes = routeResults.map(t => ({ t }))
     .sort((a, b) => (norm(a.t.name).startsWith(q) ? 0 : 1) - (norm(b.t.name).startsWith(q) ? 0 : 1) || a.t.name.localeCompare(b.t.name, 'es'))
     .slice(0, 6);
   let html = `<div class="dd-sec">Rutas</div>`;
-  html += routes.length ? routes.map(({ t, i }) => {
+  html += routes.length ? routes.map(({ t }) => {
     const c = getTrackColor(t);
-    return `<div class="dd-item" data-kind="route" data-idx="${i}">
+    return `<div class="dd-item" data-kind="route" data-id="${t.id}">
       <span class="dd-ico act" style="background:${c}">${actIconInner(t.activity || 'Otro')}</span>
       <div class="dd-txt"><div class="dd-name">${highlight(t.name, q)}</div>
       <div class="dd-meta">${escHtml(t.activity || 'Sin actividad')} · ${nf1.format(t.distance)} km · ↑ ${nf0.format(t.elevationGain)} m</div></div></div>`;
@@ -1350,11 +1414,11 @@ function queryPlaces() {
 
 function chooseResult(el) {
   if (el.dataset.kind === 'route') {
-    const idx = +el.dataset.idx;
+    const id = +el.dataset.id;
     searchInp.value = ''; $('search-clear').hidden = true;
     closeSearch(); searchInp.blur();
     applyFilters();
-    activateTrack(idx, true);
+    activateTrack(id, true);
   } else {
     const p = placeResults[+el.dataset.k];
     searchInp.value = ''; $('search-clear').hidden = true;
@@ -1367,9 +1431,10 @@ let searchApplyTimer = null;
 searchInp.addEventListener('input', () => {
   $('search-clear').hidden = !searchInp.value;
   renderSearchResults();
+  queryRoutes();
   queryPlaces();
   clearTimeout(searchApplyTimer);
-  searchApplyTimer = setTimeout(applyFilters, 120);
+  searchApplyTimer = setTimeout(() => applyFilters(), 250);
 });
 searchInp.addEventListener('focus', () => { closePopover(); if (searchInp.value.trim()) renderSearchResults(); });
 searchInp.addEventListener('blur', () => setTimeout(closeSearch, 150));
@@ -1432,7 +1497,7 @@ try { const saved = parseInt(localStorage.getItem('visor-panel-w')); if (saved) 
     document.body.classList.remove('panel-resizing');
     window.removeEventListener('mousemove', onMove);
     window.removeEventListener('mouseup', onUp);
-    if (activeIdx !== null) { const t = items[activeIdx].track; showProfile(t, getTrackColor(t)); }
+    if (active?.points) showProfile({ points: active.points }, getTrackColor(active.item));
   };
   handle.addEventListener('mousedown', e => {
     if (window.matchMedia('(max-width: 760px)').matches) return;
@@ -1448,47 +1513,37 @@ $('profile-close').addEventListener('click', deactivateTrack);
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if (openPop) { closePopover(); return; }
-  if (activeIdx !== null && document.activeElement !== searchInp) deactivateTrack();
+  if (activeId !== null && document.activeElement !== searchInp) deactivateTrack();
 });
 let resizeTimer = null;
 window.addEventListener('resize', () => {
   closePopover();
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    if (activeIdx !== null) { const t = items[activeIdx].track; showProfile(t, getTrackColor(t)); }
+    if (active?.points) showProfile({ points: active.points }, getTrackColor(active.item));
   }, 200);
 });
 
 // ── Init ─────────────────────────────────────────────────────────────
 buildFilters();
+const _qp = new URLSearchParams(location.search);
+(_qp.get('ids') || '').split(',').map(Number).filter(Boolean).forEach(id => idSet.add(id));
+const fitNow = (b, z) => map.fitBounds(b, { ...fitPadding(), maxZoom: z, animate: false });
+if (idSet.size) {
+  // Routes asked for in the URL: fit to them (the box then filters inside that set)
+  try {
+    const d = await fetch(`/api/search?ids=${[...idSet].join(',')}&size=60&line=s2`).then(r => r.json());
+    const bs = d.items.flatMap(it => it.bounds);
+    if (bs.length) fitNow(L.latLngBounds(bs), 12);
+  } catch {}
+} else if (META.core) {
+  // Where most routes are, so a few far-away outliers don't zoom the map out to a continent
+  fitNow(L.latLngBounds(META.core), 12);
+}
 applyFilters();
-if (CATALOG.length > 0) fitTo(L.latLngBounds(coreBounds(CATALOG)), 12);
 
-// Fit to where most tracks are, so a handful of far-away outliers don't zoom the map out to a continent.
-function coreBounds(tracks) {
-  const med = a => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
-  const c = L.latLng(med(tracks.map(t => t.center[0])), med(tracks.map(t => t.center[1])));
-  const core = tracks.filter(t => c.distanceTo(t.center) < 700000);
-  return (core.length >= tracks.length * 0.6 ? core : tracks).flatMap(t => t.bounds);
-}
-
-const _openFile = new URLSearchParams(location.search).get('file');
-if (_openFile) {
-  const _idx = items.findIndex(it => it.track.file === _openFile);
-  if (_idx >= 0) setTimeout(() => activateTrack(_idx, true), 400);
-}
-const _openId = new URLSearchParams(location.search).get('id');
-if (_openId) {
-  const _idx2 = items.findIndex(it => it.track.id === +_openId);
-  if (_idx2 >= 0) setTimeout(() => activateTrack(_idx2, true), 600);
-}
-
-const _openIds = new URLSearchParams(location.search).get('ids');
-if (_openIds) {
-  _openIds.split(',').map(Number).filter(Boolean).forEach(id => idSet.add(id));
-  applyFilters();
-  const idBounds = items.filter(it => idSet.has(it.track.id)).flatMap(it => it.track.bounds);
-  if (idBounds.length) fitTo(L.latLngBounds(idBounds), 12);
-}
+// ?id=N opens that route
+const _openId = +_qp.get('id');
+if (_openId) activateTrack(_openId, true);
 
 })();
