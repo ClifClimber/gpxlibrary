@@ -507,8 +507,8 @@ function initMap(t, color) {
   }
 
   const lls = t.points.map(p => [p[0], p[1]]);
-  L.polyline(lls, { color:'#111', weight:9, opacity:0.75, lineCap:'round', lineJoin:'round', interactive:false }).addTo(map);
-  const line = L.polyline(lls, { color, weight:5, opacity:1, lineCap:'round', lineJoin:'round' }).addTo(map);
+  L.polyline(lls, { color:'#111', weight:6, opacity:0.75, lineCap:'round', lineJoin:'round', interactive:false }).addTo(map);
+  const line = L.polyline(lls, { color, weight:3.5, opacity:1, lineCap:'round', lineJoin:'round' }).addTo(map);
 
   const mk = (bg, sz=14) => L.divIcon({
     html: `<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${bg};border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)"></div>`,
@@ -518,6 +518,7 @@ function initMap(t, color) {
   L.marker(lls[lls.length-1], { icon: mk('#ef4444', 14), zIndexOffset: 10 }).addTo(map);
 
   map.fitBounds(t.bounds && t.bounds[0] ? t.bounds : L.latLngBounds(lls), { padding: [30,30] });
+  if (t.privacy_hidden) map.attributionControl.addAttribution('Inicio y final ocultos por privacidad');
   return { map, line };
 }
 

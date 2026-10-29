@@ -193,6 +193,10 @@ tr.inactive td { opacity: .4; }
 .um-orphans-txt { flex: 1; min-width: 220px; font-size: 13px; }
 .um-tracks-link { color: inherit; text-decoration: none; font-weight: 600; }
 .um-tracks-link:hover { color: var(--accent); text-decoration: underline; }
+.um-auth { display: flex; flex-direction: column; gap: 12px; }
+.um-switch { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--ink-2); }
+.um-switch a { color: var(--accent); }
+.um-smtp { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -646,8 +650,8 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.11.0</div>
-          <div style="font-size:11px;color:var(--muted)" id="about-date">28 octubre 2026</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.13.0</div>
+          <div style="font-size:11px;color:var(--muted)" id="about-date">29 octubre 2026</div>
         </div>
       </div>
       <div style="border-top:1px solid var(--line);padding:14px 24px;display:flex;gap:24px;flex-wrap:wrap">
@@ -665,8 +669,39 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.11.0</span>
+            <span class="cl-version">v2.13.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">29 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Registro abierto</b> en /registro con aceptación de la nueva política de privacidad (/privacidad); se puede cerrar en Admin → Usuarios</li>
+            <li><b>Recuperar contraseña</b> en /restablecer: enlace de un solo uso por email (SMTP en .env); sin SMTP el enlace queda en Admin → Logs. Email de prueba en Admin → Usuarios</li>
+            <li><b>Límite de intentos</b>: 5 logins fallidos por cuenta en 15 minutos bloquean temporalmente</li>
+            <li><b>Zona de privacidad</b> (Perfil → Mi perfil): los demás no ven el inicio ni el final de tus rutas, ni en el mapa ni en el GPX descargado</li>
+            <li><b>Descargar mis datos</b> en ZIP y <b>Borrar mi cuenta</b> desde el perfil</li>
+            <li><b>Fotos en S3</b>: la aplicación ya no guarda nada en disco (<code>scripts/photos-to-s3.js</code>)</li>
+            <li><b>Enlace directo a listas</b>: página /lista?id=N con mapa; «Abrir» y «Copiar enlace» en Mis listas</li>
+            <li><b>Logros</b>: las rutas con datos imposibles no cuentan (límites en Admin → Gamificación)</li>
+            <li>Seguridad: la exportación GPX ya no permite descargar rutas privadas ajenas; las listas compartidas no muestran rutas privadas ajenas; el login solo redirige a páginas propias</li>
+            <li>Los registros de la aplicación se borran a los 30 días</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.12.0</span>
+            <span class="cl-date">28 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Lista del visor rediseñada</b>: fichas más grandes con icono y actividad, datos con etiqueta, foto y dueño con avatar; panel más ancho</li>
+            <li><b>Guardar en lista</b> desde cada ficha, con creación de listas y aviso al guardar</li>
+            <li><b>Trazado con borde</b> al estilo de las aplicaciones de navegación (negro en el detalle, gris en el visor)</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.11.0</span>
             <span class="cl-date">28 oct 2026</span>
           </div>
           <ul class="cl-list">
@@ -1079,6 +1114,20 @@ tr.inactive td { opacity: .4; }
     </div>
 
     <div class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>Datos anómalos</h2></div>
+      <div class="card-body gm-form">
+        <label class="field-label" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="gm-an-enabled"> No contar las rutas con datos imposibles (errores de GPS o de altímetro)</label>
+        <div class="gm-row gm-row4">
+          <div><label class="field-label">Velocidad media máx. (km/h)</label><input class="input" type="number" step="1" min="1" id="gm-an-speed"></div>
+          <div><label class="field-label">Desnivel por km máx. (m)</label><input class="input" type="number" step="10" min="1" id="gm-an-gainkm"></div>
+          <div><label class="field-label">Km por día máx.</label><input class="input" type="number" step="10" min="1" id="gm-an-kmday"></div>
+          <div><label class="field-label">Desnivel por día máx. (m)</label><input class="input" type="number" step="100" min="1" id="gm-an-gainday"></div>
+        </div>
+        <p class="section-desc" style="margin:0">Una ruta que pase cualquiera de estos límites no suma en logros ni XP; el usuario la ve listada en Perfil → Logros. Los días son los detectados para las rutas de varios días (1 en el resto).</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
       <div class="card-head"><h2>Insignias</h2></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="table" style="font-size:13px">
@@ -1217,6 +1266,18 @@ tr.inactive td { opacity: .4; }
 
   <div class="tab-panel" id="tab-users">
     <div class="stats-grid" id="users-stats" style="margin-bottom:16px"></div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>Registro y correo</h2></div>
+      <div class="card-body um-auth">
+        <label class="um-switch"><input type="checkbox" id="auth-reg-open"> <span><b>Registro abierto</b>: cualquiera puede crear una cuenta desde <a href="/registro" target="_blank">/registro</a></span></label>
+        <div class="um-smtp">
+          <span id="auth-smtp-state" class="badge">…</span>
+          <button class="btn btn-sm btn-outline" id="auth-smtp-test">Enviarme un email de prueba</button>
+        </div>
+        <p class="section-desc" id="auth-smtp-help" style="margin:0"></p>
+      </div>
+    </div>
 
     <div class="card" id="orphans-card" style="margin-bottom:16px" hidden>
       <div class="card-body um-orphans">
@@ -2643,7 +2704,32 @@ loadActivities();
   const userOptions = (exclude, placeholder) => (placeholder ? `<option value="">${placeholder}</option>` : '') +
     gUsers.filter(u => u.id !== exclude).map(u => `<option value="${u.id}">${esc(u.display_name || u.username)} (@${esc(u.username)})</option>`).join('');
 
+  async function loadAuthSettings() {
+    try {
+      const d = await api('/api/admin/auth-settings');
+      $('auth-reg-open').checked = d.registration_open;
+      $('auth-smtp-state').textContent = d.smtp ? `SMTP: ${d.smtp}` : 'SMTP sin configurar';
+      $('auth-smtp-test').hidden = !d.smtp;
+      $('auth-smtp-help').innerHTML = d.smtp
+        ? `Los enlaces para restablecer la contraseña se envían desde <b>${esc(d.from)}</b>${d.public_url ? ` y apuntan a <b>${esc(d.public_url)}</b>` : '. Define <code>PUBLIC_URL</code> en .env con la dirección pública de la app: sin ella los enlaces usan la dirección por la que llega cada petición'}.`
+        : 'Sin SMTP los enlaces para restablecer la contraseña solo quedan en Admin → Logs. Configura <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code>, <code>SMTP_FROM</code> y <code>PUBLIC_URL</code> en .env.';
+    } catch (e) { $('auth-smtp-help').textContent = e.message; }
+  }
+  $('auth-reg-open').addEventListener('change', async e => {
+    try {
+      await api('/api/admin/auth-settings', { method: 'PATCH', body: JSON.stringify({ registration_open: e.target.checked }) });
+      showToast(e.target.checked ? 'Registro abierto' : 'Registro cerrado');
+    } catch (err) { e.target.checked = !e.target.checked; showToast(err.message, true); }
+  });
+  $('auth-smtp-test').addEventListener('click', async e => {
+    e.target.disabled = true;
+    try { const d = await api('/api/admin/smtp-test', { method: 'POST' }); showToast(`Email de prueba enviado a ${d.to}`); }
+    catch (err) { showToast('SMTP: ' + err.message, true); }
+    e.target.disabled = false;
+  });
+
   async function loadUsers() {
+    loadAuthSettings();
     const tbody = $('users-tbody');
     try {
       const d = await api('/api/admin/users');
@@ -2831,6 +2917,12 @@ loadActivities();
       <td class="num"><input class="input" type="number" step="10" min="1" data-k="climbMh" value="${g.climbMh}"></td>
       <td>${g.id === 'foot' ? '<span style="color:var(--muted);font-size:12px">el resto de actividades</span>'
         : `<input class="input" type="text" data-k="activities" value="${esc(g.activities.join(', '))}" style="width:100%">`}</td></tr>`).join('');
+    const an = cfg.anomaly || {};
+    $('gm-an-enabled').checked = an.enabled !== false;
+    $('gm-an-speed').value = an.maxSpeedKmh;
+    $('gm-an-gainkm').value = an.maxGainPerKm;
+    $('gm-an-kmday').value = an.maxKmPerDay;
+    $('gm-an-gainday').value = an.maxGainPerDay;
     $('gm-xp-km').value = cfg.xp.perKm;
     $('gm-xp-gain').value = cfg.xp.gainPerXp;
     $('gm-xp-tier').value = cfg.xp.perTier;
@@ -2848,6 +2940,8 @@ loadActivities();
   function read() {
     return {
       xp: { perKm: +$('gm-xp-km').value, gainPerXp: +$('gm-xp-gain').value, perTier: +$('gm-xp-tier').value, levelBase: +$('gm-xp-base').value },
+      anomaly: { enabled: $('gm-an-enabled').checked, maxSpeedKmh: +$('gm-an-speed').value, maxGainPerKm: +$('gm-an-gainkm').value,
+                 maxKmPerDay: +$('gm-an-kmday').value, maxGainPerDay: +$('gm-an-gainday').value },
       multiDay: {
         enabled: $('gm-md-enabled').checked, excludeFromRecords: $('gm-md-records').checked, excludeFromTotals: $('gm-md-totals').checked,
         overnightGapHours: +$('gm-md-night').value, maxContinuousHours: +$('gm-md-cont').value,

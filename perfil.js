@@ -72,7 +72,38 @@
     $('inp-username').value   = p.username;
     $('inp-email').value      = p.email;
     $('inp-created').value    = p.created_at || '';
+    const sel = $('sel-privacy'), r = String(p.privacy_radius || 0);
+    if (![...sel.options].some(o => o.value === r)) sel.add(new Option(`${r} m`, r));
+    sel.value = r;
   }
+
+  // ── Privacy zone ─────────────────────────────────────────────────
+  $('btn-save-privacy').addEventListener('click', async () => {
+    try {
+      const r = await api('/api/profile/me', { method: 'PATCH', body: JSON.stringify({ privacy_radius: parseInt($('sel-privacy').value) }) });
+      if (!r.ok) { const e = await r.json(); setMsg('msg-privacy', e.error || 'Error', false); return; }
+      setMsg('msg-privacy', '¡Guardado!', true);
+    } catch (err) { if (err.message !== '401') setMsg('msg-privacy', 'Error de red', false); }
+  });
+
+  // ── Delete account ───────────────────────────────────────────────
+  $('btn-del-account').addEventListener('click', () => {
+    $('del-account-form').hidden = false; $('btn-del-account').hidden = true; $('inp-del-pwd').focus();
+  });
+  $('btn-del-cancel').addEventListener('click', () => {
+    $('del-account-form').hidden = true; $('btn-del-account').hidden = false; $('inp-del-pwd').value = '';
+  });
+  $('btn-del-confirm').addEventListener('click', async () => {
+    const password = $('inp-del-pwd').value;
+    if (!password) { setMsg('msg-del', 'Escribe tu contraseña', false); return; }
+    $('btn-del-confirm').disabled = true;
+    try {
+      const r = await api('/api/profile', { method: 'DELETE', body: JSON.stringify({ password }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setMsg('msg-del', d.error || 'No se pudo borrar la cuenta', false); $('btn-del-confirm').disabled = false; return; }
+      location.href = '/login';
+    } catch (err) { if (err.message !== '401') setMsg('msg-del', 'Error de red', false); $('btn-del-confirm').disabled = false; }
+  });
 
   // ── Avatar upload ────────────────────────────────────────────────
   $('avatar-edit-btn').addEventListener('click', () => $('avatar-input').click());
@@ -240,7 +271,9 @@
           ${l.visibility === 'public' ? '<span class="list-badge pub">Pública</span>' : ''}
           ${l.share_count ? `<span class="list-badge shared">${l.share_count} compartida${l.share_count !== 1 ? 's' : ''}</span>` : ''}
           <span class="list-card-count">${l.track_count} ruta${l.track_count !== 1 ? 's' : ''}</span>
-          <button class="btn btn-sm btn-outline" data-share-list="${l.id}" style="margin-left:4px" title="Compartir">Compartir</button>
+          <a class="btn btn-sm btn-outline" href="/lista?id=${l.id}" target="_blank" style="margin-left:4px" title="Abrir la lista en su página (enlace para compartir)">Abrir</a>
+          <button class="btn btn-sm btn-outline" data-copy-list="${l.id}" title="Copiar el enlace de la lista">Copiar enlace</button>
+          <button class="btn btn-sm btn-outline" data-share-list="${l.id}" title="Compartir">Compartir</button>
           <button class="btn btn-sm btn-outline btn-danger" data-del-list="${l.id}" title="Eliminar lista">✕</button>
         </div>
         ${l.description ? `<div class="list-card-desc">${esc(l.description)}</div>` : ''}
@@ -298,6 +331,15 @@
   }
 
   $('lists-grid').addEventListener('click', async e => {
+    if (e.target.closest('a')) return;
+    const copyBtn = e.target.closest('[data-copy-list]');
+    if (copyBtn) {
+      e.stopPropagation();
+      const url = `${location.origin}/lista?id=${copyBtn.dataset.copyList}`;
+      try { await navigator.clipboard.writeText(url); copyBtn.textContent = '¡Copiado!'; setTimeout(() => { copyBtn.textContent = 'Copiar enlace'; }, 1600); }
+      catch { prompt('Copia el enlace:', url); }
+      return;
+    }
     // Share panel toggle
     const shareBtn = e.target.closest('[data-share-list]');
     if (shareBtn) { e.stopPropagation(); openSharePanel(parseInt(shareBtn.dataset.shareList)); return; }
@@ -381,6 +423,7 @@
             ${l.can_edit ? '<span class="list-badge shared">puedes editar</span>' : ''}
             ${l.visibility === 'public' && !l.shared_with_me ? '<span class="list-badge pub">Pública</span>' : ''}
             <span class="list-card-count">${l.track_count} ruta${l.track_count !== 1 ? 's' : ''} · de @${esc(l.owner_username)}</span>
+            <a class="btn btn-sm btn-outline" href="/lista?id=${l.id}" target="_blank" style="margin-left:4px">Abrir</a>
           </div>
           ${l.description ? `<div class="list-card-desc">${esc(l.description)}</div>` : ''}
           <div class="list-detail" id="shared-detail-${l.id}">
@@ -391,6 +434,7 @@
   }
 
   $('shared-grid').addEventListener('click', e => {
+    if (e.target.closest('a')) return;
     const card = e.target.closest('.list-card[data-shared]'); if (!card) return;
     const lid = parseInt(card.dataset.shared);
     const detail = $('shared-detail-' + lid); if (!detail) return;
@@ -538,6 +582,10 @@
       $('ach-multiday').hidden = !md.length;
       if (md.length) $('ach-multiday').innerHTML = `🏕️ Rutas detectadas como de varios días (${md.length}): ` +
         md.slice(0, 8).map(m => `<a href="/track?id=${m.id}" target="_blank">${esc(m.name)}</a> (~${m.estDays} días)`).join(', ') + (md.length > 8 ? '…' : '');
+      const ex = d.excludedRoutes || [];
+      $('ach-excluded').hidden = !ex.length;
+      if (ex.length) $('ach-excluded').innerHTML = `Rutas que no cuentan por datos imposibles (${ex.length}): ` +
+        ex.slice(0, 8).map(m => `<a href="/track?id=${m.id}" target="_blank">${esc(m.name)}</a> (${esc(m.reason)})`).join(', ') + (ex.length > 8 ? '…' : '');
     } catch {}
   }
 

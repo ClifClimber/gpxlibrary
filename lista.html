@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lista — GPX Library</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="/shared.css">
+  <script src="/theme.js"></script>
+  <style>
+    .lista-page { max-width: 1180px; margin: 0 auto; padding: 24px 20px 60px; }
+    .lista-head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; }
+    .lista-head h1 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+    .lista-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; color: var(--ink-2); font-size: 13px; margin-top: 6px; }
+    .lista-desc { color: var(--ink-2); font-size: 14px; margin: 8px 0 0; max-width: 70ch; }
+    .lista-grid { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 18px; align-items: start; }
+    @media (max-width: 900px) { .lista-grid { grid-template-columns: minmax(0, 1fr); } }
+    #lmap { height: 560px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--soft); }
+    @media (max-width: 900px) { #lmap { height: 360px; } }
+    .lt-list { display: flex; flex-direction: column; gap: 8px; }
+    .lt-item { display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line);
+               border-radius: 12px; cursor: pointer; transition: background .1s, box-shadow .1s; }
+    .lt-item:hover, .lt-item.hl { background: var(--soft); box-shadow: inset 3px 0 0 var(--c, var(--accent)); }
+    .lt-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: var(--c, var(--accent)); }
+    .lt-main { flex: 1; min-width: 0; }
+    .lt-name { font-weight: 600; font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lt-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .lt-rm { opacity: 0; }
+    .lt-item:hover .lt-rm { opacity: 1; }
+    .lista-empty, .lista-error { padding: 48px 20px; text-align: center; color: var(--ink-2); }
+    .lista-error h2 { font-size: 18px; margin: 0 0 6px; color: var(--ink); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">GPX Library</span>
+  <a href="/">Visor</a>
+  <a href="/editor">Catálogo</a>
+  <a href="/compare">Comparar</a>
+  <a href="/admin">Admin</a>
+  <a href="/perfil" id="nav-perfil" class="nav-user" aria-label="Mi perfil"></a>
+</nav>
+
+<main class="lista-page">
+  <div id="lista-error" class="lista-error" hidden></div>
+  <div id="lista-body" hidden>
+    <div class="lista-head">
+      <div>
+        <h1 id="l-name"></h1>
+        <div class="lista-meta" id="l-meta"></div>
+        <p class="lista-desc" id="l-desc" hidden></p>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-outline" id="btn-copy">Copiar enlace</button>
+        <a class="btn btn-outline" id="btn-edit" href="/perfil#listas" hidden>Gestionar en mi perfil</a>
+      </div>
+    </div>
+    <div class="lista-grid">
+      <div id="lmap"></div>
+      <div>
+        <div class="lt-list" id="lt-list"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/lista.js"></script>
+</body>
+</html>

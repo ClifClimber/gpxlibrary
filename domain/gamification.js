@@ -32,6 +32,14 @@ const DEFAULT_CONFIG = {
       { id: 'foot', name: 'A pie (resto)', kmh: 4.5, climbMh: 500, activities: [] },   // default group
     ],
   },
+  // Routes with physically impossible data (GPS or elevation errors) don't count at all
+  anomaly: {
+    enabled: true,
+    maxSpeedKmh: 60,      // mean moving speed
+    maxGainPerKm: 400,    // ascent per km (routes of 1 km or more)
+    maxKmPerDay: 400,
+    maxGainPerDay: 7000,
+  },
   families: [
     { id: 'routes',     icon: 'footprints', name: 'Rutas completadas',          unit: 'rutas',       enabled: true, tiers: [1, 10, 50, 100, 250] },
     { id: 'km',         icon: 'ruler', name: 'Kilómetros recorridos',      unit: 'km',          enabled: true, tiers: [100, 500, 1000, 5000, 10000] },
@@ -60,6 +68,9 @@ function mergeConfig(stored) {
   for (const k of ['enabled', 'excludeFromRecords', 'excludeFromTotals']) if (typeof md[k] === 'boolean') cfg.multiDay[k] = md[k];
   for (const k of ['overnightGapHours', 'maxGapHours', 'minDayKm', 'maxContinuousHours', 'maxDayHours', 'maxMovingHours']) cfg.multiDay[k] = num(md[k], cfg.multiDay[k]);
   if (typeof md.keywords === 'string') cfg.multiDay.keywords = md.keywords;
+  const an = stored.anomaly || {};
+  if (typeof an.enabled === 'boolean') cfg.anomaly.enabled = an.enabled;
+  for (const k of ['maxSpeedKmh', 'maxGainPerKm', 'maxKmPerDay', 'maxGainPerDay']) cfg.anomaly[k] = num(an[k], cfg.anomaly[k]);
   for (const g of md.groups || []) {
     const cur = cfg.multiDay.groups.find(x => x.id === g.id);
     if (!cur) continue;
@@ -93,6 +104,8 @@ function validateConfig(cfg) {
   if (!(m.maxGapHours > m.overnightGapHours)) throw new Error('El hueco máximo debe ser mayor que la parada nocturna');
   if (!(m.minDayKm >= 0)) throw new Error('Los km mínimos por día no pueden ser negativos');
   if (!(cfg.xp.levelBase > 0 && cfg.xp.gainPerXp > 0)) throw new Error('Parámetros de XP no válidos');
+  const an = cfg.anomaly;
+  if (!['maxSpeedKmh', 'maxGainPerKm', 'maxKmPerDay', 'maxGainPerDay'].every(k => an[k] > 0)) throw new Error('Los límites de datos anómalos deben ser > 0');
   try { new RegExp(cfg.multiDay.keywords, 'i'); } catch (e) { throw new Error('Palabras clave: expresión no válida (' + e.message + ')'); }
   return cfg;
 }
@@ -167,6 +180,20 @@ function multiDayInfo(t, cfg) {
            estDays: multiDay ? Math.max(2, Math.ceil(estHours / md.maxDayHours)) : 1 };
 }
 
+/** Why a track's data is impossible (string), or null. `days` = estimated days of the route. */
+function anomalyReason(t, days, cfg) {
+  const an = cfg.anomaly;
+  if (!an || !an.enabled) return null;
+  const km = Number(t.distance) || 0, gain = Number(t.elevation_gain) || 0;
+  const mh = t.moving_time ? Number(t.moving_time) / 3600 : 0;
+  const d = Math.max(1, Number(days) || 1);
+  if (mh > 0 && km / mh > an.maxSpeedKmh) return `velocidad media de ${Math.round(km / mh)} km/h`;
+  if (km >= 1 && gain / km > an.maxGainPerKm) return `${Math.round(gain / km)} m de desnivel por km`;
+  if (km / d > an.maxKmPerDay) return `${Math.round(km / d)} km por día`;
+  if (gain / d > an.maxGainPerDay) return `${Math.round(gain / d)} m de desnivel por día`;
+  return null;
+}
+
 /**
  * Achievements and XP for one user.
  * tracks: completed (non-planned) tracks with distance, elevation_gain, activity, moving_time, name,
@@ -174,7 +201,9 @@ function multiDayInfo(t, cfg) {
  */
 function computeAchievements(tracks, extra, cfg) {
   const md = cfg.multiDay;
-  const info = tracks.map(t => ({ t, ...multiDayInfo(t, cfg) }));
+  const all = tracks.map(t => ({ t, ...multiDayInfo(t, cfg) }));
+  for (const x of all) x.anomaly = anomalyReason(x.t, x.estDays, cfg);
+  const info = all.filter(x => !x.anomaly);
   const forTotals  = info.filter(x => !(x.multiDay && md.excludeFromTotals)).map(x => x.t);
   const forRecords = info.filter(x => !(x.multiDay && md.excludeFromRecords)).map(x => x.t);
   const sum = (arr, k) => arr.reduce((s, t) => s + (Number(t[k]) || 0), 0);
@@ -211,7 +240,8 @@ function computeAchievements(tracks, extra, cfg) {
     unlocked: achievements.reduce((s, a) => s + a.level, 0), total: families.length * 5,
     achievements,
     multiDayRoutes: info.filter(x => x.multiDay).map(x => ({ id: x.t.id, name: x.t.name, reason: x.reason, estDays: x.estDays })),
+    excludedRoutes: all.filter(x => x.anomaly).map(x => ({ id: x.t.id, name: x.t.name, reason: x.anomaly })),
   };
 }
 
-module.exports = { DEFAULT_CONFIG, TIER_NAMES, mergeConfig, validateConfig, multiDayInfo, computeAchievements };
+module.exports = { DEFAULT_CONFIG, TIER_NAMES, mergeConfig, validateConfig, multiDayInfo, anomalyReason, computeAchievements };

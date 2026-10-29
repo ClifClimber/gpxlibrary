@@ -142,3 +142,24 @@ test('mergeConfig: saved old default emoji become icon keys, custom icons are ke
   assert.equal(c.families.find(f => f.id === 'routes').icon, 'footprints');
   assert.equal(c.families.find(f => f.id === 'km').icon, 'star');
 });
+
+test('anomalies: impossible data is left out of achievements', () => {
+  const tracks = [
+    T({ id: 1, name: 'Buena', distance: 12, elevation_gain: 800 }),
+    T({ id: 2, name: 'Coche', activity: 'MTB', distance: 120, elevation_gain: 300, moving_time: 3600 }),
+    T({ id: 3, name: 'Altímetro loco', distance: 3, elevation_gain: 4000 }),
+  ];
+  const r = computeAchievements(tracks, {}, cfg);
+  assert.deepEqual(r.excludedRoutes.map(x => x.id), [2, 3]);
+  assert.equal(r.achievements.find(a => a.id === 'routes').value, 1);
+  const off = mergeConfig({ anomaly: { enabled: false } });
+  assert.equal(computeAchievements(tracks, {}, off).excludedRoutes.length, 0);
+});
+
+test('anomalies: a real steep path and a long multi-day trip are kept', () => {
+  const r = computeAchievements([
+    T({ id: 1, distance: 9.9, elevation_gain: 2752 }),
+    T({ id: 2, activity: 'Ciclismo de carretera', distance: 666, elevation_gain: 1565, moving_time: 18 * 3600 }),
+  ], {}, cfg);
+  assert.equal(r.excludedRoutes.length, 0);
+});

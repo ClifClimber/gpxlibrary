@@ -214,8 +214,8 @@ try { sortMode = localStorage.getItem('visor-sort') || 'name'; } catch {}
 const items = CATALOG.map((track, i) => {
   const color = getTrackColor(track);
   const pts = track.points.map(p=>[p[0],p[1]]);
-  const casingLayer = L.polyline(pts, { color:'#555', weight:8, opacity:0.55, interactive:false, lineCap:'round', lineJoin:'round' });
-  const layer = L.polyline(pts, { color, weight:4.5, opacity:0.82, interactive:true, lineCap:'round', lineJoin:'round' });
+  const casingLayer = L.polyline(pts, { color:'#555', weight:5.5, opacity:0.55, interactive:false, lineCap:'round', lineJoin:'round' });
+  const layer = L.polyline(pts, { color, weight:3, opacity:0.82, interactive:true, lineCap:'round', lineJoin:'round' });
   layer.on('click', () => activateTrack(i, true));
   layer.on('mousemove', e => {
     if (activeIdx !== i || !PS?.geom) return;
@@ -314,8 +314,8 @@ function previewTrack(i, on) {
   const { layer, casingLayer } = items[i];
   clearTimeout(mpcTimer);
   if (on) {
-    casingLayer.setStyle({ weight:8, opacity:0.55 });
-    layer.setStyle({ weight:4.5, opacity:0.85 });
+    casingLayer.setStyle({ weight:5.5, opacity:0.55 });
+    layer.setStyle({ weight:3, opacity:0.85 });
     casingLayer.addTo(map);
     layer.addTo(map); layer.bringToFront();
     mpcTimer = setTimeout(() => showMapCard(i), 120);
@@ -473,15 +473,15 @@ function activateTrack(i, fitMap) {
   if (activeIdx !== null && items[activeIdx]) {
     const prev = items[activeIdx];
     prev.layer.remove(); prev.casingLayer.remove();
-    prev.layer.setStyle({ weight:4.5, opacity:0.82 });
-    prev.casingLayer.setStyle({ weight:8, opacity:0.55 });
+    prev.layer.setStyle({ weight:3, opacity:0.82 });
+    prev.casingLayer.setStyle({ weight:5.5, opacity:0.55 });
     prev.marker?.getElement()?.querySelector('.act-marker')?.classList.remove('active-marker');
     prev.marker?.setZIndexOffset(0);
   }
   activeIdx = i;
   const { track, layer, casingLayer, marker } = items[i];
-  casingLayer.setStyle({ weight:9, opacity:0.60 });
-  layer.setStyle({ weight:5, opacity:1 });
+  casingLayer.setStyle({ weight:6, opacity:0.60 });
+  layer.setStyle({ weight:3.5, opacity:1 });
   casingLayer.addTo(map);
   layer.addTo(map); layer.bringToFront();
   marker?.getElement()?.querySelector('.act-marker')?.classList.add('active-marker');
@@ -499,8 +499,8 @@ function deactivateTrack() {
   if (activeIdx !== null && items[activeIdx]) {
     const it = items[activeIdx];
     it.layer.remove(); it.casingLayer.remove();
-    it.layer.setStyle({ weight:4.5, opacity:0.82 });
-    it.casingLayer.setStyle({ weight:8, opacity:0.55 });
+    it.layer.setStyle({ weight:3, opacity:0.82 });
+    it.casingLayer.setStyle({ weight:5.5, opacity:0.55 });
     it.marker?.getElement()?.querySelector('.act-marker')?.classList.remove('active-marker');
     it.marker?.setZIndexOffset(0);
   }

@@ -173,6 +173,11 @@
   .pf-card { padding: 16px; }
   .bar-label { width: 80px; }
 }
+  .pf-hint { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .pf-hint a { color: var(--accent); }
+  .danger-zone { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .danger-zone h4 { font-size: 14px; color: var(--danger); margin: 0 0 4px; }
+  .danger-zone .pf-hint { margin: 0 0 10px; }
 </style>
 </head>
 <body>
@@ -267,6 +272,49 @@
       <div class="pf-field">
         <label>Miembro desde</label>
         <input type="text" class="input" id="inp-created" disabled style="opacity:.7">
+      </div>
+    </div>
+
+    <div class="pf-card">
+      <h3>Privacidad</h3>
+      <div class="pf-field">
+        <label for="sel-privacy">Zona de privacidad en el inicio y el final de tus rutas</label>
+        <select class="select" id="sel-privacy">
+          <option value="0">Sin zona: los demás ven la ruta completa</option>
+          <option value="200">200 m</option>
+          <option value="500">500 m</option>
+          <option value="1000">1 km</option>
+          <option value="2000">2 km</option>
+        </select>
+        <div class="pf-hint">Los demás no verán los puntos de tus rutas públicas dentro de esa distancia del inicio y del final (por ejemplo, tu casa), ni en el mapa ni en el GPX que descarguen. Tú sigues viendo la ruta completa.</div>
+      </div>
+      <div class="pf-actions">
+        <button class="btn" id="btn-save-privacy">Guardar</button>
+        <span class="pf-msg" id="msg-privacy"></span>
+      </div>
+    </div>
+
+    <div class="pf-card">
+      <h3>Tus datos</h3>
+      <p class="pf-hint" style="margin-top:0">Descarga un ZIP con tu cuenta, todas tus rutas en GPX, tus listas y tus fotos. Consulta la <a href="/privacidad" target="_blank">política de privacidad</a>.</p>
+      <div class="pf-actions">
+        <a class="btn" id="btn-export" href="/api/profile/export">Descargar mis datos</a>
+      </div>
+      <div class="danger-zone">
+        <h4>Borrar mi cuenta</h4>
+        <p class="pf-hint">Se borran tu cuenta, tus rutas con sus ficheros GPX, tus fotos y tus listas. No se puede deshacer.</p>
+        <div id="del-account-form" hidden>
+          <div class="pf-field">
+            <label for="inp-del-pwd">Escribe tu contraseña para confirmar</label>
+            <input type="password" class="input" id="inp-del-pwd" autocomplete="current-password">
+          </div>
+          <div class="pf-actions">
+            <button class="btn btn-danger" id="btn-del-confirm">Borrar mi cuenta para siempre</button>
+            <button class="btn btn-outline" id="btn-del-cancel">Cancelar</button>
+            <span class="pf-msg" id="msg-del"></span>
+          </div>
+        </div>
+        <button class="btn btn-danger btn-outline" id="btn-del-account">Borrar mi cuenta…</button>
       </div>
     </div>
 
@@ -386,6 +434,7 @@
     <div class="ach-grid" id="ach-grid"></div>
     <p style="font-size:12px;color:var(--muted);margin-top:10px">Las rutas marcadas como planeadas no cuentan hasta que las marques como realizadas.</p>
     <p style="font-size:12px;color:var(--muted);margin-top:4px" id="ach-multiday" hidden></p>
+    <p style="font-size:12px;color:var(--muted);margin-top:4px" id="ach-excluded" hidden></p>
   </div>
 
 </main>

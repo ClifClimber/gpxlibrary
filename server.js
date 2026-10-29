@@ -15,7 +15,10 @@ const zlib   = require('zlib');
 const { pipeline } = require('stream/promises');
 const { spawn } = require('child_process');
 const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampleEvenly,
-        DEFAULT_CONFIG: GAMI_DEFAULTS, mergeConfig, validateConfig, multiDayInfo, computeAchievements } = require('./domain');
+        DEFAULT_CONFIG: GAMI_DEFAULTS, mergeConfig, validateConfig, multiDayInfo, computeAchievements,
+        privacyZones, inZones } = require('./domain');
+const crypto = require('crypto');
+const { sendMail } = require('./mail/smtp');
 const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
 const { openSql } = require('./repo/sql');
@@ -30,7 +33,7 @@ let blob = createBlob();
 
 const PORT = parseInt(process.env.PORT || '8080');
 const ROOT = __dirname;
-const PHOTOS_DIR = require('./config').PHOTOS_DIR;   // track photos (own Docker volume in prod)
+const { PHOTOS_DIR, SMTP, PUBLIC_URL, TRUST_PROXY } = require('./config');   // PHOTOS_DIR: old disk copy of the photos (now in S3)
 
 let _oauthState = null; // { state, ts } — CSRF token para el flujo OAuth
 
@@ -56,7 +59,7 @@ const MIME = {
 
 // ── Archivos estáticos ─────────────────────────────────────────────
 // Public: the pages and styles at the root, the browser scripts listed here and assets/.
-const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js']);
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js']);
 function isPublicFile(rel) {
   if (rel.split('/').some(s => s.startsWith('.'))) return false;
   if (rel.startsWith('assets/')) return true;
@@ -77,10 +80,75 @@ async function liveUser(id) {
   return row;
 }
 
+// ── Límite de intentos (login, registro, recuperar contraseña) ─────
+// In memory and per process: enough for one app instance; attempts reset on restart.
+const _attempts = new Map();   // key → [timestamps]
+function clientIp(req) {
+  if (TRUST_PROXY && req.headers['x-forwarded-for']) return String(req.headers['x-forwarded-for']).split(',')[0].trim();
+  return req.socket.remoteAddress || '?';
+}
+// True if `key` already used `max` attempts in the last `windowMs`; otherwise records one more.
+function tooMany(key, max, windowMs) {
+  const now = Date.now();
+  const list = (_attempts.get(key) || []).filter(t => now - t < windowMs);
+  if (list.length >= max) { _attempts.set(key, list); return true; }
+  list.push(now); _attempts.set(key, list);
+  if (_attempts.size > 5000) for (const [k, v] of _attempts) if (!v.some(t => now - t < 3600e3)) _attempts.delete(k);
+  return false;
+}
+const forgetAttempts = key => _attempts.delete(key);
+
+// ── Zonas de privacidad ────────────────────────────────────────────
+// Radius (m) that hides the start/end of `ownerId`'s routes from `viewer`; 0 for the owner and admins.
+async function privacyRadiusFor(ownerId, viewer) {
+  if (!ownerId || !viewer || viewer.sub === ownerId || viewer.role === 'admin') return 0;
+  const r = await sqlDb().get('SELECT privacy_radius FROM users WHERE id = ?', [ownerId]).catch(() => null);
+  return r ? Number(r.privacy_radius) || 0 : 0;
+}
+// Points and waypoints of a track as another person may see them, plus recomputed bounds.
+function applyPrivacy(track, points, radius) {
+  if (!radius) return { points, zones: [] };
+  const zones = privacyZones(points, radius, track.id);
+  const kept = points.filter(p => !inZones(Array.isArray(p) ? p[0] : p.lat, Array.isArray(p) ? p[1] : p.lon, zones));
+  return { points: kept, zones };
+}
+function boundsOf(points) {
+  if (!points.length) return null;
+  let s = 90, w = 180, n = -90, e = -180;
+  for (const p of points) {
+    const la = Array.isArray(p) ? p[0] : p.lat, lo = Array.isArray(p) ? p[1] : p.lon;
+    if (la < s) s = la; if (la > n) n = la; if (lo < w) w = lo; if (lo > e) e = lo;
+  }
+  return [[s, w], [n, e]];
+}
+
+// ── Fotos (S3, prefijo photos/) ────────────────────────────────────
+// Track photos, activity images and icons live in the S3 store under photos/<rel>; files still on the
+// old disk volume (PHOTOS_DIR/<rel>, before `scripts/photos-to-s3.js`) are read from there.
+async function photoPut(rel, buf) { await blob.put('photos/' + rel, buf); }
+async function photoGet(rel) {
+  const b = await blob.get('photos/' + rel).catch(() => null);
+  if (b) return b;
+  try { return fs.readFileSync(path.join(PHOTOS_DIR, rel)); } catch { return null; }
+}
+async function photoDel(rel) {
+  await blob.del('photos/' + rel).catch(() => {});
+  try { fs.unlinkSync(path.join(PHOTOS_DIR, rel)); } catch {}
+}
+
+// ── Correo ─────────────────────────────────────────────────────────
+const smtpReady = () => !!(SMTP.host && SMTP.from);
+// Absolute base URL for links in emails: PUBLIC_URL, else the address the request came in on.
+function baseUrl(req) {
+  if (PUBLIC_URL) return PUBLIC_URL;
+  const proto = TRUST_PROXY && req.headers['x-forwarded-proto'] ? String(req.headers['x-forwarded-proto']).split(',')[0] : 'http';
+  return `${proto}://${req.headers.host}`;
+}
+
 // ── Permisos por rol ───────────────────────────────────────────────
 // Non-admin users: viewer + search, track detail, compare, route drawing and their own profile.
 const ADMIN_PAGES = new Set(['/admin', '/config', '/admin.html']);
-const USER_PAGES  = new Set(['/', '/track', '/trazar', '/compare', '/perfil', '/editor', '/editor.html', '/subir', '/subir.html']);
+const USER_PAGES  = new Set(['/', '/track', '/trazar', '/compare', '/perfil', '/editor', '/editor.html', '/subir', '/subir.html', '/lista']);
 const USER_API = [
   ['GET',    /^\/api\/(catalog|tags|geo|tracks)$/],
   ['GET',    /^\/api\/config\/(activities|sierras|provinces)$/],
@@ -102,6 +170,8 @@ const USER_API = [
   ['GET',    /^\/api\/activity-images\/[\w.-]+$/],
   ['GET',    /^\/api\/activity-icons\/[\w.-]+$/],
   ['GET',    /^\/api\/lists(\/shared)?$/],
+  ['GET',    /^\/api\/lists\/\d+$/],
+  ['GET',    /^\/api\/profile\/export$/],
   ['POST',   /^\/api\/lists$/],
   ['PATCH',  /^\/api\/lists\/\d+$/],
   ['DELETE', /^\/api\/lists\/\d+$/],
@@ -312,21 +382,24 @@ async function computeGpxTimes(file) {
 }
 
 // ── API /tracks/:id ───────────────────────────────────────────────
-async function apiGetTrackById(res, id, full = false) {
+async function apiGetTrackById(res, id, full = false, viewer = null) {
   try {
     const track = await repo.getTrack(id);
     if (!track) { res.writeHead(404); res.end('Not found'); return; }
 
     const MAX_PTS = 800;
+    const radius = await privacyRadiusFor(track.owner_id, viewer);
     let allPts = await repo.getPoints(id, { clean: !!track.cleaned });
+    let zones = [];
+    if (radius) ({ points: allPts, zones } = applyPrivacy(track, allPts, radius));
     if (!full && allPts.length > MAX_PTS) {
       const step = Math.ceil(allPts.length / MAX_PTS);
       allPts = allPts.filter((_, i) => i % step === 0);
     }
     track.points = allPts.map(p => [p.lat, p.lon, p.ele]);
-    track.bounds = (track.sw_lat != null)
-      ? [[track.sw_lat, track.sw_lon], [track.ne_lat, track.ne_lon]]
-      : null;
+    track.bounds = radius ? boundsOf(allPts)
+      : (track.sw_lat != null) ? [[track.sw_lat, track.sw_lon], [track.ne_lat, track.ne_lon]] : null;
+    track.privacy_hidden = !!radius;
 
     // Compute moving/stopped time from GPX if not cached
     if (track.moving_time == null) {
@@ -340,6 +413,13 @@ async function apiGetTrackById(res, id, full = false) {
 
     track.tags      = track.tags      ? (() => { try { return JSON.parse(track.tags);      } catch { return [];   } })() : [];
     track.waypoints = track.waypoints_json ? (() => { try { return JSON.parse(track.waypoints_json); } catch { return []; } })() : [];
+    if (zones.length) {
+      track.waypoints = track.waypoints.filter(w => !inZones(w.lat, w.lon, zones));
+      // Exact start/end coordinates would give the hidden place away
+      for (const k of Object.keys(track)) if (/^(start|end|center)_(lat|lon)$/.test(k)) track[k] = null;
+      if (allPts.length) { track.center_lat = allPts[Math.floor(allPts.length / 2)].lat; track.center_lon = allPts[Math.floor(allPts.length / 2)].lon; }
+      if (track.bounds) { [[track.sw_lat, track.sw_lon], [track.ne_lat, track.ne_lon]] = track.bounds; }
+    }
     delete track.waypoints_json;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(track));
@@ -441,14 +521,24 @@ function exportGpxResponse(res, tracksData, filename) {
   });
   res.end(gpx);
 }
-async function getTracksForExport(ids, mode, maxPts) {
+// viewer: req.user — tracks it may not see are skipped and privacy zones apply (null = no checks).
+async function getTracksForExport(ids, mode, maxPts, viewer = null) {
   const result = [];
   for (const id of ids) {
     const t = await repo.getTrack(id);
     if (!t) continue;
+    if (viewer && viewer.role !== 'admin' && t.owner_id !== viewer.sub && t.visibility !== 'public') continue;
     let pts = await repo.getPoints(t.id, { clean: !!t.cleaned });
+    let wpts = null;
+    const radius = await privacyRadiusFor(t.owner_id, viewer);
+    if (radius) {
+      const r = applyPrivacy(t, pts, radius);
+      pts = r.points;
+      try { wpts = JSON.parse(t.waypoints_json || '[]').filter(w => !inZones(w.lat, w.lon, r.zones)); } catch { wpts = []; }
+    }
     if (mode === 'simplified') pts = sampleEvenly(pts, maxPts);
-    result.push({ id: t.id, name: t.name, date: t.date, file: t.file, activity: t.activity, sierra: t.sierra || t.zone, pts });
+    result.push({ id: t.id, name: t.name, date: t.date, file: t.file, activity: t.activity, sierra: t.sierra || t.zone, pts,
+                  ...(wpts ? { waypoints: wpts } : {}), privacy: !!radius });
   }
   return result;
 }
@@ -461,7 +551,7 @@ async function apiExportGpx(req, res) {
     const format = body.format === 'zip' ? 'zip' : 'gpx';
     const layout = body.layout === 'flat' ? 'flat' : 'tree';
     if (!ids.length) { res.writeHead(400); return res.end('ids required'); }
-    const data = await getTracksForExport(ids, mode, maxPts);
+    const data = await getTracksForExport(ids, mode, maxPts, req.user);
     if (!data.length) { res.writeHead(404); return res.end('No tracks found'); }
 
     if (format === 'zip') {
@@ -493,11 +583,11 @@ async function apiExportGpx(req, res) {
     }
   } catch(e) { res.writeHead(500); res.end(e.message); }
 }
-async function apiExportGpxSingle(res, id, searchParams) {
+async function apiExportGpxSingle(res, id, searchParams, viewer) {
   try {
     const mode   = searchParams.get('mode') === 'simplified' ? 'simplified' : 'full';
     const maxPts = parseInt(searchParams.get('pts')) || 500;
-    const data = await getTracksForExport([id], mode, maxPts);
+    const data = await getTracksForExport([id], mode, maxPts, viewer);
     if (!data.length) { res.writeHead(404); return res.end('Not found'); }
     exportGpxResponse(res, data, data[0].name + '.gpx');
   } catch(e) { res.writeHead(500); res.end(e.message); }
@@ -511,12 +601,18 @@ async function originalGpxWithMeta(track) {
 
 // GET /api/tracks/:id/gpx           → original GPX file from disk
 // GET /api/tracks/:id/gpx?pts=300   → generated GPX with N simplified points
-async function apiDownloadGpx(res, id, searchParams) {
+async function apiDownloadGpx(res, id, searchParams, viewer) {
   try {
     const track = await repo.getTrack(id);
     if (!track) { res.writeHead(404); res.end('Not found'); return; }
 
     const ptsParam = searchParams.get('pts');
+    // Someone else's route with a privacy zone: the original would reveal it, so a trimmed GPX is built
+    if (await privacyRadiusFor(track.owner_id, viewer)) {
+      const data = await getTracksForExport([id], ptsParam && ptsParam !== 'all' ? 'simplified' : 'full', Math.max(2, parseInt(ptsParam) || 300), viewer);
+      if (!data.length) { res.writeHead(404); res.end('Not found'); return; }
+      return exportGpxResponse(res, data, downloadName(track.name));
+    }
     if (!ptsParam || ptsParam === 'all') {
       const gpx = await originalGpxWithMeta(track);
       if (gpx == null) { res.writeHead(404); res.end('GPX file not found in the store'); return; }
@@ -561,8 +657,13 @@ function apiTempFiles(res, srcDir) {
 // Result is cached in memory and invalidated on any write.
 const MAX_CATALOG_PTS = 300;
 
-async function buildCatalog(ownerId) {
+async function buildCatalog(viewer) {
+  const ownerId = viewer ? viewer.sub : null;
   const tracks = await repo.catalogTracks({ ownerId });
+  // Privacy zones of the other owners (admins see everything)
+  const radii = new Map();
+  if (viewer && viewer.role !== 'admin')
+    for (const u of await sqlDb().all('SELECT id, privacy_radius FROM users WHERE privacy_radius > 0')) radii.set(u.id, u.privacy_radius);
   const catalog = [];
   for(const t of tracks){
     if(t.sw_lat==null || t.ne_lat==null) continue;
@@ -580,6 +681,15 @@ async function buildCatalog(ownerId) {
       ]);
     }
     if(!Array.isArray(points) || points.length < 2) continue;
+    let bounds = [[t.sw_lat,t.sw_lon],[t.ne_lat,t.ne_lon]];
+    let center = [Math.round(t.center_lat*10000)/10000, Math.round(t.center_lon*10000)/10000];
+    const radius = t.owner_id !== ownerId ? radii.get(t.owner_id) : 0;
+    if (radius) {
+      points = applyPrivacy(t, points, radius).points;
+      if (points.length < 2) continue;   // the whole route is inside the zone: nothing to show
+      bounds = boundsOf(points);
+      center = points[Math.floor(points.length / 2)].slice(0, 2);
+    }
     catalog.push({
       id:            t.id,
       name:          t.name,
@@ -595,8 +705,8 @@ async function buildCatalog(ownerId) {
       elevationLoss: t.elevation_loss,
       minElevation:  t.min_elevation  != null ? Math.round(t.min_elevation)  : null,
       maxElevation:  t.max_elevation  != null ? Math.round(t.max_elevation)  : null,
-      bounds:        [[t.sw_lat,t.sw_lon],[t.ne_lat,t.ne_lon]],
-      center:        [Math.round(t.center_lat*10000)/10000, Math.round(t.center_lon*10000)/10000],
+      bounds,
+      center,
       color:         t.color||null,
       ibp_bicycle:   t.ibp_bicycle  != null ? Math.round(t.ibp_bicycle)  : null,
       ibp_hiking:    t.ibp_hiking   != null ? Math.round(t.ibp_hiking)   : null,
@@ -627,7 +737,7 @@ async function apiCatalog(req, res) {
     const version = await jobQueue().dataVersion().catch(() => null);
     if (version !== _catalogDataVersion) { _catalogDataVersion = version; _catalogCacheMap.clear(); }
     if (!_catalogCacheMap.has(ownerId)) {
-      const data = await buildCatalog(ownerId);
+      const data = await buildCatalog(req.user);
       _catalogCacheMap.set(ownerId, { data, etag: `"cat-${ownerId}-${Date.now().toString(36)}"` });
       console.log(`[catalog] built for user=${ownerId}: ${Math.round(Buffer.byteLength(data)/1024)}KB`);
     }
@@ -667,7 +777,7 @@ async function deleteTrackById(id) {
   const photos = await sqlDb().all('SELECT filename, thumb_filename FROM track_photos WHERE track_id = ?', [id]).catch(() => []);
   const file = await repo.deleteTrack(id);
   if (!file) return { ok: false, error: 'Not found' };
-  for (const p of photos) for (const f of [p.filename, p.thumb_filename]) if (f) { try { fs.unlinkSync(path.join(PHOTOS_DIR, f)); } catch {} }
+  for (const p of photos) for (const f of [p.filename, p.thumb_filename]) if (f) await photoDel(f);
   invalidateCatalogCache();
   let fileDeleted = false;
   try { fileDeleted = await deleteTrackFile(file, blob); }
@@ -692,6 +802,8 @@ async function getSetting(key) {
   const r = await sqlDb().get('SELECT value FROM app_settings WHERE key = ?', [key]).catch(() => null);
   try { return r ? JSON.parse(r.value) : null; } catch { return null; }
 }
+// Self-service registration: open unless the admin closed it (app_settings 'auth')
+async function registrationOpen() { const a = await getSetting('auth'); return !(a && a.registration_open === false); }
 async function gamificationConfig() { return mergeConfig(await getSetting('gamification')); }
 // Completed (non-planned) tracks of a user, in the shape computeAchievements expects
 async function userCompletedTracks(uid) {
@@ -1132,22 +1244,112 @@ const server = http.createServer(async (req, res) => {
     else { req.user.role = live.role; req.user.username = live.username; }
   }
 
-  // Login page and auth endpoints are public
+  // Login, registration, password reset and privacy policy pages + auth endpoints are public
   if (pathname === '/login') return serveStatic(res, path.join(ROOT, 'login.html'), req);
+  if (pathname === '/registro') return serveStatic(res, path.join(ROOT, 'registro.html'), req);
+  if (pathname === '/restablecer') return serveStatic(res, path.join(ROOT, 'restablecer.html'), req);
+  if (pathname === '/privacidad') return serveStatic(res, path.join(ROOT, 'privacidad.html'), req);
 
   if (pathname === '/api/auth/login' && method === 'POST') {
     const body = await parseBody(req);
     const db = sqlDb();
     const login = String(body.username || '').trim().toLowerCase();
+    // 5 failed attempts per account and IP, or 30 per IP, in 15 minutes → wait
+    const ip = clientIp(req), kUser = `login:${ip}:${login}`, kIp = `login:${ip}`;
+    const recent = k => (_attempts.get(k) || []).filter(t => Date.now() - t < 15 * 60e3).length;
+    if (recent(kUser) >= 5 || recent(kIp) >= 30) {
+      res.writeHead(429, J); return res.end(JSON.stringify({ error: 'Demasiados intentos. Espera 15 minutos y vuelve a probar.' }));
+    }
     const user = await db.get('SELECT id, username, email, password_hash, role, active FROM users WHERE lower(username) = ? OR lower(email) = ?', [login, login]);
     if (!user || !user.active || !checkPassword(body.password || '', user.password_hash)) {
+      tooMany(kUser, 5, 15 * 60e3); tooMany(kIp, 30, 15 * 60e3);
       res.writeHead(401, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: 'Usuario o contraseña incorrectos' }));
     }
+    forgetAttempts(kUser);
     const token = createToken(user);
     setCookie(res, token);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ id: user.id, username: user.username, role: user.role }));
+  }
+
+  // Is self-service registration open? (login page shows the link; Admin → Usuarios switches it)
+  if (pathname === '/api/auth/options' && method === 'GET') {
+    res.writeHead(200, J);
+    return res.end(JSON.stringify({ registration_open: await registrationOpen() }));
+  }
+
+  if (pathname === '/api/auth/register' && method === 'POST') {
+    const fail = (code, error) => { res.writeHead(code, J); res.end(JSON.stringify({ error })); };
+    if (!(await registrationOpen())) return fail(403, 'El registro está cerrado');
+    if (tooMany(`register:${clientIp(req)}`, 5, 3600e3)) return fail(429, 'Demasiados registros desde esta conexión. Prueba más tarde.');
+    const body = await parseBody(req);
+    const username = String(body.username || '').trim().toLowerCase();
+    const email    = String(body.email || '').trim().toLowerCase();
+    const password = String(body.password || '');
+    if (!/^[a-z0-9._-]{2,32}$/.test(username)) return fail(400, 'Usuario: 2–32 caracteres (letras, números, punto, guion)');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) return fail(400, 'Email no válido');
+    if (password.length < 8) return fail(400, 'La contraseña debe tener al menos 8 caracteres');
+    if (body.accept !== true) return fail(400, 'Debes aceptar la política de privacidad');
+    try {
+      const user = await sqlDb().get(
+        "INSERT INTO users (username, email, password_hash, role, display_name, terms_accepted_at) VALUES (?, ?, ?, 'user', ?, NOW()) RETURNING id, username, role",
+        [username, email, hashPassword(password), String(body.display_name || '').trim().slice(0, 80) || null]);
+      appendLog('info', 'users', `Registro: ${username}`, { ip: clientIp(req) });
+      setCookie(res, createToken(user));
+      res.writeHead(201, J); return res.end(JSON.stringify({ id: user.id, username: user.username, role: user.role }));
+    } catch (e) {
+      if (e.code === '23505') return fail(409, 'Ese usuario o email ya está registrado');
+      throw e;
+    }
+  }
+
+  // Asks for a reset link by email. Always answers the same, so it can't tell who has an account.
+  if (pathname === '/api/auth/forgot' && method === 'POST') {
+    const body = await parseBody(req);
+    const email = String(body.email || '').trim().toLowerCase();
+    const ok = () => { res.writeHead(200, J); res.end(JSON.stringify({ ok: true })); };
+    if (!email || tooMany(`forgot:${clientIp(req)}`, 5, 3600e3) || tooMany(`forgot:${email}`, 3, 3600e3)) return ok();
+    const user = await sqlDb().get('SELECT id, username, email, display_name, active FROM users WHERE lower(email) = ?', [email]);
+    if (!user || !user.active) return ok();
+    const token = crypto.randomBytes(32).toString('hex');
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    await sqlDb().run("INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES (?, ?, NOW() + INTERVAL '1 hour')", [hash, user.id]);
+    const link = `${baseUrl(req)}/restablecer?token=${token}`;
+    if (!smtpReady()) {
+      appendLog('warn', 'auth', `SMTP sin configurar: enlace de restablecimiento para ${user.username}`, { link });
+      return ok();
+    }
+    const name = user.display_name || user.username;
+    sendMail(SMTP, {
+      to: user.email,
+      subject: 'GPX Library: restablecer tu contraseña',
+      text: `Hola ${name}:\n\nPara elegir una contraseña nueva abre este enlace (caduca en 1 hora):\n\n${link}\n\nSi no lo has pedido tú, ignora este mensaje: tu contraseña no cambia.\n`,
+    }).then(() => appendLog('info', 'auth', `Enlace de restablecimiento enviado a ${user.username}`))
+      .catch(e => appendLog('error', 'auth', 'No se pudo enviar el email de restablecimiento', { user: user.username, error: e.message }));
+    return ok();
+  }
+
+  // GET checks a reset link, POST sets the new password with it
+  if (pathname === '/api/auth/reset' && (method === 'GET' || method === 'POST')) {
+    const body = method === 'POST' ? await parseBody(req) : {};
+    const token = String(body.token || searchParams.get('token') || '');
+    const fail = (code, error) => { res.writeHead(code, J); res.end(JSON.stringify({ error })); };
+    if (tooMany(`reset:${clientIp(req)}`, 20, 3600e3)) return fail(429, 'Demasiados intentos. Prueba más tarde.');
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    const row = await sqlDb().get(
+      `SELECT r.user_id, u.username FROM password_resets r JOIN users u ON u.id = r.user_id
+       WHERE r.token_hash = ? AND r.used_at IS NULL AND r.expires_at > NOW() AND u.active`, [hash]);
+    if (!row) return fail(400, 'El enlace no es válido o ha caducado. Pide uno nuevo.');
+    if (method === 'GET') { res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, username: row.username })); }
+    const password = String(body.password || '');
+    if (password.length < 8) return fail(400, 'La contraseña debe tener al menos 8 caracteres');
+    await sqlDb().tx(async t => {
+      await t.run('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?', [hashPassword(password), row.user_id]);
+      await t.run('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [row.user_id]);
+    });
+    appendLog('info', 'auth', `Contraseña restablecida: ${row.username}`, { ip: clientIp(req) });
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
   }
 
   if (pathname === '/api/auth/logout' && method === 'POST') {
@@ -1163,6 +1365,34 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ id: req.user.sub, username: req.user.username, role: req.user.role,
       display_name: u?.display_name || null,
       avatar_url: u?.avatar_key ? `/api/profile/avatar/${encodeURIComponent(u.avatar_key)}` : null }));
+  }
+
+  // ── Admin: registro abierto y correo ──────────────────────────────
+  if (pathname === '/api/admin/auth-settings' && (method === 'GET' || method === 'PATCH')) {
+    if (!requireAdmin(req, res)) return;
+    if (method === 'PATCH') {
+      const body = await parseBody(req);
+      const cur = (await getSetting('auth')) || {};
+      if (typeof body.registration_open === 'boolean') cur.registration_open = body.registration_open;
+      await sqlDb().run(`INSERT INTO app_settings (key, value, updated_at, updated_by) VALUES ('auth', ?, NOW(), ?)
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW(), updated_by = EXCLUDED.updated_by`, [JSON.stringify(cur), req.user.username]);
+      appendLog('info', 'users', `Registro ${cur.registration_open === false ? 'cerrado' : 'abierto'}`, { by: req.user.username });
+    }
+    res.writeHead(200, J);
+    return res.end(JSON.stringify({ registration_open: await registrationOpen(), smtp: smtpReady() ? `${SMTP.host}:${SMTP.port}` : null,
+      from: SMTP.from || null, public_url: PUBLIC_URL || null }));
+  }
+  if (pathname === '/api/admin/smtp-test' && method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    if (!smtpReady()) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'SMTP sin configurar (SMTP_HOST y SMTP_FROM en .env)' })); }
+    const me = await sqlDb().get('SELECT email FROM users WHERE id = ?', [req.user.sub]);
+    try {
+      await sendMail(SMTP, { to: me.email, subject: 'GPX Library: prueba de correo', text: 'El correo de GPX Library funciona.\n' });
+      res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, to: me.email }));
+    } catch (e) {
+      appendLog('error', 'auth', 'Prueba de SMTP fallida', { error: e.message });
+      res.writeHead(502, J); return res.end(JSON.stringify({ error: e.message }));
+    }
   }
 
   // ── Admin: gestión de usuarios ────────────────────────────────────
@@ -1307,12 +1537,16 @@ const server = http.createServer(async (req, res) => {
 
   // ── Perfil del usuario autenticado ───────────────────────────────
   if (pathname === '/perfil') return serveStatic(res, path.join(ROOT, 'perfil.html'), req);
+  if (pathname === '/lista') {
+    if (!req.user) { res.writeHead(302, { Location: `/login?next=${encodeURIComponent('/lista' + (searchParams.toString() ? '?' + searchParams : ''))}` }); return res.end(); }
+    return serveStatic(res, path.join(ROOT, 'lista.html'), req);
+  }
 
   if (pathname === '/api/profile/me' && method === 'GET') {
     if (!requireAuth(req, res)) return;
     const db = sqlDb();
     const u = await db.get(
-      'SELECT id, username, email, display_name, bio, avatar_key, role, to_char(created_at AT TIME ZONE \'UTC\', \'YYYY-MM-DD\') AS created_at FROM users WHERE id = ?',
+      'SELECT id, username, email, display_name, bio, avatar_key, role, privacy_radius, to_char(created_at AT TIME ZONE \'UTC\', \'YYYY-MM-DD\') AS created_at FROM users WHERE id = ?',
       [req.user.sub]);
     if (!u) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Usuario no encontrado' })); }
     const avatarUrl = u.avatar_key ? `/api/profile/avatar/${encodeURIComponent(u.avatar_key)}` : null;
@@ -1327,9 +1561,15 @@ const server = http.createServer(async (req, res) => {
     const updates = []; const vals = [];
     if (body.display_name !== undefined) { updates.push('display_name = ?'); vals.push(body.display_name || null); }
     if (body.bio !== undefined)          { updates.push('bio = ?');          vals.push(body.bio || null); }
+    if (body.privacy_radius !== undefined) {
+      const r = Number(body.privacy_radius);
+      if (!Number.isInteger(r) || r < 0 || r > 5000) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Zona de privacidad no válida (0–5000 m)' })); }
+      updates.push('privacy_radius = ?'); vals.push(r);
+    }
     if (!updates.length) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Nada que actualizar' })); }
     updates.push('updated_at = NOW()'); vals.push(req.user.sub);
     await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, vals);
+    if (body.privacy_radius !== undefined) invalidateCatalogCache();
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
   }
 
@@ -1343,6 +1583,70 @@ const server = http.createServer(async (req, res) => {
     if (!u || !checkPassword(current, u.password_hash)) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Contraseña actual incorrecta' })); }
     await db.run('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?', [hashPassword(next), req.user.sub]);
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+  }
+
+  // Everything the user has in the app, as a ZIP: account, routes (metadata + original GPX), lists, photos
+  if (pathname === '/api/profile/export' && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const db = sqlDb(), uid = req.user.sub;
+    const user = await db.get(`SELECT id, username, email, display_name, bio, role, privacy_radius, avatar_key,
+      to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at FROM users WHERE id = ?`, [uid]);
+    const tracks = await db.all(`SELECT id, name, activity, sierra, province, ccaa, date, distance, elevation_gain, elevation_loss,
+      notes, url, tags, visibility, planned, difficulty, days_declared, file,
+      to_char(imported_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS imported_at FROM tracks WHERE owner_id = ? ORDER BY id`, [uid]);
+    const lists = await db.all('SELECT id, name, description, visibility FROM user_lists WHERE owner_id = ? ORDER BY id', [uid]);
+    for (const l of lists) l.track_ids = (await db.all('SELECT track_id FROM user_list_tracks WHERE list_id = ? ORDER BY position, track_id', [l.id])).map(r => r.track_id);
+    const photos = await db.all('SELECT id, track_id, filename, caption FROM track_photos WHERE owner_id = ? ORDER BY id', [uid]);
+    const entries = [];
+    const safe = s => String(s || 'ruta').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim().slice(0, 80) || 'ruta';
+    for (const t of tracks) {
+      const gpx = await originalGpxWithMeta(t).catch(() => null);
+      if (gpx) entries.push({ name: `rutas/${t.id} - ${safe(t.name)}.gpx`, data: Buffer.from(gpx, 'utf8') });
+      try { t.tags = JSON.parse(t.tags || '[]'); } catch { t.tags = []; }
+      delete t.file;
+    }
+    for (const ph of photos) {
+      const buf = await photoGet(ph.filename);
+      if (buf) entries.push({ name: `fotos/${ph.track_id}/${ph.filename}`, data: buf });
+      delete ph.filename;
+    }
+    if (user.avatar_key) { const a = await blob.get(user.avatar_key).catch(() => null); if (a) entries.push({ name: 'avatar' + path.extname(user.avatar_key), data: a }); }
+    delete user.avatar_key;
+    const json = (n, o) => entries.unshift({ name: n, data: Buffer.from(JSON.stringify(o, null, 2), 'utf8') });
+    json('fotos.json', photos); json('listas.json', lists); json('rutas.json', tracks); json('cuenta.json', user);
+    const zip = buildZip(entries);
+    appendLog('info', 'users', `Exportación de datos: ${req.user.username}`, { tracks: tracks.length, photos: photos.length });
+    res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': zip.length,
+      'Content-Disposition': `attachment; filename="gpxlibrary-${user.username}-${new Date().toISOString().slice(0, 10)}.zip"` });
+    return res.end(zip);
+  }
+
+  // Delete my own account: my routes (with their GPX and photos), lists and avatar go too
+  if (pathname === '/api/profile' && method === 'DELETE') {
+    if (!requireAuth(req, res)) return;
+    const body = await parseBody(req);
+    const db = sqlDb(), uid = req.user.sub;
+    const fail = (code, error) => { res.writeHead(code, J); res.end(JSON.stringify({ error })); };
+    const u = await db.get('SELECT username, role, password_hash, avatar_key FROM users WHERE id = ?', [uid]);
+    if (!u) return fail(404, 'Usuario no encontrado');
+    if (!checkPassword(String(body.password || ''), u.password_hash)) return fail(403, 'Contraseña incorrecta');
+    if (u.role === 'admin') {
+      const { n } = await db.get("SELECT CAST(COUNT(*) AS INTEGER) AS n FROM users WHERE role = 'admin' AND active AND id <> ?", [uid]);
+      if (!n) return fail(400, 'Eres el único administrador: nombra otro antes de borrar tu cuenta');
+    }
+    const ids = (await db.all('SELECT id FROM tracks WHERE owner_id = ?', [uid])).map(r => r.id);
+    for (const id of ids) await deleteTrackById(id);
+    // Photos this user added to routes of other people
+    for (const ph of await db.all('SELECT filename, thumb_filename FROM track_photos WHERE owner_id = ?', [uid]))
+      for (const f of [ph.filename, ph.thumb_filename]) if (f) await photoDel(f);
+    await db.run('DELETE FROM track_photos WHERE owner_id = ?', [uid]);
+    await db.run('DELETE FROM users WHERE id = ?', [uid]);   // lists, shares and reset links cascade
+    if (u.avatar_key) blob.del(u.avatar_key).catch(() => {});
+    _liveUsers.delete(uid);
+    invalidateCatalogCache();
+    appendLog('info', 'users', `Cuenta borrada por su usuario: ${u.username}`, { tracks: ids.length });
+    clearCookie(res);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, tracks: ids.length }));
   }
 
   if (pathname === '/api/profile/avatar' && method === 'POST') {
@@ -1488,6 +1792,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   const listMatch = pathname.match(/^\/api\/lists\/(\d+)$/);
+  if (listMatch && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const lid = parseInt(listMatch[1]);
+    const acc = await listAccess(lid, req.user.sub, req.user.role === 'admin');
+    if (!acc.role) { res.writeHead(acc.exists ? 403 : 404, J); return res.end(JSON.stringify({ error: acc.exists ? 'Esta lista es privada' : 'Lista no encontrada' })); }
+    const l = await sqlDb().get(
+      `SELECT l.id, l.name, l.description, l.visibility, l.owner_id, u.username AS owner_username, u.display_name AS owner_name
+       FROM user_lists l JOIN users u ON u.id = l.owner_id WHERE l.id = ?`, [lid]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ...l, role: acc.role }));
+  }
   if (listMatch && (method === 'PATCH' || method === 'DELETE')) {
     if (!requireAuth(req, res)) return;
     const lid = parseInt(listMatch[1]);
@@ -1554,10 +1868,13 @@ const server = http.createServer(async (req, res) => {
     const lid = parseInt(listTracksMatch[1]);
     const acc = await listAccess(lid, req.user.sub, req.user.role === "admin");
     if (!acc.role) { res.writeHead(acc.exists ? 403 : 404, J); return res.end(JSON.stringify({ error: acc.exists ? 'Sin permiso' : 'Lista no encontrada' })); }
+    // Someone else's private routes in a shared list stay hidden
+    const admin = req.user.role === 'admin';
     const tracks = await sqlDb().all(
-      `SELECT t.id, t.name, t.activity, t.sierra, t.date, t.distance, t.elevation_gain, lt.position
+      `SELECT t.id, t.name, t.activity, t.sierra, t.date, t.distance, t.elevation_gain, t.owner_id, t.visibility, lt.position
        FROM user_list_tracks lt JOIN tracks t ON t.id = lt.track_id
-       WHERE lt.list_id = ? ORDER BY lt.position ASC, t.name COLLATE "C" ASC`, [lid]);
+       WHERE lt.list_id = ? AND (? OR t.visibility = 'public' OR t.owner_id = ?)
+       ORDER BY lt.position ASC, t.name COLLATE "C" ASC`, [lid, admin, req.user.sub]);
     res.writeHead(200, J); return res.end(JSON.stringify({ role: acc.role, tracks }));
   }
 
@@ -1638,11 +1955,11 @@ const server = http.createServer(async (req, res) => {
 
   const exportMatch = pathname.match(/^\/api\/tracks\/(\d+)\/export-gpx$/);
   if (exportMatch && method === 'GET')
-    return apiExportGpxSingle(res, parseInt(exportMatch[1]), searchParams);
+    return apiExportGpxSingle(res, parseInt(exportMatch[1]), searchParams, req.user);
 
   const gpxMatch = pathname.match(/^\/api\/tracks\/(\d+)\/gpx$/);
   if (gpxMatch && method === 'GET')
-    return apiDownloadGpx(res, parseInt(gpxMatch[1]), searchParams);
+    return apiDownloadGpx(res, parseInt(gpxMatch[1]), searchParams, req.user);
 
   // ── Track CRUD ────────────────────────────────────────────────────
   if (pathname === '/api/tags' && method === 'GET') {
@@ -1680,7 +1997,7 @@ const server = http.createServer(async (req, res) => {
 
   const trackMatch = pathname.match(/^\/api\/tracks\/(\d+)$/);
   if (trackMatch && method === 'GET')
-    return apiGetTrackById(res, parseInt(trackMatch[1]), searchParams.get('full') === '1');
+    return apiGetTrackById(res, parseInt(trackMatch[1]), searchParams.get('full') === '1', req.user);
   if (trackMatch && method === 'PATCH')
     return apiPatchTrack(req, res, parseInt(trackMatch[1]));
   if (trackMatch && method === 'DELETE')
@@ -1718,9 +2035,8 @@ const server = http.createServer(async (req, res) => {
     const base = `t${tid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const fname = base + ext, tname = thumb && thumb.length <= 1024 * 1024 ? base + '-thumb.jpg' : null;
     try {
-      fs.mkdirSync(PHOTOS_DIR, { recursive: true });
-      fs.writeFileSync(path.join(PHOTOS_DIR, fname), buf);
-      if (tname) fs.writeFileSync(path.join(PHOTOS_DIR, tname), thumb);
+      await photoPut(fname, buf);
+      if (tname) await photoPut(tname, thumb);
     } catch (e) {
       appendLog('error', 'photos', 'No se pudo guardar la foto', { error: e.message });
       res.writeHead(500, J); return res.end(JSON.stringify({ error: 'No se pudo guardar la foto: ' + e.message }));
@@ -1772,7 +2088,8 @@ const server = http.createServer(async (req, res) => {
     if (!p) { res.writeHead(404); return res.end('Not found'); }
     if (!isAdmin && p.visibility !== 'public' && p.owner_id !== req.user.sub) { res.writeHead(404); return res.end('Not found'); }
     const useThumb = searchParams.get('size') === 'thumb' && p.thumb_filename;
-    let buf; try { buf = fs.readFileSync(path.join(PHOTOS_DIR, useThumb ? p.thumb_filename : p.filename)); } catch { res.writeHead(404); return res.end('Not found'); }
+    const buf = await photoGet(useThumb ? p.thumb_filename : p.filename);
+    if (!buf) { res.writeHead(404); return res.end('Not found'); }
     res.writeHead(200, { 'Content-Type': useThumb ? 'image/jpeg' : (p.mime || 'image/jpeg'), 'Cache-Control': 'private, max-age=86400' });
     return res.end(buf);
   }
@@ -1782,7 +2099,7 @@ const server = http.createServer(async (req, res) => {
     if (!p) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrada' })); }
     if (!isAdmin && p.owner_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
     await sqlDb().run('DELETE FROM track_photos WHERE id = ?', [pid]);   // cover_photo_id → NULL (FK)
-    for (const f of [p.filename, p.thumb_filename]) if (f) { try { fs.unlinkSync(path.join(PHOTOS_DIR, f)); } catch {} }
+    for (const f of [p.filename, p.thumb_filename]) if (f) await photoDel(f);
     let newCover = null;
     if (p.cover_photo_id === pid) {   // the cover went away: the next photo takes its place
       const next = await sqlDb().get('SELECT id FROM track_photos WHERE track_id = ? ORDER BY position, id LIMIT 1', [p.track_id]);
@@ -2089,10 +2406,9 @@ const server = http.createServer(async (req, res) => {
     const aid = parseInt(actImgMatch[1]);
     const a = await sqlDb().get('SELECT image FROM config_activities WHERE id = ?', [aid]);
     if (!a) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Actividad no encontrada' })); }
-    const dir = path.join(PHOTOS_DIR, 'activities');
-    const removeOld = () => {   // only files we uploaded; the stock /assets images stay
+    const removeOld = async () => {   // only files we uploaded; the stock /assets images stay
       const m = /^\/api\/activity-images\/([\w.-]+)$/.exec(a.image || '');
-      if (m) { try { fs.unlinkSync(path.join(dir, m[1])); } catch {} }
+      if (m) await photoDel('activities/' + m[1]);
     };
     let image = null;
     if (method === 'POST') {
@@ -2101,11 +2417,11 @@ const server = http.createServer(async (req, res) => {
       const buf = Buffer.from(body.data, 'base64');
       if (buf.length > 3 * 1024 * 1024) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'La imagen no puede superar 3 MB' })); }
       const fname = `act-${aid}-${Date.now()}.jpg`;
-      try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, fname), buf); }
+      try { await photoPut('activities/' + fname, buf); }
       catch (e) { res.writeHead(500, J); return res.end(JSON.stringify({ error: 'No se pudo guardar la imagen: ' + e.message })); }
       image = `/api/activity-images/${fname}`;
     }
-    removeOld();
+    await removeOld();
     await sqlDb().run('UPDATE config_activities SET image = ? WHERE id = ?', [image, aid]);
     invalidateCatalogCache();
     appendLog('info', 'activities', image ? 'Imagen de actividad cambiada' : 'Imagen de actividad quitada', { id: aid, by: req.user.username });
@@ -2113,7 +2429,8 @@ const server = http.createServer(async (req, res) => {
   }
   const actImgFile = pathname.match(/^\/api\/activity-images\/([\w.-]+)$/);
   if (actImgFile && method === 'GET') {
-    let buf; try { buf = fs.readFileSync(path.join(PHOTOS_DIR, 'activities', actImgFile[1])); } catch { res.writeHead(404); return res.end('Not found'); }
+    const buf = await photoGet('activities/' + actImgFile[1]);
+    if (!buf) { res.writeHead(404); return res.end('Not found'); }
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400' });
     return res.end(buf);
   }
@@ -2125,10 +2442,9 @@ const server = http.createServer(async (req, res) => {
     const aid = parseInt(actIconMatch[1]);
     const a = await sqlDb().get('SELECT icon_img FROM config_activities WHERE id = ?', [aid]);
     if (!a) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Actividad no encontrada' })); }
-    const dir = path.join(PHOTOS_DIR, 'act-icons');
-    const removeOld = () => {
+    const removeOld = async () => {
       const m = /^\/api\/activity-icons\/([\w.-]+)$/.exec(a.icon_img || '');
-      if (m) { try { fs.unlinkSync(path.join(dir, m[1])); } catch {} }
+      if (m) await photoDel('act-icons/' + m[1]);
     };
     let icon_img = null;
     if (method === 'POST') {
@@ -2137,18 +2453,19 @@ const server = http.createServer(async (req, res) => {
       const buf = Buffer.from(body.data, 'base64');
       if (buf.length > 3 * 1024 * 1024) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'La imagen no puede superar 3 MB' })); }
       const fname = `icon-${aid}-${Date.now()}.jpg`;
-      try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, fname), buf); }
+      try { await photoPut('act-icons/' + fname, buf); }
       catch (e) { res.writeHead(500, J); return res.end(JSON.stringify({ error: 'No se pudo guardar: ' + e.message })); }
       icon_img = `/api/activity-icons/${fname}`;
     }
-    removeOld();
+    await removeOld();
     await sqlDb().run('UPDATE config_activities SET icon_img = ? WHERE id = ?', [icon_img, aid]);
     invalidateCatalogCache();
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, icon_img }));
   }
   const actIconFile = pathname.match(/^\/api\/activity-icons\/([\w.-]+)$/);
   if (actIconFile && method === 'GET') {
-    let buf; try { buf = fs.readFileSync(path.join(PHOTOS_DIR, 'act-icons', actIconFile[1])); } catch { res.writeHead(404); return res.end('Not found'); }
+    const buf = await photoGet('act-icons/' + actIconFile[1]);
+    if (!buf) { res.writeHead(404); return res.end('Not found'); }
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
     return res.end(buf);
   }
@@ -2527,4 +2844,8 @@ ready.then(() => server.listen(PORT, HOST, () => {
       }
     } catch (e) { console.error('  ✗ Auto-backup:', e.message); }
   });
+  // Used or expired password reset links are of no use after a day
+  const pruneResets = () => sqlDb().run("DELETE FROM password_resets WHERE expires_at < NOW() - INTERVAL '1 day'").catch(() => {});
+  setTimeout(pruneResets, 60e3);
+  setInterval(pruneResets, 24 * 3600e3).unref();
 }));

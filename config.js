@@ -39,4 +39,17 @@ module.exports = {
   LOCAL_SYNC_DIR: process.env.LOCAL_SYNC_DIR || path.join(ROOT, 'TracksGps', 'local'),
   // Where track photos are stored (own Docker volume in production, data/photos locally).
   PHOTOS_DIR: process.env.PHOTOS_DIR || path.join(ROOT, 'data', 'photos'),
+  // Outgoing mail (password reset). Without SMTP_HOST the reset link is only written to the app log.
+  SMTP: {
+    host: process.env.SMTP_HOST || '',
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: process.env.SMTP_SECURE === '1',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || '',
+  },
+  // Public address of the app, used in links sent by email (e.g. https://rutas.example.com)
+  PUBLIC_URL: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
+  // Behind a reverse proxy: take the client IP from X-Forwarded-For (login attempt limits)
+  TRUST_PROXY: process.env.TRUST_PROXY === '1',
 };

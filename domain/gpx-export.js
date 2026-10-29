@@ -51,6 +51,9 @@ function buildGpx(tracks) {
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<gpx version="1.1" creator="GPX Library" xmlns="http://www.topografix.com/GPX/1/1">',
   ];
+  for (const t of tracks) for (const w of t.waypoints || []) {
+    lines.push(`  <wpt lat="${w.lat}" lon="${w.lon}">${w.ele != null ? `<ele>${w.ele}</ele>` : ''}${w.name ? `<name>${escXml(w.name)}</name>` : ''}</wpt>`);
+  }
   for (const t of tracks) {
     lines.push('  <trk>');
     lines.push(`    <name>${escXml(t.name)}</name>`);

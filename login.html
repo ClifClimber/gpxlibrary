@@ -16,6 +16,11 @@
     .field input { width: 100%; }
     .btn-login { width: 100%; margin-top: 8px; }
     #login-error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; min-height: 18px; }
+    .login-links { display: flex; flex-direction: column; gap: 8px; align-items: center; margin-top: 18px; font-size: 13px; color: var(--ink-2); }
+    .login-links a { color: var(--accent); text-decoration: none; }
+    .login-links a:hover { text-decoration: underline; }
+    .login-foot { margin-top: 22px; text-align: center; font-size: 12px; }
+    .login-foot a { color: var(--muted); }
   </style>
 </head>
 <body>
@@ -33,8 +38,21 @@
     <button type="submit" class="btn btn-primary btn-login">Acceder</button>
     <div id="login-error"></div>
   </form>
+  <div class="login-links">
+    <a href="/restablecer">¿Has olvidado tu contraseña?</a>
+    <span id="register-link" hidden>¿No tienes cuenta? <a href="/registro">Crear una cuenta</a></span>
+  </div>
+  <div class="login-foot"><a href="/privacidad">Política de privacidad</a></div>
 </div>
 <script>
+// Only paths of this site (never another domain) after logging in
+function safeNext() {
+  const n = new URLSearchParams(location.search).get('next') || '/';
+  return /^\/(?![\/\\])/.test(n) ? n : '/';
+}
+fetch('/api/auth/options').then(r => r.json()).then(o => {
+  if (o.registration_open) document.getElementById('register-link').hidden = false;
+}).catch(() => {});
 document.getElementById('login-form').addEventListener('submit', async function (e) {
   e.preventDefault();
   const err = document.getElementById('login-error');
@@ -48,8 +66,7 @@ document.getElementById('login-form').addEventListener('submit', async function 
       body: JSON.stringify({ username: document.getElementById('inp-user').value.trim(), password: document.getElementById('inp-pass').value })
     });
     if (r.ok) {
-      const params = new URLSearchParams(location.search);
-      location.href = params.get('next') || '/';
+      location.href = safeNext();
     } else {
       const d = await r.json();
       err.textContent = d.error || 'Error al iniciar sesión';

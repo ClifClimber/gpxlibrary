@@ -4,6 +4,35 @@
 
 ---
 
+## v2.13.0 — 2026-10-29
+
+### Listo para abrir a otros usuarios
+- **Registro abierto** en `/registro` con aceptación de la nueva **política de privacidad** (`/privacidad`); el admin puede cerrarlo en Admin → Usuarios
+- **Recuperar contraseña** en `/restablecer`: enlace de un solo uso que caduca en 1 hora, enviado por email con un cliente SMTP propio sin dependencias (`SMTP_*` y `PUBLIC_URL` en `.env`); sin SMTP el enlace queda en Admin → Logs. Botón de email de prueba en Admin → Usuarios
+- **Límite de intentos**: 5 logins fallidos por cuenta en 15 minutos bloquean temporalmente; también registros y peticiones de enlace por conexión
+- **Zona de privacidad** (Perfil → Mi perfil): 200 m a 2 km alrededor del inicio y el final de tus rutas que los demás no ven, ni en el mapa ni en el GPX descargado ni en los puntos de paso. El círculo se desplaza y agranda para no delatar el punto real
+- **Descargar mis datos** (ZIP con cuenta, rutas en GPX, listas y fotos) y **Borrar mi cuenta** desde el perfil
+- **Fotos en S3**: fotos de rutas, imágenes e iconos de actividad pasan al almacén S3 (`photos/…`); `scripts/photos-to-s3.js` copia las existentes. La app ya no guarda nada en disco
+- **Enlace directo a listas**: página `/lista?id=N` con mapa y rutas; botones «Abrir» y «Copiar enlace» en Mis listas
+- **Logros sin datos imposibles**: las rutas con velocidad media, desnivel por km o km/desnivel por día imposibles no cuentan (límites en Admin → Gamificación) y se listan en Perfil → Logros
+- Los registros de la aplicación se borran a los 30 días
+
+### Seguridad
+- `POST /api/tracks/export-gpx` exportaba rutas privadas de otros usuarios si se conocía su id: ahora solo exporta las rutas que puedes ver
+- Las listas compartidas ya no muestran los nombres de rutas privadas ajenas
+- El login solo redirige a páginas de la propia aplicación (`next`)
+
+---
+
+## v2.12.0 — 2026-10-28
+
+### Visor y detalle
+- Lista del visor rediseñada: fichas más grandes con icono y actividad, nombre, distancia, desnivel y dificultad, foto y dueño con avatar; panel de 480 px
+- «Guardar en lista» desde cada ficha: ventana centrada que indica en qué listas está ya la ruta, permite crear una lista nueva y avisa al guardar; el botón queda marcado
+- Trazado al estilo de las aplicaciones de navegación: línea de color con borde negro en el detalle y gris en el visor, más fina
+
+---
+
 ## v2.11.0 — 2026-10-28
 
 ### Iconos PNG ilustrados por actividad

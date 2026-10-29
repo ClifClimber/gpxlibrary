@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPX Library — Crear cuenta</title>
+  <link rel="stylesheet" href="/shared.css">
+  <script src="/theme.js"></script>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); padding: 24px 16px; }
+    .auth-card { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 32px; box-shadow: var(--shadow); }
+    .auth-logo { font-size: 20px; font-weight: 700; color: var(--ink); text-align: center; letter-spacing: -.02em; }
+    .auth-logo span { color: var(--accent); }
+    .auth-sub { text-align: center; color: var(--ink-2); font-size: 14px; margin: 6px 0 24px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 13px; font-weight: 500; color: var(--ink-2); margin-bottom: 5px; }
+    .field input { width: 100%; }
+    .field .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--ink-2); margin: 6px 0 4px; }
+    .check input { margin-top: 3px; }
+    .check a, .auth-links a { color: var(--accent); }
+    .btn-full { width: 100%; margin-top: 12px; }
+    #msg { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; min-height: 18px; }
+    .auth-links { text-align: center; font-size: 13px; color: var(--ink-2); margin-top: 16px; }
+    .closed { text-align: center; color: var(--ink-2); font-size: 14px; }
+  </style>
+</head>
+<body>
+<div class="auth-card">
+  <div class="auth-logo">GPX <span>Library</span></div>
+  <p class="auth-sub">Crea tu cuenta para guardar y compartir tus rutas</p>
+  <form id="reg-form" hidden>
+    <div class="field">
+      <label for="f-user">Nombre de usuario</label>
+      <input class="input" id="f-user" autocomplete="username" required maxlength="32" pattern="[A-Za-z0-9._\-]{2,32}">
+      <div class="hint">2–32 caracteres: letras, números, punto o guion</div>
+    </div>
+    <div class="field">
+      <label for="f-name">Nombre visible <span style="color:var(--muted)">(opcional)</span></label>
+      <input class="input" id="f-name" autocomplete="name" maxlength="80">
+    </div>
+    <div class="field">
+      <label for="f-email">Email</label>
+      <input class="input" type="email" id="f-email" autocomplete="email" required>
+      <div class="hint">Solo para recuperar la contraseña</div>
+    </div>
+    <div class="field">
+      <label for="f-pass">Contraseña</label>
+      <input class="input" type="password" id="f-pass" autocomplete="new-password" required minlength="8">
+      <div class="hint">Mínimo 8 caracteres</div>
+    </div>
+    <label class="check"><input type="checkbox" id="f-accept" required> <span>He leído y acepto la <a href="/privacidad" target="_blank">política de privacidad</a></span></label>
+    <button type="submit" class="btn btn-primary btn-full">Crear cuenta</button>
+    <div id="msg"></div>
+  </form>
+  <p class="closed" id="closed" hidden>El registro está cerrado. Pide una cuenta al administrador.</p>
+  <div class="auth-links">¿Ya tienes cuenta? <a href="/login">Acceder</a></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+fetch('/api/auth/options').then(r => r.json()).then(o => {
+  $(o.registration_open ? 'reg-form' : 'closed').hidden = false;
+  if (o.registration_open) $('f-user').focus();
+}).catch(() => { $('reg-form').hidden = false; });
+
+$('reg-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  $('msg').textContent = ''; btn.disabled = true;
+  try {
+    const r = await fetch('/api/auth/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: $('f-user').value.trim(), display_name: $('f-name').value.trim(),
+        email: $('f-email').value.trim(), password: $('f-pass').value, accept: $('f-accept').checked }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) { location.href = '/perfil'; return; }
+    $('msg').textContent = d.error || 'No se pudo crear la cuenta';
+  } catch { $('msg').textContent = 'Error de red'; }
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>

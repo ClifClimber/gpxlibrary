@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPX Library — Restablecer contraseña</title>
+  <link rel="stylesheet" href="/shared.css">
+  <script src="/theme.js"></script>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); padding: 24px 16px; }
+    .auth-card { width: min(380px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 32px; box-shadow: var(--shadow); }
+    .auth-logo { font-size: 20px; font-weight: 700; color: var(--ink); text-align: center; letter-spacing: -.02em; margin-bottom: 6px; }
+    .auth-logo span { color: var(--accent); }
+    h1 { font-size: 16px; font-weight: 600; text-align: center; margin: 0 0 18px; color: var(--ink-2); }
+    p.info { font-size: 14px; color: var(--ink-2); margin: 0 0 16px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 13px; font-weight: 500; color: var(--ink-2); margin-bottom: 5px; }
+    .field input { width: 100%; }
+    .btn-full { width: 100%; margin-top: 6px; }
+    .msg { font-size: 13px; margin-top: 12px; text-align: center; min-height: 18px; color: var(--danger); }
+    .done { background: color-mix(in srgb, var(--success) 12%, transparent); border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+            color: var(--ink); border-radius: 8px; padding: 12px 14px; font-size: 14px; }
+    .auth-links { text-align: center; font-size: 13px; margin-top: 18px; }
+    .auth-links a { color: var(--accent); }
+  </style>
+</head>
+<body>
+<div class="auth-card">
+  <div class="auth-logo">GPX <span>Library</span></div>
+  <h1 id="title">Restablecer contraseña</h1>
+
+  <!-- 1 · Pedir el enlace -->
+  <form id="ask-form" hidden>
+    <p class="info">Escribe el email de tu cuenta y te enviaremos un enlace para elegir una contraseña nueva.</p>
+    <div class="field">
+      <label for="f-email">Email</label>
+      <input class="input" type="email" id="f-email" autocomplete="email" required>
+    </div>
+    <button type="submit" class="btn btn-primary btn-full">Enviar enlace</button>
+    <div class="msg" id="ask-msg"></div>
+  </form>
+  <div class="done" id="ask-done" hidden>Si ese email tiene una cuenta, en unos minutos recibirás un enlace. Caduca en 1 hora. Revisa también la carpeta de spam.</div>
+
+  <!-- 2 · Elegir la contraseña nueva con el enlace -->
+  <form id="set-form" hidden>
+    <p class="info" id="set-info"></p>
+    <div class="field">
+      <label for="f-pass">Contraseña nueva</label>
+      <input class="input" type="password" id="f-pass" autocomplete="new-password" required minlength="8">
+    </div>
+    <div class="field">
+      <label for="f-pass2">Repite la contraseña</label>
+      <input class="input" type="password" id="f-pass2" autocomplete="new-password" required minlength="8">
+    </div>
+    <button type="submit" class="btn btn-primary btn-full">Guardar contraseña</button>
+    <div class="msg" id="set-msg"></div>
+  </form>
+  <div class="done" id="set-done" hidden>Contraseña cambiada. Ya puedes <a href="/login" style="color:var(--accent)">acceder</a> con ella.</div>
+  <div class="msg" id="bad-link" hidden></div>
+
+  <div class="auth-links"><a href="/login">Volver a acceder</a></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const token = new URLSearchParams(location.search).get('token');
+const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+if (!token) {
+  $('ask-form').hidden = false; $('f-email').focus();
+} else {
+  $('title').textContent = 'Elige una contraseña nueva';
+  fetch('/api/auth/reset?token=' + encodeURIComponent(token)).then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      $('bad-link').hidden = false;
+      $('bad-link').innerHTML = (d.error || 'Enlace no válido') + ' <a href="/restablecer" style="color:var(--accent)">Pedir otro</a>';
+      return;
+    }
+    $('set-info').textContent = `Cuenta: ${d.username}`;
+    $('set-form').hidden = false; $('f-pass').focus();
+  });
+}
+
+$('ask-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button'); btn.disabled = true; $('ask-msg').textContent = '';
+  try {
+    const r = await post('/api/auth/forgot', { email: $('f-email').value.trim() });
+    if (r.ok) { $('ask-form').hidden = true; $('ask-done').hidden = false; return; }
+    $('ask-msg').textContent = 'No se pudo enviar. Prueba más tarde.';
+  } catch { $('ask-msg').textContent = 'Error de red'; }
+  btn.disabled = false;
+});
+
+$('set-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('set-msg').textContent = '';
+  if ($('f-pass').value !== $('f-pass2').value) { $('set-msg').textContent = 'Las contraseñas no coinciden'; return; }
+  const btn = e.target.querySelector('button'); btn.disabled = true;
+  try {
+    const r = await post('/api/auth/reset', { token, password: $('f-pass').value });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) { $('set-form').hidden = true; $('set-done').hidden = false; return; }
+    $('set-msg').textContent = d.error || 'No se pudo cambiar la contraseña';
+  } catch { $('set-msg').textContent = 'Error de red'; }
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>

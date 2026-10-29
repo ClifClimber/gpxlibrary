@@ -9,4 +9,5 @@ module.exports = {
   ...require('./simplify'),
   ...require('./gpx-export'),
   ...require('./gamification'),
+  ...require('./privacy'),
 };
