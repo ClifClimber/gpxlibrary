@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+### Fase 3 · bloque 2: geometrías derivadas
+- Migración 016: `geom_view` (lo que ven los demás: geometría limpia o original menos la zona de privacidad del dueño), `geom_s1` (simplificada a 15 m), `geom_s2` (150 m), `start_point`, `search_text` (sin acentos) y `derived_at`, con índices GIST, trigram y btree
+- `domain/derive.js` con tests y trabajo `track-derive` (`--ids`, `--all`, `--owner`, `--missing`), que se encola tras importar, tras limpiar y al cambiar la zona de privacidad; `search_text` se actualiza al editar la ruta. Tolerancias en metros reales (corregidas por la latitud en 3857). El visor sigue recortando al vuelo hasta los bloques 3 y 4
+
+### Fase 3 · bloque 1: datos sintéticos y banco de pruebas
+- `scripts/synth-tracks.js --count N [--reset]` crea (si no existe) la base `gpxlibrary_bench` en el mismo Postgres, le aplica las migraciones y la llena con N rutas sintéticas: copias de las reales (lectura) trasladadas a puntos aleatorios de la península, con usuarios sintéticos (1 por 50 rutas, ~90 % públicas, `privacy_radius` en el 20 % de los usuarios). Inserta por lotes en SQL (100.000 rutas en ~4 min, 5,9 GB). No toca S3 ni la base real
+- `scripts/bench.js [--db bench|real] [--runs 30]` mide el catálogo actual (tamaño sin comprimir y brotli q5, tiempo), la lista paginada por caja visible con totales y facetas, teselas `ST_AsMVT` con simplificación al vuelo (5/15/50/150/400 m) o precalculada (`geom_s1`/`geom_s2`, columnas solo en la base bench), la búsqueda trigram sobre `name` y los puntos por ruta y el error visual en píxeles de cada tolerancia. Informe en `data/bench/bench-<fecha>-<n>rutas.json`
+
 ### Fase 3 · bloque 0: compresión
 - Las respuestas de texto (JSON, HTML, CSS, JS, GPX) se envían comprimidas con brotli o gzip cuando el navegador lo acepta (`http/compress.js`, sin dependencias). El catálogo del visor pasa de 3,1 MB a 0,92 MB y `visor.js` de 76 KB a 21 KB. Las respuestas con ETag se comprimen una vez y se guardan en una caché de 64 MB
 

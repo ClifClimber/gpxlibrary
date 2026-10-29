@@ -16,7 +16,7 @@ const { pipeline } = require('stream/promises');
 const { spawn } = require('child_process');
 const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampleEvenly,
         DEFAULT_CONFIG: GAMI_DEFAULTS, mergeConfig, validateConfig, multiDayInfo, computeAchievements,
-        privacyZones, inZones } = require('./domain');
+        privacyZones, inZones, searchText } = require('./domain');
 const crypto = require('crypto');
 const { sendMail } = require('./mail/smtp');
 const { enableCompression } = require('./http/compress');
@@ -261,7 +261,7 @@ function countGpx(dir) {
 // browser no longer stops an import.
 const { createQueue, TERMINAL } = require('./queue');
 const { createWorker } = require('./queue/worker');
-const { JOBS, IMPORT_TYPES, summarize } = require('./queue/jobs');
+const { JOBS, IMPORT_TYPES, summarize, deriveArgsAfter } = require('./queue/jobs');
 const jobQueue = () => createQueue(sqlDb());
 
 const worker = process.env.EMBEDDED_WORKER === '0' ? null : createWorker({
@@ -273,6 +273,8 @@ const worker = process.env.EMBEDDED_WORKER === '0' ? null : createWorker({
     if (code === 0) {
       invalidateCatalogCache();
       if (IMPORT_TYPES.has(job.type)) jobQueue().enqueue('export-folders', {}).catch(() => {});
+      const dArgs = deriveArgsAfter(job, lines);
+      if (dArgs) jobQueue().enqueue('track-derive', { args: dArgs }).catch(() => {});
     }
   },
 });
@@ -890,6 +892,16 @@ async function apiMoveTrack(req, res, id) {
   }
 }
 
+// Keeps tracks.search_text in step with name/sierra/province/tags (synchronous; the rest of the derived data doesn't depend on them).
+async function refreshSearchText(ids, changed) {
+  if (!changed.some(k => ['name', 'sierra', 'province', 'tags'].includes(k))) return;
+  try {
+    const db = sqlDb();
+    for (const t of await db.all('SELECT id, name, sierra, province, tags FROM tracks WHERE id = ANY(?::int[])', [ids]))
+      await db.run('UPDATE tracks SET search_text = ? WHERE id = ?', [searchText(t), t.id]);
+  } catch (e) { console.error('search_text:', e.message); }
+}
+
 async function apiPatchTrack(req, res, id) {
   try {
     const body   = await parseBody(req);
@@ -899,6 +911,7 @@ async function apiPatchTrack(req, res, id) {
     if (bad) { res.writeHead(400, J); return res.end(JSON.stringify({ error: bad })); }
     // The GPX is immutable: metadata lives only in the DB (it is applied on download).
     await repo.updateTrack(id, body);
+    await refreshSearchText([id], Object.keys(body));
     invalidateCatalogCache();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
@@ -923,6 +936,7 @@ async function apiBulkUpdate(req, res, ownerId = null) {
     ids = await ownedOnly(ids.map(Number).filter(Boolean), ownerId);
     if (!ids.length) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'No puedes editar rutas que no son tuyas' })); }
     await repo.bulkUpdate(ids, fields, !!notesAppend);
+    await refreshSearchText(ids, Object.keys(fields));
     invalidateCatalogCache();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, updated: ids.length }));
@@ -1571,7 +1585,10 @@ const server = http.createServer(async (req, res) => {
     if (!updates.length) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Nada que actualizar' })); }
     updates.push('updated_at = NOW()'); vals.push(req.user.sub);
     await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, vals);
-    if (body.privacy_radius !== undefined) invalidateCatalogCache();
+    if (body.privacy_radius !== undefined) {
+      invalidateCatalogCache();
+      jobQueue().enqueue('track-derive', { args: ['--owner', String(req.user.sub)] }).catch(() => {});
+    }
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
   }
 

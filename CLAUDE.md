@@ -25,6 +25,11 @@ node scripts/sync-local.js [--dir <path>] [--clean]
 node scripts/db-copy.js --to sqlite [--sqlite data/otra.db] [--replace]
 node scripts/db-copy.js --to postgres [--replace]
 
+# Phase 3 scale bench: synthetic routes in the separate DB gpxlibrary_bench (never touches gpxlibrary/S3), then measure
+# current catalog vs candidate queries (paginated list, ST_AsMVT tiles, trigram search) → data/bench/bench-<date>-<n>rutas.json
+node scripts/synth-tracks.js --count 10000 [--reset]
+node scripts/bench.js [--db bench|real] [--runs 30]
+
 # Clean/smooth raw GPS points
 node scripts/clean-tracks.js [--ids 1,2,3] [--all]
 
@@ -72,6 +77,8 @@ Roles: `admin` can use everything. Any other user only gets what `userMayAccess(
 - **Attempt limits** (in memory, per process): `tooMany(key, max, windowMs)`; login 5 per account+IP / 30 per IP in 15 min (429), registration and reset requests per IP/email. `TRUST_PROXY=1` takes the IP from `X-Forwarded-For`.
 - **Privacy zones**: `users.privacy_radius` (m, Perfil → Mi perfil). Others never see points near the start/end of that user's routes: `domain/privacy.js` (`privacyZones` moves and enlarges the circle with the track id as seed) applied by `applyPrivacy()` in the catalog (cached per viewer), `GET /api/tracks/:id` (also waypoints, bounds; sets `privacy_hidden`), GPX download and export (a trimmed GPX is generated instead of the original). The owner and admins see everything. Export endpoints skip tracks the viewer may not see.
 - **Own data**: `GET /api/profile/export` (ZIP: account, routes JSON + original GPX, lists, photos, avatar) and `DELETE /api/profile {password}` (deletes routes, files, photos, lists; not the last admin). App logs older than 30 days are deleted (`pruneLogs` in `scripts/applog.js`).
+
+Derived data (migration `016`, `domain/derive.js`, job `track-derive`): `tracks.geom_view` is what other people see (clean-or-raw geometry minus the owner's privacy zones, track id as seed); from it `geom_s1` (15 m), `geom_s2` (150 m), `start_point`, plus `search_text` (accent-free) and `derived_at`. Tolerances live in `DERIVE_TOLERANCES` (real metres; scaled by latitude when simplifying in 3857). `scripts/track-derive.js [--ids|--all|--owner|--missing]` is enqueued after imports, after `clean-tracks` and when a user changes `privacy_radius`; `search_text` is refreshed in the track PATCH and bulk-update.
 
 Every response goes through `enableCompression()` (`http/compress.js`): text bodies ≥ 1 KB with status 200 are sent with brotli/gzip (the status line is held until `end`; `res.write` streams such as SSE pass untouched; bodies with an ETag are cached compressed).
 

@@ -16,9 +16,11 @@ const { appendLog } = require('./scripts/applog');
   const worker = createWorker({
     getQueue: () => queue,
     onFinish: (job, code, lines) => {
-      const { summarize } = require('./queue/jobs');
+      const { summarize, deriveArgsAfter } = require('./queue/jobs');
       appendLog(code === 0 ? 'info' : 'error', job.type, `${job.type} ${code === 0 ? 'completado' : code === 130 ? 'cancelado' : 'fallido'}`,
         { job: job.id, ...summarize(lines, code) });
+      const dArgs = code === 0 ? deriveArgsAfter(job, lines) : null;
+      if (dArgs) return queue.enqueue('track-derive', { args: dArgs }).catch(() => {});
     },
   });
   worker.start();

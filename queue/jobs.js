@@ -18,6 +18,7 @@ const JOBS = {
   'export-folders':    { label: 'Exportar en carpetas' },
   'extract-urls':      { label: 'Extraer URLs' },
   'backfill-elapsed':  { label: 'Tiempos de las rutas (días con actividad)' },
+  'track-derive':      { label: 'Geometrías derivadas' },
 };
 
 // Job types that add new GPX files to S3 — automatically trigger a local sync after success
@@ -52,4 +53,19 @@ function summarize(lines, code) {
   return extra;
 }
 
-module.exports = { JOBS, IMPORT_TYPES, scriptOf, levelOf, summarize };
+// Derived data (geom_view/geom_s1/geom_s2/search_text) must be recomputed after a finished job of these types.
+// Returns the args for a 'track-derive' job, or null when nothing needs recomputing.
+function deriveArgsAfter(job, lines) {
+  if (IMPORT_TYPES.has(job.type)) {
+    const m = lines.join('\n').match(/IMPORTED_IDS:([\d,]+)/);
+    return m ? ['--ids', m[1]] : ['--missing'];
+  }
+  if (job.type === 'clean-tracks') {
+    const a = (job.payload && job.payload.args) || [];
+    const i = a.indexOf('--ids');
+    return i >= 0 && a[i + 1] ? ['--ids', a[i + 1]] : ['--all'];
+  }
+  return null;
+}
+
+module.exports = { JOBS, IMPORT_TYPES, deriveArgsAfter, scriptOf, levelOf, summarize };
