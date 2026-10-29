@@ -99,7 +99,9 @@ function buildSearchSql(p, viewer) {
   range('distance', p.distMin, p.distMax);
   range('elevation_gain', p.eleMin, p.eleMax);
   if (p.year) base.push(`t.date LIKE ${$(p.year + '%')}`);
-  if (p.q) base.push(`t.search_text LIKE ${$('%' + p.q.replace(/[\\%_]/g, c => '\\' + c) + '%')}`);
+  // Every word must appear (name, sierra, zone, province, activity or tags), in any order
+  if (p.q) for (const w of p.q.split(/\s+/).filter(Boolean))
+    base.push(`t.search_text LIKE ${$('%' + w.replace(/[\\%_]/g, c => '\\' + c) + '%')}`);
   if (p.near) {
     const [lat, lon, km] = p.near;
     const pt = `ST_SetSRID(ST_MakePoint(${$(lon)}, ${$(lat)}), 4326)`;

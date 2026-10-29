@@ -10,16 +10,6 @@ function sampleEvenly(pts, maxN) {
   return out;
 }
 
-/** Compact JSON polyline ([[lat, lon, ele], …], 5 decimals) used by the visor catalog. */
-function catalogPts(pts, maxN) {
-  if (!pts || pts.length < 2) return null;
-  return JSON.stringify(sampleEvenly(pts, maxN).map(p => [
-    Math.round(p.lat * 100000) / 100000,
-    Math.round(p.lon * 100000) / 100000,
-    p.ele != null ? Math.round(p.ele) : null,
-  ]));
-}
-
 /** Drops isolated GPS spikes: points far from both neighbours that the neighbours would skip. */
 function filterMaxJump(pts, maxM) {
   if (!maxM || pts.length <= 2) return pts;
@@ -72,4 +62,4 @@ function cleanPoints(pts, { maxJump = 0, minDist = 0, rdp = 0 } = {}) {
   return out;
 }
 
-module.exports = { sampleEvenly, catalogPts, filterMaxJump, filterMinDist, rdpSimplify, cleanPoints };
+module.exports = { sampleEvenly, filterMaxJump, filterMinDist, rdpSimplify, cleanPoints };

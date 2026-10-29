@@ -19,9 +19,7 @@
 
 const { openSql } = require('../repo/sql');
 
-// ── catalog_pts ────────────────────────────────────────────────────
-const MAX_CATALOG_PTS = 300;
-const { cleanPoints, catalogPts } = require('../domain');
+const { cleanPoints } = require('../domain');
 
 // ── Ayuda ──────────────────────────────────────────────────────────
 if (process.argv.includes('--help')) {
@@ -161,7 +159,7 @@ for(const track of tracks) {
   const rawPts=await db.getPoints(track.id);
 
   if(opts.reset){
-    if(!opts.dryRun) await db.tx(async t=>{ await t.setPoints(track.id, [], { clean: true }); await t.run('UPDATE tracks SET cleaned=0,clean_count=NULL,cleaned_at=NULL,catalog_pts=? WHERE id=?', [catalogPts(rawPts, MAX_CATALOG_PTS), track.id]); });
+    if(!opts.dryRun) await db.tx(async t=>{ await t.setPoints(track.id, [], { clean: true }); await t.run('UPDATE tracks SET cleaned=0,clean_count=NULL,cleaned_at=NULL WHERE id=?', [track.id]); });
     console.log(`  ✓ reset  ${track.name.substring(0,55)} (${rawPts.length} pts)`);
     continue;
   }
@@ -179,8 +177,6 @@ for(const track of tracks) {
     await db.tx(async t=>{
       await t.setPoints(track.id, cleaned, { clean: true });
       await t.run(`UPDATE tracks SET cleaned=1,clean_count=?,cleaned_at=${t.NOW} WHERE id=?`, [cleaned.length, track.id]);
-      const cp = catalogPts(cleaned, MAX_CATALOG_PTS);
-      if (cp) await t.run('UPDATE tracks SET catalog_pts=? WHERE id=?', [cp, track.id]);
     });
   }
 }

@@ -28,7 +28,7 @@ const BATCH = 200;
   for (let i = 0; i < rows.length; i += BATCH) {
     const ids = rows.slice(i, i + BATCH).map(r => r.id);
     const tracks = await db.all(
-      `SELECT t.id, t.name, t.sierra, t.zone, t.province, t.tags, t.cleaned, COALESCE(u.privacy_radius, 0) AS radius
+      `SELECT t.id, t.name, t.sierra, t.zone, t.province, t.activity, t.tags, t.cleaned, COALESCE(u.privacy_radius, 0) AS radius
          FROM tracks t LEFT JOIN users u ON u.id = t.owner_id WHERE t.id = ANY(?::int[])`, [ids]);
     for (const t of tracks) {
       try {

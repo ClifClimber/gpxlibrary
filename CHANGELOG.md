@@ -6,6 +6,12 @@
 - Por defecto el mapa solo enseña los iconos de las rutas de la página de la lista; al cambiar de página o mover el mapa cambian con ella. Si las rutas de la zona con los filtros caben en 3 páginas (45), las enseña todas. La línea aparece solo al pasar el ratón
 - Cada usuario puede elegir en Perfil → Mi perfil → Visor: solo la página, la página más un punto en el inicio de las demás rutas de la zona, o todas (migración 017, `users.prefs`)
 
+### Fase 3 · bloque 6: limpieza
+- Los selectores de rutas de Comparar y Trazar buscan en el servidor mientras escribes, en lugar de descargar la lista entera de rutas
+- La búsqueda de texto exige todas las palabras en cualquier orden y también mira la actividad («mtb pedriza»)
+- Retirados `GET /api/catalog`, la columna `catalog_pts` (migración 019), `scripts/backfill-catalog-pts.js` y su mantenimiento en la limpieza de rutas
+- `scripts/search-check.js` toma su referencia directamente de la base; `synth-tracks.js` copia también las geometrías derivadas
+
 ### El visor ya no descarga el catálogo
 - El visor alimentado por el servidor sustituye al anterior en `/` (`/visor2` redirige allí). La primera carga pasa de unos 920 KB a unos 18 KB
 - Los colores de ruta elegidos en el visor anterior se conservan

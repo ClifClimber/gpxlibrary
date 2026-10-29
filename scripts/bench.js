@@ -5,12 +5,8 @@
 // Informe: data/bench/bench-<fecha>-<n>rutas.json  (+ resumen por consola).
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
-const { Readable } = require('stream');
-const { pipeline } = require('stream/promises');
 const { Client } = require('pg');
 const config = require('../config');
-const C = require('../repo/columns');
 
 function arg(name, def) {
   const i = process.argv.indexOf('--' + name);
@@ -21,7 +17,6 @@ function arg(name, def) {
 const WHICH = arg('db', 'bench');
 const RUNS = Number(arg('runs', 30));
 const TILE_BUDGET_MS = Number(arg('tile-budget', 15)) * 1000;   // tope de tiempo por caso de tesela
-const CATALOG_SAMPLE = 25000;                                   // por encima, el catálogo se mide en una muestra y se extrapola
 const ZOOMS_LIST = [6, 9, 12, 14];
 const ZOOMS_TILE = [5, 8, 11, 14];
 const TOLS_M = [5, 15, 50, 150, 400];
@@ -74,60 +69,6 @@ function viewBox(z, lat, lon) {
 function tileOf(z, lat, lon) {
   const n = 2 ** z, l = lat * Math.PI / 180;
   return [Math.min(n - 1, Math.floor((lon + 180) / 360 * n)), Math.min(n - 1, Math.floor((1 - Math.log(Math.tan(l) + 1 / Math.cos(l)) / Math.PI) / 2 * n))];
-}
-
-// ── a. Sistema actual: catálogo de buildCatalog() (server.js) ─────────
-async function measureCatalog(ownerId, total) {
-  const cols = C.CATALOG_COLS.map(c => `tracks.${c}`).join(', ');
-  const limit = total > CATALOG_SAMPLE ? ` LIMIT ${CATALOG_SAMPLE}` : '';
-  const sql = `SELECT ${cols}, u.username AS owner_username FROM tracks LEFT JOIN users u ON u.id = tracks.owner_id
-    WHERE visibility = 'public' OR owner_id = $1 ORDER BY tracks.date DESC NULLS LAST, tracks.name COLLATE "C" ASC, tracks.id${limit}`;
-  const rawBytes = Number((await Q("SELECT coalesce(sum(octet_length(catalog_pts)),0) b FROM tracks WHERE visibility='public' OR owner_id=$1", [ownerId])).rows[0].b);
-  const visible = Number((await Q("SELECT count(*) c FROM tracks WHERE visibility='public' OR owner_id=$1", [ownerId])).rows[0].c);
-  const per = [];
-  for (let run = 0; run < Math.min(3, RUNS); run++) {
-    const t0 = ms();
-    const rows = (await Q(sql, [ownerId])).rows;
-    const tQuery = ms() - t0;
-    const t1 = ms();
-    // Mismo ensamblado que buildCatalog (sin zonas de privacidad): parse de catalog_pts + objeto + JSON
-    const chunks = [];
-    for (const t of rows) {
-      if (t.sw_lat == null || t.ne_lat == null || !t.catalog_pts) continue;
-      let points; try { points = JSON.parse(t.catalog_pts); } catch { continue; }
-      if (!Array.isArray(points) || points.length < 2) continue;
-      chunks.push(JSON.stringify({
-        id: t.id, name: t.name, file: t.file, zone: t.zone, date: t.date, activity: t.activity || null, sierra: t.sierra || null,
-        ccaa: t.ccaa || null, tags: t.tags ? JSON.parse(t.tags) : [], distance: t.distance, elevationGain: t.elevation_gain,
-        elevationLoss: t.elevation_loss, bounds: [[t.sw_lat, t.sw_lon], [t.ne_lat, t.ne_lon]],
-        center: [Math.round(t.center_lat * 1e4) / 1e4, Math.round(t.center_lon * 1e4) / 1e4], color: t.color || null,
-        ibp_bicycle: t.ibp_bicycle, ibp_hiking: t.ibp_hiking, ibp_running: t.ibp_running, difficulty: t.difficulty ?? null,
-        hasOsm: !!(t.road_types && t.road_types !== '{}'), movingTime: t.moving_time || null, circular: !!t.circular,
-        owner_id: t.owner_id || null, owner_username: t.owner_username || null, visibility: t.visibility, points,
-      }));
-    }
-    const tBuild = ms() - t1;
-    // Tamaño sin comprimir y con brotli q5 (los mismos parámetros que http/compress.js), en streaming
-    const t2 = ms();
-    let raw = 2, comp = 0;
-    const src = Readable.from((function* () { yield '['; for (let i = 0; i < chunks.length; i++) { const s = (i ? ',' : '') + chunks[i]; raw += Buffer.byteLength(s); yield s; } yield ']'; })());
-    const br = zlib.createBrotliCompress({ params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } });
-    await pipeline(src, br, async function (it) { for await (const b of it) comp += b.length; });
-    const tBrotli = ms() - t2;
-    per.push({ tQuery, tBuild, tBrotli, raw, comp, n: chunks.length });
-  }
-  const med = k => pct(per.map(x => x[k]), 50);
-  const sampleN = per[0].n, factor = sampleN ? visible / sampleN : 1;
-  const sampled = total > CATALOG_SAMPLE;
-  return {
-    viewerOwnerId: ownerId, visibleTracks: visible, sampledTracks: sampleN, extrapolated: sampled, extrapolationFactor: r1(factor),
-    note: sampled ? `Medido con las primeras ${sampleN} rutas del catálogo y multiplicado por ${r1(factor)} (el catálogo completo no cabe en un string de V8 ni en memoria razonable)` : 'Medido completo',
-    uncompressedMB: r1(med('raw') * factor / 1048576), brotliMB: r1(med('comp') * factor / 1048576),
-    uncompressedMB_catalogPtsOnlyExact: r1(rawBytes / 1048576),
-    bytesPerTrack: Math.round(med('raw') / Math.max(1, sampleN)),
-    timeMs: { query: r1(med('tQuery') * factor), assemble: r1(med('tBuild') * factor), brotliQ5: r1(med('tBrotli') * factor), total: r1((med('tQuery') + med('tBuild') + med('tBrotli')) * factor) },
-    runs: per.length,
-  };
 }
 
 // ── b1. Lista paginada por caja visible ───────────────────────────────
@@ -295,7 +236,6 @@ async function main() {
     notas: ['Cache caliente (una pasada de calentamiento por caso); shared_buffers pequeño: con tablas mayores que la RAM de Docker los p95 de producción dependerán del disco.',
             'Las cajas y teselas se centran en rutas existentes elegidas al azar (uso realista).'] } };
   const step = async (label, fn) => { process.stdout.write(`${label}… `); const t0 = ms(); const r = await fn(); console.log(`${((ms() - t0) / 1000).toFixed(1)} s`); return r; };
-  report.catalogo_actual = await step('Catálogo actual', () => measureCatalog(uid, total));
   report.lista = await step('Lista paginada', () => benchList(ctx));
   report.busqueda = await step('Búsqueda', () => benchSearch(ctx));
   process.stdout.write('Teselas');
@@ -311,9 +251,8 @@ async function main() {
 }
 
 function summary(r) {
-  const c = r.catalogo_actual, line = (...a) => console.log(...a);
+  const line = (...a) => console.log(...a);
   line(`\n=== ${r.meta.base} · ${r.meta.rutas} rutas · runs=${r.meta.runs} ===`);
-  line(`Catálogo actual: ${c.uncompressedMB} MB sin comprimir, ${c.brotliMB} MB brotli q5, ${Math.round(c.timeMs.total)} ms (query ${Math.round(c.timeMs.query)} + ensamblado ${Math.round(c.timeMs.assemble)} + brotli ${Math.round(c.timeMs.brotliQ5)})${c.extrapolated ? '  [extrapolado]' : ''}`);
   line('\nLista (p50/p95 ms):');
   for (const [z, modes] of Object.entries(r.lista)) for (const [m, res] of Object.entries(modes))
     line(`  ${z.padEnd(4)} ${m.padEnd(20)} ` + Object.entries(res).map(([k, v]) => `${k}=${v.error ? 'ERR' : v.p50 + '/' + v.p95}`).join('  '));

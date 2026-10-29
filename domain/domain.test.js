@@ -87,12 +87,10 @@ test('cleaning: spikes, minimum distance and RDP', () => {
   assert.equal(d.cleanPoints(line).length, 5);     // no filters enabled
 });
 
-test('sampleEvenly and catalogPts', () => {
+test('sampleEvenly', () => {
   const pts = Array.from({ length: 11 }, (_, i) => ({ lat: i, lon: 0, ele: i * 10.4 }));
   assert.deepEqual(d.sampleEvenly(pts, 3).map(p => p.lat), [0, 5, 10]);
   assert.equal(d.sampleEvenly(pts, 50), pts);
-  assert.equal(d.catalogPts(pts, 3), '[[0,0,0],[5,0,52],[10,0,104]]');
-  assert.equal(d.catalogPts([pts[0]], 3), null);
 });
 
 test('applyGpxMetadata rewrites the track header and escapes values', () => {

@@ -21,14 +21,6 @@ const LIST_COLS = [
   'owner_id', 'visibility', 'difficulty',
 ];
 
-const CATALOG_COLS = [
-  'id', 'name', 'file', 'zone', 'date', 'cleaned', 'color', 'activity', 'sierra', 'ccaa', 'tags',
-  'ibp_bicycle', 'ibp_hiking', 'ibp_running',
-  'distance', 'elevation_gain', 'elevation_loss', 'min_elevation', 'max_elevation',
-  'sw_lat', 'sw_lon', 'ne_lat', 'ne_lon', 'center_lat', 'center_lon', 'catalog_pts', 'road_types',
-  'moving_time', 'stopped_time', 'circular', 'owner_id', 'visibility', 'cover_photo_id', 'difficulty',
-];
-
 // Fields a client may change through PATCH / bulk update.
 const EDITABLE_FIELDS = new Set(['name', 'activity', 'province', 'ccaa', 'sierra', 'notes', 'url', 'tags', 'days_declared', 'difficulty']);
 
@@ -55,4 +47,4 @@ function editableFields(fields) {
   return Object.keys(fields || {}).filter(k => EDITABLE_FIELDS.has(k) && fields[k] !== undefined);
 }
 
-module.exports = { TRACK_COLS, LIST_COLS, CATALOG_COLS, EDITABLE_FIELDS, CONFIG_TABLES, configValues, assertConfigTable, editableFields };
+module.exports = { TRACK_COLS, LIST_COLS, EDITABLE_FIELDS, CONFIG_TABLES, configValues, assertConfigTable, editableFields };

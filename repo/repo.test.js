@@ -48,10 +48,6 @@ describe('postgres', () => {
     assert.equal(rows[0].imported_at, '2024-05-02 10:00:00');
   });
 
-  it('catalogTracks: newest date first, undated last', async () => {
-    assert.deepEqual((await repo.catalogTracks()).map(r => r.id), [1, 3, 2]);
-  });
-
   it('getTrack and getPoints round-trip coordinates and missing elevation exactly', async () => {
     const t = await repo.getTrack(1);
     assert.equal(t.name, 'Bravo');

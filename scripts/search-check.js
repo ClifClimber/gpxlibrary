@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 'use strict';
-// Compares GET /api/search with what visor.js computes from /api/catalog for random boxes and filters.
+// Compares GET /api/search with an independent JavaScript implementation of the visor's filters, counts and
+// sort (the logic visor.js had when it filtered the whole catalog in the browser), for random boxes and filters.
+// The reference data is read straight from the database (public routes, as the throwaway account sees them).
 // Creates a throwaway account, runs the checks against a running server and deletes the account.
 //   node scripts/search-check.js [--base http://localhost:8081] [--runs 300] [--seed 1]
 const argv = process.argv.slice(2);
@@ -39,7 +41,7 @@ function reference(cat, f, me) {
     t.distance >= (f.dmin ?? 0) && t.distance <= (f.dmax ?? Infinity) &&
     t.elevationGain >= (f.emin ?? 0) && t.elevationGain <= (f.emax ?? Infinity) &&
     (!f.year || (t.date && t.date.startsWith(f.year))) &&
-    (!f.q || t._q.includes(f.q)) &&
+    (!f.q || norm(f.q).split(/\s+/).every(w => t._q.includes(w))) &&
     (!f.near || hav(f.near[0], f.near[1], t.center[0], t.center[1]) <= f.near[2] || t.points.some(p => hav(f.near[0], f.near[1], p[0], p[1]) <= f.near[2])) &&
     (!f.grade || (gradeIdx(t) >= f.grade[0] && gradeIdx(t) <= f.grade[1])) &&
     (!f.rtype || (f.rtype === 'circular' ? t.circular : !t.circular)) &&
@@ -98,6 +100,30 @@ function toQuery(f) {
   return sp.toString();
 }
 
+// Public routes as another user sees them: the privacy-trimmed 15 m line (geom_s1), its box and its points
+async function loadCatalog() {
+  const { openSql } = require('../repo/sql');
+  const db = openSql();
+  const rows = await db.all(`SELECT id, name, sierra, zone, province, activity, tags, distance, elevation_gain, date, circular, owner_id, difficulty,
+      ibp_bicycle, ibp_hiking, ibp_running, ST_AsGeoJSON(geom_s1, 5) AS line,
+      ST_XMin(geom_s1) AS w, ST_YMin(geom_s1) AS s, ST_XMax(geom_s1) AS e, ST_YMax(geom_s1) AS n
+    FROM tracks WHERE visibility = 'public' AND sw_lat IS NOT NULL AND geom_s1 IS NOT NULL AND geom_view IS NOT NULL
+    ORDER BY date DESC NULLS LAST, name COLLATE "C", id`);   // the old catalog order: the stable JS sort keeps it for ties
+  await db.close();
+  const r0 = v => (v != null ? Math.round(v) : null);
+  return rows.map(t => {
+    let tags = []; try { tags = t.tags ? JSON.parse(t.tags) : []; } catch {}
+    const points = JSON.parse(t.line).coordinates.map(c => [c[1], c[0]]);
+    return {
+      id: t.id, name: t.name, sierra: t.sierra, activity: t.activity, tags, date: t.date, circular: !!t.circular, owner_id: t.owner_id,
+      distance: t.distance, elevationGain: t.elevation_gain, difficulty: t.difficulty,
+      ibp_bicycle: r0(t.ibp_bicycle), ibp_hiking: r0(t.ibp_hiking), ibp_running: r0(t.ibp_running),
+      bounds: [[t.s, t.w], [t.n, t.e]], center: points[Math.floor(points.length / 2)], points,
+      _q: norm([t.name, t.sierra, t.zone, t.province, t.activity, ...tags].filter(Boolean).join(' ')),
+    };
+  });
+}
+
 // ── Run ─────────────────────────────────────────────────────────────
 (async () => {
   const user = `check.${Date.now().toString(36)}`, pass = 'check-' + Math.random().toString(36).slice(2);
@@ -108,8 +134,7 @@ function toQuery(f) {
   const me = (await reg.json()).id;
   const get = async url => { const r = await fetch(BASE + url, { headers: { cookie } }); if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`); return r.json(); };
   try {
-    const cat = await get('/api/catalog');
-    cat.forEach(t => { t._q = norm([t.name, t.sierra, t.zone, ...(t.tags || [])].filter(Boolean).join(' ')); });
+    const cat = await loadCatalog();
     console.log(`Catálogo: ${cat.length} rutas · ${RUNS} búsquedas aleatorias`);
     const bad = { total: 0, totals: 0, page: 0, facets: 0 }, examples = [], times = [];
     for (let i = 0; i < RUNS; i++) {

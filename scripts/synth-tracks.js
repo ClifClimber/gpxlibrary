@@ -44,27 +44,29 @@ async function loadSources(bench) {
       SELECT name, zone, activity, province, ccaa, sierra, tags, color, distance, elevation_gain, elevation_loss,
              min_elevation, max_elevation, sw_lat, sw_lon, ne_lat, ne_lon, center_lat, center_lon,
              raw_count, ibp_bicycle, ibp_hiking, ibp_running, circular, moving_time, stopped_time,
-             road_types, notes, difficulty, catalog_pts, encode(ST_AsEWKB(geom), 'hex') AS geom_hex, ele
+             road_types, notes, difficulty, search_text, encode(ST_AsEWKB(geom), 'hex') AS geom_hex, ele,
+             encode(ST_AsEWKB(geom_s1), 'hex') AS s1_hex, encode(ST_AsEWKB(geom_s2), 'hex') AS s2_hex
       FROM tracks
-      WHERE geom IS NOT NULL AND catalog_pts IS NOT NULL AND sw_lat IS NOT NULL AND center_lat IS NOT NULL`);
+      WHERE geom IS NOT NULL AND geom_s1 IS NOT NULL AND sw_lat IS NOT NULL AND center_lat IS NOT NULL`);
     await bench.query('DROP TABLE IF EXISTS synth_src');
     await bench.query(`CREATE TABLE synth_src (sid serial PRIMARY KEY, name text, zone text, activity text, province text, ccaa text,
       sierra text, tags text, color text, distance double precision, elevation_gain integer, elevation_loss integer,
       min_elevation integer, max_elevation integer, sw_lat double precision, sw_lon double precision, ne_lat double precision,
       ne_lon double precision, center_lat double precision, center_lon double precision, raw_count integer,
       ibp_bicycle double precision, ibp_hiking double precision, ibp_running double precision, circular integer,
-      moving_time integer, stopped_time integer, road_types text, notes text, difficulty integer, catalog_pts text,
-      geom geometry(LineString, 4326), ele double precision[])`);
+      moving_time integer, stopped_time integer, road_types text, notes text, difficulty integer, search_text text,
+      geom geometry(LineString, 4326), ele double precision[], geom_s1 geometry(LineString, 4326), geom_s2 geometry(LineString, 4326))`);
     for (const r of rows) {
       await bench.query(`INSERT INTO synth_src (name, zone, activity, province, ccaa, sierra, tags, color, distance, elevation_gain,
         elevation_loss, min_elevation, max_elevation, sw_lat, sw_lon, ne_lat, ne_lon, center_lat, center_lon, raw_count,
-        ibp_bicycle, ibp_hiking, ibp_running, circular, moving_time, stopped_time, road_types, notes, difficulty, catalog_pts, geom, ele)
+        ibp_bicycle, ibp_hiking, ibp_running, circular, moving_time, stopped_time, road_types, notes, difficulty, search_text, geom, ele,
+        geom_s1, geom_s2)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
-        ST_GeomFromEWKB(decode($31,'hex')),$32)`,
+        ST_GeomFromEWKB(decode($31,'hex')),$32,ST_GeomFromEWKB(decode($33,'hex')),ST_GeomFromEWKB(decode($34,'hex')))`,
         [r.name, r.zone, r.activity, r.province, r.ccaa, r.sierra, r.tags, r.color, r.distance, r.elevation_gain, r.elevation_loss,
          r.min_elevation, r.max_elevation, r.sw_lat, r.sw_lon, r.ne_lat, r.ne_lon, r.center_lat, r.center_lon, r.raw_count,
          r.ibp_bicycle, r.ibp_hiking, r.ibp_running, r.circular, r.moving_time, r.stopped_time, r.road_types, r.notes, r.difficulty,
-         r.catalog_pts, r.geom_hex, r.ele]);
+         r.search_text, r.geom_hex, r.ele, r.s1_hex, r.s2_hex]);
     }
     return rows.length;
   } finally { await real.end(); }
@@ -86,19 +88,21 @@ WITH p AS MATERIALIZED (
 INSERT INTO tracks (name, file, zone, date, distance, elevation_gain, elevation_loss, min_elevation, max_elevation,
   sw_lat, sw_lon, ne_lat, ne_lon, center_lat, center_lon, raw_count, cleaned, color, activity, province, ccaa, sierra,
   road_types, moving_time, stopped_time, tags, ibp_bicycle, ibp_hiking, ibp_running, circular, notes, difficulty,
-  catalog_pts, uid, sha256, geom, ele, owner_id, visibility)
+  search_text, uid, sha256, geom, ele, owner_id, visibility, geom_view, geom_s1, geom_s2, start_point, derived_at)
 SELECT q.name || ' · v' || ($2::int + q.i), 'synthetic/' || q.nuid || '.gpx', q.zone,
   to_char(date '2008-01-01' + floor(q.r_date * 6800)::int, 'YYYY-MM-DD'),
   q.distance, q.elevation_gain, q.elevation_loss, q.min_elevation, q.max_elevation,
   q.sw_lat + q.dlat, q.sw_lon + q.dlon, q.ne_lat + q.dlat, q.ne_lon + q.dlon, q.tlat, q.tlon,
   q.raw_count, 0, q.color, q.activity, q.province, q.ccaa, q.sierra,
   q.road_types, q.moving_time, q.stopped_time, q.tags, q.ibp_bicycle, q.ibp_hiking, q.ibp_running, q.circular, q.notes, q.difficulty,
-  (SELECT '[' || string_agg('[' || trim_scale(round((e->>0)::numeric + q.dlat::numeric, 5))::text || ',' ||
-                            trim_scale(round((e->>1)::numeric + q.dlon::numeric, 5))::text || ',' || coalesce(e->>2, 'null') || ']', ',' ORDER BY ord) || ']'
-   FROM jsonb_array_elements(q.catalog_pts::jsonb) WITH ORDINALITY AS t(e, ord)),
+  q.search_text,
   q.nuid, encode(sha256(q.nuid::bytea), 'hex'),
   ST_Translate(q.geom, q.dlon, q.dlat), q.ele,
-  ($3::int[])[1 + floor(random() * array_length($3::int[], 1))::int], CASE WHEN q.r_vis < 0.9 THEN 'public' ELSE 'private' END
+  ($3::int[])[1 + floor(random() * array_length($3::int[], 1))::int], CASE WHEN q.r_vis < 0.9 THEN 'public' ELSE 'private' END,
+  -- Derived columns copied from the real route (016). geom_view = the 15 m line, to keep the bench DB small
+  -- (privacy zones are not applied to synthetic routes)
+  ST_Translate(q.geom_s1, q.dlon, q.dlat), ST_Translate(q.geom_s1, q.dlon, q.dlat), ST_Translate(q.geom_s2, q.dlon, q.dlat),
+  ST_StartPoint(ST_Translate(q.geom_s1, q.dlon, q.dlat)), now()
 FROM q`;
 
 async function main() {

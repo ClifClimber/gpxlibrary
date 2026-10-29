@@ -156,7 +156,7 @@ function baseUrl(req) {
 const ADMIN_PAGES = new Set(['/admin', '/config', '/admin.html']);
 const USER_PAGES  = new Set(['/', '/visor2', '/track', '/trazar', '/compare', '/perfil', '/editor', '/editor.html', '/subir', '/subir.html', '/lista']);
 const USER_API = [
-  ['GET',    /^\/api\/(catalog|search|tags|geo|tracks)$/],
+  ['GET',    /^\/api\/(search|tags|geo|tracks)$/],
   ['GET',    /^\/api\/config\/(activities|sierras|provinces)$/],
   ['GET',    /^\/api\/tracks\/\d+(\/gpx|\/export-gpx|\/preview)?$/],
   ['POST',   /^\/api\/tracks\/export-gpx$/],
@@ -276,7 +276,7 @@ const worker = process.env.EMBEDDED_WORKER === '0' ? null : createWorker({
     appendLog(code === 0 ? 'info' : 'error', job.type, `${job.type} ${code === 0 ? 'completado' : code === 130 ? 'cancelado' : 'fallido'}`,
       { job: job.id, ...summarize(lines, code) });
     if (code === 0) {
-      invalidateCatalogCache();
+      dataChanged();
       if (IMPORT_TYPES.has(job.type)) jobQueue().enqueue('export-folders', {}).catch(() => {});
       const dArgs = deriveArgsAfter(job, lines);
       if (dArgs) jobQueue().enqueue('track-derive', { args: dArgs }).catch(() => {});
@@ -659,110 +659,12 @@ function apiTempFiles(res, srcDir) {
   } catch(e) { res.writeHead(500); res.end(e.message); }
 }
 
-// ── API /catalog ─────────────────────────────────────────────────
-// Stats come from the tracks table (pre-computed at import time).
-// Only points are fetched per-track for simplification.
-// Result is cached in memory and invalidated on any write.
-const MAX_CATALOG_PTS = 300;
-
-async function buildCatalog(viewer) {
-  const ownerId = viewer ? viewer.sub : null;
-  const tracks = await repo.catalogTracks({ ownerId });
-  // Privacy zones of the other owners (admins see everything)
-  const radii = new Map();
-  if (viewer && viewer.role !== 'admin')
-    for (const u of await sqlDb().all('SELECT id, privacy_radius FROM users WHERE privacy_radius > 0')) radii.set(u.id, u.privacy_radius);
-  const catalog = [];
-  for(const t of tracks){
-    if(t.sw_lat==null || t.ne_lat==null) continue;
-    let points;
-    if (t.catalog_pts) {
-      try { points = JSON.parse(t.catalog_pts); } catch { continue; }
-    } else {
-      const pts = await repo.getPoints(t.id, { clean: !!t.cleaned });
-      if(pts.length<2) continue;
-      const disp = sampleEvenly(pts, MAX_CATALOG_PTS);
-      points = disp.map(p=>[
-        Math.round(p.lat*100000)/100000,
-        Math.round(p.lon*100000)/100000,
-        p.ele!=null?Math.round(p.ele):null,
-      ]);
-    }
-    if(!Array.isArray(points) || points.length < 2) continue;
-    let bounds = [[t.sw_lat,t.sw_lon],[t.ne_lat,t.ne_lon]];
-    let center = [Math.round(t.center_lat*10000)/10000, Math.round(t.center_lon*10000)/10000];
-    const radius = t.owner_id !== ownerId ? radii.get(t.owner_id) : 0;
-    if (radius) {
-      points = applyPrivacy(t, points, radius).points;
-      if (points.length < 2) continue;   // the whole route is inside the zone: nothing to show
-      bounds = boundsOf(points);
-      center = points[Math.floor(points.length / 2)].slice(0, 2);
-    }
-    catalog.push({
-      id:            t.id,
-      name:          t.name,
-      file:          t.file,
-      zone:          t.zone,
-      date:          t.date,
-      activity:      t.activity||null,
-      sierra:        t.sierra||null,
-      ccaa:          t.ccaa||null,
-      tags:          t.tags ? JSON.parse(t.tags) : [],
-      distance:      t.distance,
-      elevationGain: t.elevation_gain,
-      elevationLoss: t.elevation_loss,
-      minElevation:  t.min_elevation  != null ? Math.round(t.min_elevation)  : null,
-      maxElevation:  t.max_elevation  != null ? Math.round(t.max_elevation)  : null,
-      bounds,
-      center,
-      color:         t.color||null,
-      ibp_bicycle:   t.ibp_bicycle  != null ? Math.round(t.ibp_bicycle)  : null,
-      ibp_hiking:    t.ibp_hiking   != null ? Math.round(t.ibp_hiking)   : null,
-      ibp_running:   t.ibp_running  != null ? Math.round(t.ibp_running)  : null,
-      difficulty:    t.difficulty   ?? null,   // grade chosen by the user (0–5), else derived from the IBP
-      hasOsm:        !!(t.road_types && t.road_types !== '{}'),
-      movingTime:    t.moving_time  || null,
-      stoppedTime:   t.stopped_time || null,
-      circular:      !!t.circular,
-      owner_id:      t.owner_id       || null,
-      owner_username: t.owner_username || null,
-      visibility:    t.visibility     || 'public',
-      cover:         t.cover_photo_id ? `/api/photos/${t.cover_photo_id}?size=thumb` : null,
-      points,
-    });
-  }
-  return JSON.stringify(catalog);
-}
-
-// Catalog cache: keyed by ownerId (null = public only, N = public + own private)
-let _catalogDataVersion = null;
-const _catalogCacheMap = new Map(); // ownerId → { data, etag, size }
+// ── Versión de los datos ──────────────────────────────────────────
+// Caches of /api/search (pill counts, meta) are keyed by this version.
 let _dataEpoch = 0;   // bumped on every in-process data change (edits don't go through the job queue)
-function invalidateCatalogCache() { _catalogDataVersion = null; _catalogCacheMap.clear(); _dataEpoch++; }
+function dataChanged() { _dataEpoch++; }
 // Version of the visible data: job queue (imports and other jobs, also from the external worker) + local edits
 async function dataVersionKey() { return `${await jobQueue().dataVersion().catch(() => 0)}:${_dataEpoch}`; }
-
-async function apiCatalog(req, res) {
-  try {
-    const ownerId = req.user ? req.user.sub : null;
-    const version = await jobQueue().dataVersion().catch(() => null);
-    if (version !== _catalogDataVersion) { _catalogDataVersion = version; _catalogCacheMap.clear(); }
-    if (!_catalogCacheMap.has(ownerId)) {
-      const data = await buildCatalog(req.user);
-      _catalogCacheMap.set(ownerId, { data, etag: `"cat-${ownerId}-${Date.now().toString(36)}"` });
-      console.log(`[catalog] built for user=${ownerId}: ${Math.round(Buffer.byteLength(data)/1024)}KB`);
-    }
-    const { data, etag } = _catalogCacheMap.get(ownerId);
-    if (req.headers['if-none-match'] === etag) {
-      res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end();
-    }
-    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', ETag: etag });
-    res.end(data);
-  } catch (e) {
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: e.message }));
-  }
-}
 
 // ── API /tracks ───────────────────────────────────────────────────
 async function apiGetTracks(res, viewerId = null, mineOnly = false) {
@@ -789,7 +691,7 @@ async function deleteTrackById(id) {
   const file = await repo.deleteTrack(id);
   if (!file) return { ok: false, error: 'Not found' };
   for (const p of photos) for (const f of [p.filename, p.thumb_filename]) if (f) await photoDel(f);
-  invalidateCatalogCache();
+  dataChanged();
   let fileDeleted = false;
   try { fileDeleted = await deleteTrackFile(file, blob); }
   catch (e) { console.error(`[store] no se pudo borrar ${file}: ${e.message}`); }   // the DB row is already gone
@@ -891,7 +793,7 @@ async function apiMoveTrack(req, res, id) {
     const { category: actParam, zone } = await parseBody(req);
     if (!actParam) { res.writeHead(400); res.end('category required'); return; }
     if (!(await repo.moveTrack(id, actParam, zone))) { res.writeHead(404); res.end('Not found'); return; }
-    invalidateCatalogCache();
+    dataChanged();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
   } catch (e) {
@@ -902,10 +804,10 @@ async function apiMoveTrack(req, res, id) {
 
 // Keeps tracks.search_text in step with name/sierra/province/tags (synchronous; the rest of the derived data doesn't depend on them).
 async function refreshSearchText(ids, changed) {
-  if (!changed.some(k => ['name', 'sierra', 'zone', 'province', 'tags'].includes(k))) return;
+  if (!changed.some(k => ['name', 'sierra', 'zone', 'province', 'activity', 'tags'].includes(k))) return;
   try {
     const db = sqlDb();
-    for (const t of await db.all('SELECT id, name, sierra, zone, province, tags FROM tracks WHERE id = ANY(?::int[])', [ids]))
+    for (const t of await db.all('SELECT id, name, sierra, zone, province, activity, tags FROM tracks WHERE id = ANY(?::int[])', [ids]))
       await db.run('UPDATE tracks SET search_text = ? WHERE id = ?', [searchText(t), t.id]);
   } catch (e) { console.error('search_text:', e.message); }
 }
@@ -920,7 +822,7 @@ async function apiPatchTrack(req, res, id) {
     // The GPX is immutable: metadata lives only in the DB (it is applied on download).
     await repo.updateTrack(id, body);
     await refreshSearchText([id], Object.keys(body));
-    invalidateCatalogCache();
+    dataChanged();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
   } catch (e) {
@@ -945,7 +847,7 @@ async function apiBulkUpdate(req, res, ownerId = null) {
     if (!ids.length) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'No puedes editar rutas que no son tuyas' })); }
     await repo.bulkUpdate(ids, fields, !!notesAppend);
     await refreshSearchText(ids, Object.keys(fields));
-    invalidateCatalogCache();
+    dataChanged();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, updated: ids.length }));
   } catch (e) {
@@ -1114,7 +1016,7 @@ async function apiAdminRestore(res, filename) {
         l => out.push(l), { env: { ...process.env, SQLITE_PATH: tmp } });
       if (code !== 0) throw new Error('Carga en PostgreSQL fallida: ' + out.slice(-3).join(' · '));
     } finally { rm(); }
-    invalidateCatalogCache();
+    dataChanged();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
   } catch (e) {
@@ -1456,7 +1358,7 @@ const server = http.createServer(async (req, res) => {
     const where = orphans ? 'owner_id IS NULL' : `id IN (${ids.map(() => '?').join(',')})`;
     if (!orphans) vals.push(...ids);
     const r = await db.get(`WITH up AS (UPDATE tracks SET ${sets.join(', ')} WHERE ${where} RETURNING 1) SELECT CAST(COUNT(*) AS INTEGER) AS n FROM up`, vals);
-    invalidateCatalogCache();
+    dataChanged();
     appendLog('info', 'users', `Dueño cambiado en ${r.n} ruta(s)`, { owner, by: req.user.username });
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, updated: r.n }));
   }
@@ -1525,7 +1427,7 @@ const server = http.createServer(async (req, res) => {
       throw e;
     }
     _liveUsers.delete(uid);
-    invalidateCatalogCache();
+    dataChanged();
     appendLog('info', 'users', `Usuario modificado: id=${uid}`, { fields: Object.keys(body).filter(k => k !== 'password').concat(body.password ? ['password'] : []), by: req.user.username });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ ok: true }));
@@ -1554,7 +1456,7 @@ const server = http.createServer(async (req, res) => {
     });
     if (target.avatar_key) blob.del(target.avatar_key).catch(() => {});
     _liveUsers.delete(uid);
-    invalidateCatalogCache();
+    dataChanged();
     appendLog('info', 'users', `Usuario borrado: ${target.username}`, { tracks: moved, reassign_to: to, by: req.user.username });
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, tracks: moved }));
   }
@@ -1598,7 +1500,7 @@ const server = http.createServer(async (req, res) => {
     updates.push('updated_at = NOW()'); vals.push(req.user.sub);
     await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, vals);
     if (body.privacy_radius !== undefined) {
-      invalidateCatalogCache();
+      dataChanged();
       jobQueue().enqueue('track-derive', { args: ['--owner', String(req.user.sub)] }).catch(() => {});
     }
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
@@ -1674,7 +1576,7 @@ const server = http.createServer(async (req, res) => {
     await db.run('DELETE FROM users WHERE id = ?', [uid]);   // lists, shares and reset links cascade
     if (u.avatar_key) blob.del(u.avatar_key).catch(() => {});
     _liveUsers.delete(uid);
-    invalidateCatalogCache();
+    dataChanged();
     appendLog('info', 'users', `Cuenta borrada por su usuario: ${u.username}`, { tracks: ids.length });
     clearCookie(res);
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, tracks: ids.length }));
@@ -1731,7 +1633,7 @@ const server = http.createServer(async (req, res) => {
     if (!t) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
     if (t.owner_id !== req.user.sub && req.user.role !== 'admin') { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
     await db.run('UPDATE tracks SET visibility = ? WHERE id = ?', [vis, tid]);
-    invalidateCatalogCache();
+    dataChanged();
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
   }
 
@@ -2002,9 +1904,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (pathname === '/api/catalog' && method === 'GET')
-    return apiCatalog(req, res);
-
   // Visor search (phase 3): one page of routes in the box + totals + cascading pill counts
   if (pathname === '/api/search' && method === 'GET') {
     try {
@@ -2107,7 +2006,7 @@ const server = http.createServer(async (req, res) => {
       [tid, t.owner_id, fname, tname, mimeType, buf.length, (body.caption || '').trim() || null, pos]);
     // The first photo of a route becomes its cover
     const isCover = !t.cover_photo_id || body.cover === true;
-    if (isCover) { await sqlDb().run('UPDATE tracks SET cover_photo_id = ? WHERE id = ?', [row.id, tid]); invalidateCatalogCache(); }
+    if (isCover) { await sqlDb().run('UPDATE tracks SET cover_photo_id = ? WHERE id = ?', [row.id, tid]); dataChanged(); }
     res.writeHead(201, J);
     return res.end(JSON.stringify({ ok: true, id: row.id, url: `/api/photos/${row.id}`, thumb: `/api/photos/${row.id}?size=thumb`, is_cover: isCover }));
   }
@@ -2138,7 +2037,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Esa foto no es de esta ruta' }));
     }
     await sqlDb().run('UPDATE tracks SET cover_photo_id = ? WHERE id = ?', [pid, tid]);
-    invalidateCatalogCache();
+    dataChanged();
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, cover_photo_id: pid }));
   }
 
@@ -2165,7 +2064,7 @@ const server = http.createServer(async (req, res) => {
       const next = await sqlDb().get('SELECT id FROM track_photos WHERE track_id = ? ORDER BY position, id LIMIT 1', [p.track_id]);
       newCover = next ? next.id : null;
       await sqlDb().run('UPDATE tracks SET cover_photo_id = ? WHERE id = ?', [newCover, p.track_id]);
-      invalidateCatalogCache();
+      dataChanged();
     }
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, cover_photo_id: newCover }));
   }
@@ -2483,7 +2382,7 @@ const server = http.createServer(async (req, res) => {
     }
     await removeOld();
     await sqlDb().run('UPDATE config_activities SET image = ? WHERE id = ?', [image, aid]);
-    invalidateCatalogCache();
+    dataChanged();
     appendLog('info', 'activities', image ? 'Imagen de actividad cambiada' : 'Imagen de actividad quitada', { id: aid, by: req.user.username });
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, image }));
   }
@@ -2519,7 +2418,7 @@ const server = http.createServer(async (req, res) => {
     }
     await removeOld();
     await sqlDb().run('UPDATE config_activities SET icon_img = ? WHERE id = ?', [icon_img, aid]);
-    invalidateCatalogCache();
+    dataChanged();
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, icon_img }));
   }
   const actIconFile = pathname.match(/^\/api\/activity-icons\/([\w.-]+)$/);

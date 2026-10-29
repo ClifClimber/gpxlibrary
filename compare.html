@@ -459,20 +459,27 @@ function buildList() {
 (function () {
   const inp = document.getElementById('cmp-add-input');
   const box = document.getElementById('cmp-add-results');
-  let all = null, focus = -1, shown = [];
-  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-  async function ensureLoaded() {
-    if (all) return;
-    try { all = await fetch('/api/tracks').then(r => r.json()); } catch { all = []; }
-    all.forEach(t => { t._q = norm([t.name, t.sierra, t.activity, t.province].filter(Boolean).join(' ')); });
+  let focus = -1, shown = [];
+  const ctl = { ac: null, timer: 0 };
+  // Server search (name, sierra, province, activity, tags; every word must appear), debounced
+  function search(q, exclude) {
+    clearTimeout(ctl.timer); ctl.ac?.abort();
+    return new Promise(resolve => {
+      ctl.timer = setTimeout(async () => {
+        ctl.ac = new AbortController();
+        try {
+          const d = await fetch(`/api/search?q=${encodeURIComponent(q)}&size=${8 + exclude.length}&sort=name`, { signal: ctl.ac.signal }).then(r => r.json());
+          resolve((d.items || []).filter(t => !exclude.includes(t.id)).slice(0, 8));
+        } catch { resolve(null); }
+      }, 200);
+    });
   }
   async function render() {
-    await ensureLoaded();
-    const q = norm(inp.value.trim());
+    const q = inp.value.trim();
     if (!q) { box.classList.remove('open'); return; }
-    const words = q.split(/\s+/);
-    shown = all.filter(t => !tracks.some(x => x.id === t.id) && words.every(w => t._q.includes(w))).slice(0, 8);
+    const found = await search(q, tracks.map(x => x.id).filter(Boolean));
+    if (found === null || inp.value.trim() !== q) return;   // superseded by a newer keystroke
+    shown = found;
     focus = -1;
     box.innerHTML = shown.length ? shown.map((t, k) => `
       <div class="add-item" data-k="${k}">
@@ -491,7 +498,7 @@ function buildList() {
     inp.focus();
   }
   inp.addEventListener('input', render);
-  inp.addEventListener('focus', () => { ensureLoaded(); if (inp.value.trim()) render(); });
+  inp.addEventListener('focus', () => { if (inp.value.trim()) render(); });
   inp.addEventListener('blur', () => setTimeout(() => box.classList.remove('open'), 150));
   inp.addEventListener('keydown', e => {
     const items = box.querySelectorAll('.add-item');

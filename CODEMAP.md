@@ -54,7 +54,6 @@ gpxlibrary/
 │   ├── enrich-road-types.js    Enriquece con tipo de camino/superficie (OSM Overpass)
 │   ├── enrich-tracks.js        Provincia / CCAA / sierra / actividad (Nominatim)
 │   ├── osm-precache.js         Descarga OSM por zonas; osm-strategy-*.js y osm-shared.js
-│   ├── backfill-catalog-pts.js Rellena catalog_pts (polilínea del catálogo)
 │   ├── calc-ibp.js             Calcula IBP Index vía API ibpindex.com
 │   └── extract-urls.js         Extrae URLs de los metadatos GPX
 │

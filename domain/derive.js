@@ -18,12 +18,12 @@ function visiblePoints(points, radiusM, trackId) {
 
 const stripAccents = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-/** Lowercase, accent-free text with name, sierra, zone, province and tags (tags: array or JSON text). */
-function searchText({ name, sierra, zone, province, tags } = {}) {
+/** Lowercase, accent-free text with name, sierra, zone, province, activity and tags (tags: array or JSON text). */
+function searchText({ name, sierra, zone, province, activity, tags } = {}) {
   let t = tags;
   if (typeof t === 'string') { try { t = JSON.parse(t); } catch { t = t ? [t] : []; } }
   if (!Array.isArray(t)) t = [];
-  return stripAccents([name, sierra, zone !== sierra ? zone : null, province, ...t].filter(x => x != null && String(x).trim() !== '').join(' ')).toLowerCase();
+  return stripAccents([name, sierra, zone !== sierra ? zone : null, province, activity, ...t].filter(x => x != null && String(x).trim() !== '').join(' ')).toLowerCase();
 }
 
 module.exports = { DERIVE_TOLERANCES, visiblePoints, searchText, stripAccents };
