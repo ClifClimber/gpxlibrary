@@ -4,19 +4,28 @@
 // Semantics mirror visor.js (applyFilters / baseMatch / updateFilterCounts / SORTERS) so both give the
 // same answer; `scripts/search-check.js` compares them against a running server.
 //
+// Filtering, totals and counts read the narrow table `track_search` (migration 020, kept by triggers on
+// `tracks`), aliased `t`; only the page of ≤60 routes and their geometries are read from `tracks` (`tr`).
+//
 //   parseSearchParams(URLSearchParams) → params      (pure)
-//   buildSearchSql(params, viewer)     → { where, facetWhere, args }   (pure, testable)
-//   runSearch(db, params, viewer)      → { items, total, km, gain, page, pages, facets }
+//   buildSearchSql(params, viewer)     → { where, base, … args }   (pure, testable)
+//   runSearch(db, params, viewer)      → { items, total, km, gain, page, pages, facets, fuzzy? }
 
 const { stripAccents, DERIVE_TOLERANCES: TOL } = require('../domain/derive');
 
+// Kept in step with the lists inside track_search_sync() (migration 020); search.test.js checks it
 const CYCLING = ['MTB', 'MTB Enduro', 'Mtb', 'Gravel', 'Bikepacking', 'Ciclismo de carretera'];
 const RUNNING = ['Trail Running', 'Running'];
 const MAX_SIZE = 60;
-// Counting every match of a huge box (the map zoomed far out) reads tens of thousands of wide rows:
+// Counting every match of a huge box (the map zoomed far out) reads tens of thousands of rows:
 // above this many the total is reported as "more than" and the km/ascent sums are left out
 const COUNT_CAP = 1000;
 const FACETS_CACHE_MAX = 500;
+// Typo tolerance (pg_trgm strict_word_similarity: the best run of whole words of the text against the typed word).
+// «pealara» → «peñalara» scores 0.55, «gredoz» → «gredos» 0.56, «candelda» → «candeleda» 0.58, while unrelated
+// look-alikes stay lower («pealara» vs «tralara» 0.33). Plain word_similarity cannot tell those apart.
+const FUZZY_THRESHOLD = 0.45;
+const FUZZY_MIN_LEN = 3;   // shorter words are matched exactly
 
 const num = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 const list = (sp, k) => sp.getAll(k).flatMap(v => String(v).split('|')).map(s => s.trim()).filter(Boolean);
@@ -44,19 +53,14 @@ function parseSearchParams(sp) {
     starts: sp.get('starts') === '1',
     // Hover line of each item: s1 (15 m) for close zooms, s2 (150 m) when the map is far out
     line: sp.get('line') === 's2' ? 's2' : 's1',
+    fuzzy: false,   // set by runSearch when the exact text search finds nothing
   };
   const grade = p.gradeMin != null || p.gradeMax != null;
   p.gradeActive = grade && ((p.gradeMin ?? 0) > 0 || (p.gradeMax ?? 5) < 5);
   return p;
 }
 
-// IBP of the track's activity group and the 0–5 grade (user's choice, else from the rounded IBP), as SQL
-const IBP_SQL = `(CASE WHEN t.activity = ANY($ACT_C) THEN t.ibp_bicycle WHEN t.activity = ANY($ACT_R) THEN t.ibp_running ELSE t.ibp_hiking END)`;
-const GRADE_SQL = `COALESCE(t.difficulty, CASE WHEN ibp.v IS NULL THEN -1
-  WHEN round(ibp.v::numeric) < 0 THEN -1 WHEN round(ibp.v::numeric) <= 50 THEN 0 WHEN round(ibp.v::numeric) <= 100 THEN 1
-  WHEN round(ibp.v::numeric) <= 150 THEN 2 WHEN round(ibp.v::numeric) <= 250 THEN 3 WHEN round(ibp.v::numeric) <= 400 THEN 4 ELSE 5 END)`;
-
-// Each matches an index (migrations 016/018), so a page is read in order without sorting every match
+// Each matches an index of track_search (migration 020), so a page is read in order without sorting every match
 const SORTS = {
   'name':      `t.name COLLATE "es-x-icu" ASC`,
   'date':      `t.date DESC NULLS LAST`,
@@ -64,34 +68,33 @@ const SORTS = {
   'dist-asc':  `t.distance ASC`,
   'dist-desc': `t.distance DESC`,
   'ele-desc':  `t.elevation_gain DESC`,
-  'ibp-asc':   `COALESCE(round(ibp.v::numeric), 9999) ASC`,
+  'ibp-asc':   `t.ibp_sort ASC`,
 };
 // Ties keep the catalog order (newest date, byte-wise name, id), as the stable JS sort does
 const TIEBREAK = `t.date DESC NULLS LAST, t.name COLLATE "C" ASC, t.id ASC`;
 
+const words = p => (p.q ? p.q.split(/\s+/).filter(Boolean) : []);
+const likeArg = w => '%' + w.replace(/[\\%_]/g, c => '\\' + c) + '%';
+
 /**
- * WHERE clauses. `where` = everything (box included); `base` = the filters the pill counts use
- * (no box, no activity/sierra/tag); `actC`/`sierraC`/`tagC` = each pill filter on its own.
+ * WHERE clauses over track_search (alias `t`). `where` = everything (box included); `base` = the filters the
+ * pill counts use (no box, no activity/sierra/tag); `actC`/`sierraC`/`tagC` = each pill filter on its own.
  * viewer: { sub, role } — the visor catalog shows public routes + the viewer's own (admins too).
+ * opts.nearIds: ids already matching the radius filter (runSearch computes them once instead of three times).
+ * `full`/`geom` refer to the `tracks` row (alias `tr`) of the page query.
  */
-function buildSearchSql(p, viewer) {
+function buildSearchSql(p, viewer, { nearIds = null } = {}) {
   const args = [];
   const $ = v => { args.push(v); return `$${args.length}`; };
   const me = $(viewer.sub), admin = $(viewer.role === 'admin');
   // The owner (and admins) see the whole route; everyone else the privacy-trimmed one
-  const full = `(COALESCE(t.owner_id = ${me}, FALSE) OR ${admin})`;   // routes without owner: NULL would drop them
-  const geom = `(CASE WHEN ${full} THEN t.geom ELSE t.geom_view END)`;
-  // Plain column tests the planner can estimate (OR/CASE over geometries made it scan every public route).
-  // geom_s1 exists for every route with geometry; geom_view is NULL when the privacy zone hides the whole
-  // route, which then only its owner (and admins) may see.
-  const base = [
-    `(t.visibility = 'public' OR t.owner_id = ${me})`,
-    `t.sw_lat IS NOT NULL`, `t.geom_s1 IS NOT NULL`,
-    `(t.geom_view IS NOT NULL OR t.owner_id = ${me} OR ${admin})`,
-  ];
+  const full = `(COALESCE(tr.owner_id = ${me}, FALSE) OR ${admin})`;   // routes without owner: NULL would drop them
+  const geom = `(CASE WHEN ${full} THEN tr.geom ELSE tr.geom_view END)`;
+  // `hidden`: the privacy zone covers the whole route, so only its owner (and admins) may see it
+  const vis = [`(t.visibility = 'public' OR t.owner_id = ${me})`, `(NOT t.hidden OR t.owner_id = ${me} OR ${admin})`];
+  const base = [...vis];
   if (p.ids.length) base.push(`t.id = ANY(${$(p.ids)}::int[])`);
-  // JS coerces a missing distance/gain to 0 (null >= 5 is false, null <= 40 is true). Written without
-  // COALESCE so the planner can use the column statistics.
+  // JS coerces a missing distance/gain to 0 (null >= 5 is false, null <= 40 is true)
   const range = (col, min, max) => {
     if (min != null) base.push(min > 0 ? `t.${col} >= ${$(min)}` : `(t.${col} >= ${$(min)} OR t.${col} IS NULL)`);
     if (max != null) base.push(max >= 0 ? `(t.${col} <= ${$(max)} OR t.${col} IS NULL)` : `t.${col} <= ${$(max)}`);
@@ -99,19 +102,35 @@ function buildSearchSql(p, viewer) {
   range('distance', p.distMin, p.distMax);
   range('elevation_gain', p.eleMin, p.eleMax);
   if (p.year) base.push(`t.date LIKE ${$(p.year + '%')}`);
-  // Every word must appear (name, sierra, zone, province, activity or tags), in any order
-  if (p.q) for (const w of p.q.split(/\s+/).filter(Boolean))
-    base.push(`t.search_text LIKE ${$('%' + w.replace(/[\\%_]/g, c => '\\' + c) + '%')}`);
-  if (p.near) {
+  // Every word must appear (name, sierra, zone, province, activity or tags), in any order. Fuzzy mode (no
+  // exact result): each word of ≥3 letters only has to be similar to a word of the text (pg_trgm `<<%`)
+  let rank = null;
+  const ws = words(p);
+  for (const w of ws) {
+    if (p.fuzzy && w.length >= FUZZY_MIN_LEN) base.push(`${$(w)}::text <<% t.search_text`);
+    else base.push(`t.search_text LIKE ${$(likeArg(w))}`);
+  }
+  if (p.fuzzy) {
+    const fz = ws.filter(w => w.length >= FUZZY_MIN_LEN);
+    if (fz.length) rank = fz.map(w => `strict_word_similarity(${$(w)}::text, t.search_text)`).join(' + ');
+  }
+  const nearAt = () => {
     const [lat, lon, km] = p.near;
     const pt = `ST_SetSRID(ST_MakePoint(${$(lon)}, ${$(lat)}), 4326)`;
-    // Box prefilter on an indexed column (degrees, generous), then the exact distance to the line
+    // Box prefilter on the narrow table's indexed box (degrees, generous), then the exact distance to the line
     const deg = $(km / 111 / Math.max(0.2, Math.cos(lat * Math.PI / 180)) + 0.01);
     // Distance to the 15 m simplified line: thousands of times cheaper than the full one, within 15 m of it
-    base.push(`t.geom_s1 && ST_Expand(${pt}, ${deg})`, `ST_DWithin(t.geom_s1::geography, ${pt}::geography, ${$(km * 1000)})`);
+    return [`t.box && ST_Expand(${pt}, ${deg})`,
+            `ST_DWithin((SELECT s.geom_s1 FROM tracks s WHERE s.id = t.id)::geography, ${pt}::geography, ${$(km * 1000)})`];
+  };
+  let nearSql = null;
+  if (p.near) {
+    nearSql = `SELECT t.id FROM track_search t WHERE ${[...vis, ...nearAt()].join(' AND ')}`;
+    if (nearIds) base.push(`t.id = ANY(${$(nearIds)}::int[])`);
+    else base.push(...nearAt());
   }
-  if (p.gradeActive) base.push(`${GRADE_SQL} BETWEEN ${$(p.gradeMin ?? 0)} AND ${$(p.gradeMax ?? 5)}`);
-  if (p.rtype.length === 1) base.push(p.rtype[0] === 'circular' ? `COALESCE(t.circular, 0) <> 0` : `COALESCE(t.circular, 0) = 0`);
+  if (p.gradeActive) base.push(`t.grade BETWEEN ${$(p.gradeMin ?? 0)} AND ${$(p.gradeMax ?? 5)}`);
+  if (p.rtype.length === 1) base.push(p.rtype[0] === 'circular' ? `t.circular` : `NOT t.circular`);
   if (p.mine) base.push(`t.owner_id = ${me}`);
   if (p.users.length) base.push(`t.owner_id = ANY(${$(p.users)}::int[])`);
 
@@ -119,24 +138,19 @@ function buildSearchSql(p, viewer) {
     : p.acts.includes('Sin clasificar') ? `(t.activity = ANY(${$(p.acts)}::text[]) OR t.activity IS NULL)`
     : `t.activity = ANY(${$(p.acts)}::text[])`;
   const sierraC = p.sierras.length ? `t.sierra = ANY(${$(p.sierras)}::text[])` : 'TRUE';
-  const tagC = p.tags.length
-    ? `EXISTS (SELECT 1 FROM json_array_elements_text(COALESCE(NULLIF(t.tags, ''), '[]')::json) tg WHERE tg = ANY(${$(p.tags)}::text[]))`
-    : 'TRUE';
+  const tagC = p.tags.length ? `t.tags && ${$(p.tags)}::text[]` : 'TRUE';
   let boxC = 'TRUE';
   if (p.bbox) {
     const [w, s, e, n] = p.bbox;
-    const env = `ST_MakeEnvelope(${$(w)}, ${$(s)}, ${$(e)}, ${$(n)}, 4326)`;
-    // Bounding boxes overlap, like the visor's bounds.intersects(). geom_s1 (indexed) stands in for the
-    // route: its box is at most the 15 m tolerance smaller (and, for the owner, without the privacy zone)
-    boxC = `t.geom_s1 && ${env}`;
+    // Bounding boxes overlap, like the visor's bounds.intersects(). The box of geom_s1 (indexed) stands in for
+    // the route: at most the 15 m tolerance smaller (and, for the owner, without the privacy zone)
+    boxC = `t.box && ST_MakeEnvelope(${$(w)}, ${$(s)}, ${$(e)}, ${$(n)}, 4326)`;
   }
-  const sql = s => s.replace(/\$ACT_C/g, $(CYCLING)).replace(/\$ACT_R/g, $(RUNNING));
-  const baseSql = sql(base.join(' AND '));
+  const baseSql = base.join(' AND ');
   return {
-    args, geom, full, boxC,
+    args, geom, full, boxC, nearSql, rank,
     base: baseSql, actC, sierraC, tagC,
     where: `${baseSql} AND ${actC} AND ${sierraC} AND ${tagC} AND ${boxC}`,
-    ibp: sql(IBP_SQL),
   };
 }
 
@@ -154,55 +168,76 @@ function bind(sql, args) {
   return [sql.replace(/\$(\d+)/g, (_, n) => '$' + to.get(+n)), used.map(n => args[n - 1])];
 }
 
-async function runSearch(db, p, viewer, { dataVersion = null, lite = false } = {}) {
-  const s = buildSearchSql(p, viewer);
+async function searchOnce(db, p, viewer, { dataVersion = null, lite = false, serial = false } = {}) {
+  // The radius filter (distance to the line) is the one expensive predicate: evaluate it once
+  let nearIds = null;
+  if (p.near) {
+    const s0 = buildSearchSql(p, viewer);
+    nearIds = (await db.all(...bind(s0.nearSql, s0.args))).map(r => r.id);
+  }
+  const s = buildSearchSql(p, viewer, { nearIds });
   const all = sql => db.all(...bind(sql, s.args));
   const get = sql => db.get(...bind(sql, s.args));
-  const order = `${SORTS[p.sort] || SORTS.name}, ${TIEBREAK}`;
-  const from = `FROM tracks t CROSS JOIN LATERAL (SELECT ${s.ibp} AS v) ibp`;
+  // Fuzzy results without an explicit sort come best match first
+  const byRank = p.fuzzy && s.rank && p.sort === 'name';
+  const order = `${byRank ? `(${s.rank}) DESC, ` : ''}${SORTS[p.sort] || SORTS.name}, ${TIEBREAK}`;
 
-  const totalsQ = lite ? { n: 0, km: 0, gain: 0 } : get(
+  const totalsQ = lite ? () => ({ n: 0, km: 0, gain: 0 }) : () => get(
     `SELECT CAST(COUNT(*) AS INTEGER) AS n, COALESCE(SUM(d), 0) AS km, COALESCE(SUM(g), 0) AS gain
-     FROM (SELECT t.distance AS d, t.elevation_gain AS g ${from} WHERE ${s.where} LIMIT ${COUNT_CAP + 1}) x`);
-  const itemsQ = all(
-    `SELECT t.id, t.name, t.date, t.activity, t.sierra, t.ccaa, t.tags, t.distance, t.elevation_gain, t.elevation_loss,
-            t.min_elevation, t.max_elevation, t.ibp_bicycle, t.ibp_hiking, t.ibp_running, t.difficulty, t.moving_time, t.stopped_time,
-            t.circular, t.owner_id, t.visibility, t.cover_photo_id, t.road_types, t.file, u.username AS owner_username,
+     FROM (SELECT t.distance AS d, t.elevation_gain AS g FROM track_search t WHERE ${s.where} LIMIT ${COUNT_CAP + 1}) x`);
+  // The page is chosen on the narrow table; the full rows and geometries of its ≤60 routes come from tracks
+  const sortCols = `t.name, t.date, t.distance, t.elevation_gain, t.ibp_sort${byRank ? `, (${s.rank}) AS rank` : ''}`;
+  const outer = `${byRank ? 'pg.rank DESC, ' : ''}${(SORTS[p.sort] || SORTS.name).replace(/\bt\./g, 'pg.')}, ${TIEBREAK.replace(/\bt\./g, 'pg.')}`;
+  const itemsQ = () => all(
+    `WITH pg AS (SELECT t.id, ${sortCols} FROM track_search t WHERE ${s.where} ORDER BY ${order} LIMIT ${p.size} OFFSET ${p.page * p.size})
+     SELECT tr.id, tr.name, tr.date, tr.activity, tr.sierra, tr.ccaa, tr.tags, tr.distance, tr.elevation_gain, tr.elevation_loss,
+            tr.min_elevation, tr.max_elevation, tr.ibp_bicycle, tr.ibp_hiking, tr.ibp_running, tr.difficulty, tr.moving_time, tr.stopped_time,
+            tr.circular, tr.owner_id, tr.visibility, tr.cover_photo_id, tr.road_types, tr.file, u.username AS owner_username,
             ST_AsGeoJSON(ST_StartPoint(${s.geom}), 5) AS start,
-            ST_AsGeoJSON(CASE WHEN ${s.full} THEN ST_Transform(ST_Simplify(ST_Transform(t.geom, 3857),
-                                ${TOL[p.line]} / cos(radians(ST_Y(ST_Centroid(t.geom)))), true), 4326)
-                              ELSE t.geom_${p.line} END, 5) AS line,
+            ST_AsGeoJSON(CASE WHEN ${s.full} THEN ST_Transform(ST_Simplify(ST_Transform(tr.geom, 3857),
+                                ${TOL[p.line]} / cos(radians(ST_Y(ST_Centroid(tr.geom)))), true), 4326)
+                              ELSE tr.geom_${p.line} END, 5) AS line,
             ST_XMin(${s.geom}) AS w, ST_YMin(${s.geom}) AS s, ST_XMax(${s.geom}) AS e, ST_YMax(${s.geom}) AS n
-     ${from} LEFT JOIN users u ON u.id = t.owner_id
-     WHERE ${s.where} ORDER BY ${order} LIMIT ${p.size} OFFSET ${p.page * p.size}`);
+     FROM pg JOIN tracks tr ON tr.id = pg.id LEFT JOIN users u ON u.id = tr.owner_id
+     ORDER BY ${outer}`);
   const startsQ = p.starts && !lite
-    ? all(`SELECT t.id, t.activity, ST_Y(ST_StartPoint(${s.geom})) AS lat, ST_X(ST_StartPoint(${s.geom})) AS lon
-              ${from} WHERE ${s.where} LIMIT 5000`)
+    ? () => all(`SELECT tr.id, tr.activity, ST_Y(ST_StartPoint(${s.geom})) AS lat, ST_X(ST_StartPoint(${s.geom})) AS lon
+              FROM (SELECT t.id FROM track_search t WHERE ${s.where} LIMIT 5000) x JOIN tracks tr ON tr.id = x.id`)
     : null;
 
   const key = facetKey(p, viewer, dataVersion);
-  let facetsQ = lite ? null : dataVersion != null ? _facetCache.get(key) : null;
+  const cached = lite ? null : dataVersion != null ? _facetCache.get(key) : null;
+  let facetsQ = lite ? null : cached ? () => cached : null;
   if (!facetsQ && !lite) {
-    const one = (expr, extra) => all(
-      `SELECT ${expr} AS k, CAST(COUNT(*) AS INTEGER) AS n ${from} WHERE ${s.base} AND ${extra} GROUP BY 1`);
-    facetsQ = Promise.all([
-      one(`COALESCE(t.activity, 'Sin clasificar')`, `${s.sierraC} AND ${s.tagC}`),
-      one(`t.sierra`, `t.sierra IS NOT NULL AND t.sierra <> '' AND ${s.actC} AND ${s.tagC}`),
-      all(`SELECT tg AS k, CAST(COUNT(*) AS INTEGER) AS n ${from}
-              CROSS JOIN LATERAL json_array_elements_text(COALESCE(NULLIF(t.tags, ''), '[]')::json) tg
-              WHERE ${s.base} AND ${s.actC} AND ${s.sierraC} GROUP BY 1`),
-    ]).then(([a, si, tg]) => {
-      const obj = rows => Object.fromEntries(rows.map(r => [r.k, r.n]));
-      return { activity: obj(a), sierra: obj(si), tags: obj(tg) };
-    });
-    if (dataVersion != null) {
-      _facetCache.set(key, facetsQ);
-      facetsQ.catch(() => _facetCache.delete(key));
+    // One pass over the matches (without box/pill filters), then the three cascading counts from it
+    facetsQ = () => all(
+      `WITH c AS MATERIALIZED (
+         SELECT t.activity, t.sierra, t.tags, ${s.actC} AS a_ok, ${s.sierraC} AS s_ok, ${s.tagC} AS t_ok
+         FROM track_search t WHERE ${s.base})
+       SELECT 'a' AS kind, COALESCE(activity, 'Sin clasificar') AS k, CAST(COUNT(*) AS INTEGER) AS n FROM c WHERE s_ok AND t_ok GROUP BY 2
+       UNION ALL
+       SELECT 's', sierra, CAST(COUNT(*) AS INTEGER) FROM c WHERE sierra IS NOT NULL AND sierra <> '' AND a_ok AND t_ok GROUP BY 2
+       UNION ALL
+       SELECT 'g', tg, CAST(COUNT(*) AS INTEGER) FROM c CROSS JOIN LATERAL unnest(c.tags) tg WHERE a_ok AND s_ok GROUP BY 2`)
+      .then(rows => {
+        const f = { activity: {}, sierra: {}, tags: {} };
+        for (const r of rows) f[r.kind === 'a' ? 'activity' : r.kind === 's' ? 'sierra' : 'tags'][r.k] = r.n;
+        return f;
+      });
+    if (dataVersion != null && !serial) {
+      const pending = facetsQ();
+      facetsQ = () => pending;
+      _facetCache.set(key, pending);
+      pending.catch(() => _facetCache.delete(key));
       if (_facetCache.size > FACETS_CACHE_MAX) _facetCache.delete(_facetCache.keys().next().value);
     }
   }
 
-  const [totals, rows, starts, facets] = await Promise.all([totalsQ, itemsQ, startsQ, facetsQ]);
+  // One client runs one query at a time: inside a transaction (fuzzy mode) they go in turn
+  const jobs = [totalsQ, itemsQ, startsQ, facetsQ].map(f => f || (() => null));
+  let totals, rows, starts, facets;
+  if (serial) { const out = []; for (const f of jobs) out.push(await f()); [totals, rows, starts, facets] = out; }
+  else [totals, rows, starts, facets] = await Promise.all(jobs.map(f => f()));
   const coords = g => { try { return JSON.parse(g).coordinates; } catch { return null; } };
   const r0 = v => (v != null ? Math.round(v) : null);
   const items = rows.map(t => {
@@ -236,6 +271,22 @@ async function runSearch(db, p, viewer, { dataVersion = null, lite = false } = {
   };
 }
 
+/** Exact search; if the text finds nothing at all (not only in this box) it is repeated by similarity. */
+async function runSearch(db, p, viewer, opts = {}) {
+  const out = await searchOnce(db, p, viewer, opts);
+  if (opts.lite || !p.q || out.total > 0 || p.fuzzy) return out;
+  // Matches outside the visible box mean the text is right: the box is just empty
+  const s = buildSearchSql({ ...p, bbox: null }, viewer);
+  const outside = await db.get(...bind(`SELECT 1 AS x FROM track_search t WHERE ${s.base} AND ${s.actC} AND ${s.sierraC} AND ${s.tagC} LIMIT 1`, s.args));
+  if (outside) return out;
+  const fp = { ...p, fuzzy: true };
+  // strict_word_similarity_threshold is a session setting: the queries run in one transaction that sets it
+  const fz = typeof db.tx === 'function'
+    ? await db.tx(async d => { await d.exec(`SET LOCAL pg_trgm.strict_word_similarity_threshold = ${FUZZY_THRESHOLD}`); return searchOnce(d, fp, viewer, { ...opts, serial: true }); })
+    : await searchOnce(db, fp, viewer, opts);
+  return fz.total > 0 ? { ...fz, fuzzy: true } : out;
+}
+
 // Data the visor used to derive from the whole catalog: years, owners, slider maxima and a robust
 // "where most routes are" box (5th–95th percentile, so a few far-away outliers don't zoom the map out).
 // Depends only on the viewer and the data, so it is cached per data version.
@@ -247,13 +298,13 @@ async function runMeta(db, viewer, { dataVersion = null } = {}) {
     const s = buildSearchSql(parseSearchParams(new URLSearchParams()), viewer);
     const all = sql => db.all(...bind(sql, s.args));
     const [years, owners, mx, core] = await Promise.all([
-      all(`SELECT DISTINCT substr(t.date, 1, 4) AS y FROM tracks t WHERE ${s.base} AND t.date ~ '^[0-9]{4}' ORDER BY 1 DESC`),
-      all(`SELECT t.owner_id AS id, u.username, CAST(COUNT(*) AS INTEGER) AS n FROM tracks t JOIN users u ON u.id = t.owner_id
+      all(`SELECT DISTINCT substr(t.date, 1, 4) AS y FROM track_search t WHERE ${s.base} AND t.date ~ '^[0-9]{4}' ORDER BY 1 DESC`),
+      all(`SELECT t.owner_id AS id, u.username, CAST(COUNT(*) AS INTEGER) AS n FROM track_search t JOIN users u ON u.id = t.owner_id
            WHERE ${s.base} GROUP BY 1, 2 ORDER BY u.username COLLATE "es-x-icu"`),
-      db.get(...bind(`SELECT MAX(t.distance) AS d, MAX(t.elevation_gain) AS e FROM tracks t WHERE ${s.base}`, s.args)),
-      db.get(...bind(`SELECT percentile_cont(0.05) WITHIN GROUP (ORDER BY t.sw_lat) AS s, percentile_cont(0.05) WITHIN GROUP (ORDER BY t.sw_lon) AS w,
-                             percentile_cont(0.95) WITHIN GROUP (ORDER BY t.ne_lat) AS n, percentile_cont(0.95) WITHIN GROUP (ORDER BY t.ne_lon) AS e
-                      FROM tracks t WHERE ${s.base}`, s.args)),
+      db.get(...bind(`SELECT MAX(t.distance) AS d, MAX(t.elevation_gain) AS e FROM track_search t WHERE ${s.base}`, s.args)),
+      db.get(...bind(`SELECT percentile_cont(0.05) WITHIN GROUP (ORDER BY ST_YMin(t.box)) AS s, percentile_cont(0.05) WITHIN GROUP (ORDER BY ST_XMin(t.box)) AS w,
+                             percentile_cont(0.95) WITHIN GROUP (ORDER BY ST_YMax(t.box)) AS n, percentile_cont(0.95) WITHIN GROUP (ORDER BY ST_XMax(t.box)) AS e
+                      FROM track_search t WHERE ${s.base}`, s.args)),
     ]);
     return {
       years: years.map(r => r.y),
@@ -270,4 +321,4 @@ async function runMeta(db, viewer, { dataVersion = null } = {}) {
   return q;
 }
 
-module.exports = { parseSearchParams, buildSearchSql, runSearch, runMeta, bind, SORTS, COUNT_CAP };
+module.exports = { parseSearchParams, buildSearchSql, runSearch, runMeta, bind, SORTS, COUNT_CAP, CYCLING, RUNNING, FUZZY_THRESHOLD };

@@ -26,7 +26,7 @@ async function postgresFixture() {
   await admin.end();
   const url = new URL(config.DATABASE_URL); url.pathname = '/gpxlibrary_test';
   const pool = new Pool({ connectionString: url.toString() });
-  await pool.query('DROP TABLE IF EXISTS user_list_tracks, user_lists, tracks, users, config_activities, config_sierras, job_logs, jobs, schema_migrations CASCADE');
+  await pool.query('DROP TABLE IF EXISTS track_search, user_list_tracks, user_lists, tracks, users, config_activities, config_sierras, job_logs, jobs, schema_migrations CASCADE');
   await migrate(pool);
   for (const t of SEED) {
     const [geom, ele] = lineParams(t.pts);
@@ -102,5 +102,72 @@ describe('postgres', () => {
     assert.equal(await repo.deleteTrack(3), 'TracksGps/store/c.gpx');
     assert.equal(await repo.getTrack(3), null);
     assert.equal(await repo.deleteTrack(3), null);
+  });
+
+  // ── track_search (migration 020): narrow table kept by triggers, and the typo-tolerant text search ──
+  const LINE = 'LINESTRING(-3.95 40.84, -3.96 40.85, -3.97 40.86)';
+  const ins = (id, name, extra = {}) => repo.pool.query(
+    `INSERT INTO tracks (id, name, file, activity, sierra, tags, sw_lat, sw_lon, ne_lat, ne_lon, raw_count, distance, elevation_gain,
+        visibility, search_text, ibp_hiking, ibp_bicycle, geom, geom_s1, geom_view)
+     VALUES ($1::int, $2, 'TracksGps/store/ts' || $1::text || '.gpx', $3, 'Guadarrama', $4, 40.84, -3.97, 40.86, -3.95, 3, $5, 300, $6, $7, $8, 20,
+        ST_GeomFromText($9, 4326), ST_GeomFromText($9, 4326), ST_GeomFromText($9, 4326))`,
+    [id, name, extra.activity ?? 'Senderismo', extra.tags ?? '["cumbre"]', extra.distance ?? 12, extra.visibility ?? 'public',
+     name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() + ' guadarrama senderismo', extra.ibp ?? 120, LINE]);
+  const ts = async id => (await repo.pool.query('SELECT * FROM track_search WHERE id = $1', [id])).rows[0];
+  const search = (q, viewer = { sub: 999, role: 'user' }) =>
+    require('./search').runSearch(require('./sql').openSql({ pool: repo.pool }), require('./search').parseSearchParams(new URLSearchParams(q)), viewer);
+
+  it('track_search follows INSERT, UPDATE and DELETE of tracks by itself', async () => {
+    await ins(100, 'Cumbre de Peñalara');
+    let r = await ts(100);
+    assert.deepEqual([r.name, r.visibility, r.hidden, r.tags, r.grade, r.ibp_sort, r.circular], ['Cumbre de Peñalara', 'public', false, ['cumbre'], 2, 120, false]);
+    await repo.pool.query("UPDATE tracks SET visibility = 'private', tags = '[\"a\",\"b\"]', difficulty = 4, geom_view = NULL, circular = 1 WHERE id = 100");
+    r = await ts(100);
+    assert.deepEqual([r.visibility, r.hidden, r.tags, r.grade, r.circular], ['private', true, ['a', 'b'], 4, true]);
+    await repo.pool.query("UPDATE tracks SET geom_s1 = NULL WHERE id = 100");
+    assert.equal(await ts(100), undefined, 'a route without geom_s1 is not searchable');
+    await repo.pool.query("UPDATE tracks SET geom_s1 = geom WHERE id = 100");
+    await repo.pool.query("UPDATE tracks SET tags = 'not json' WHERE id = 100");
+    assert.deepEqual((await ts(100)).tags, []);
+    await repo.pool.query('DELETE FROM tracks WHERE id = 100');
+    assert.equal(await ts(100), undefined);
+  });
+
+  it('search by text finds exact words; a typo only matches by similarity and is marked fuzzy', async () => {
+    await ins(101, 'Cumbre de Peñalara');
+    await ins(102, 'Ruta del Valle');
+    const exact = await search('q=penalara');
+    assert.deepEqual(exact.items.map(i => i.id), [101]);
+    assert.ok(!exact.fuzzy, 'an exact search is not fuzzy');
+    const typo = await search('q=pealara');
+    assert.equal(typo.fuzzy, true);
+    assert.deepEqual(typo.items.map(i => i.id), [101]);
+    assert.equal(typo.total, 1);
+    const none = await search('q=zzzqqq');
+    assert.equal(none.total, 0);
+    assert.ok(!none.fuzzy);
+    // Matches exist but outside the box: the text is right, so no fuzzy fallback
+    const away = await search('q=penalara&bbox=10,10,11,11');
+    assert.equal(away.total, 0);
+    assert.ok(!away.fuzzy);
+    // Private routes of others never come out, fuzzy or not
+    await repo.pool.query("UPDATE tracks SET visibility = 'private' WHERE id = 101");
+    assert.equal((await search('q=pealara')).total, 0);
+  });
+
+  it('search: near, pill counts and ordering come from track_search', async () => {
+    await repo.pool.query("UPDATE tracks SET visibility = 'public' WHERE id = 101");
+    const r = await search('near=40.85,-3.96,5');
+    assert.deepEqual(r.items.map(i => i.id).sort(), [101, 102]);
+    assert.deepEqual(r.facets.activity, { Senderismo: 2 });
+    assert.deepEqual(r.facets.tags, { cumbre: 2 });
+    assert.equal((await search('near=38,-3.96,5')).total, 0);
+    assert.deepEqual((await search('sort=id-desc')).items.map(i => i.id), [102, 101]);
+  });
+
+  it('migration 020 lists of cycling/running activities match repo/search.js', () => {
+    const sql = require('fs').readFileSync(require('path').join(__dirname, 'pg', '020_track_search.sql'), 'utf8');
+    const { CYCLING, RUNNING } = require('./search');
+    for (const list of [CYCLING, RUNNING]) assert.ok(sql.includes(`ARRAY[${list.map(a => `'${a}'`).join(',')}]`), list.join());
   });
 });

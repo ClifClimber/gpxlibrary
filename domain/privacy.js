@@ -22,8 +22,10 @@ function privacyZones(points, radiusM, seed = 0) {
   const ends = [points[0], points[points.length - 1]];
   return ends.map((p, i) => {
     const ang = rand(seed, 1 + i * 3) * 2 * Math.PI;
-    const off = rand(seed, 2 + i * 3) * 0.4 * r0;        // centre moved up to 40 % of the radius
-    const r = r0 * (1.2 + rand(seed, 3 + i * 3) * 0.3);  // and the circle made 20–50 % bigger, so the real point stays inside
+    const r = r0 * (1.2 + rand(seed, 3 + i * 3) * 0.3);  // the circle is made 20–50 % bigger than the radius…
+    // …and its centre moved up to 40 % of the radius, but never so far that the disc of radius r0 around the real
+    // point sticks out of it (off + r0 ≤ r): nothing within r0 metres of the start/end is ever shown
+    const off = rand(seed, 2 + i * 3) * Math.min(0.4 * r0, r - r0);
     const lat = latOf(p) + (off * Math.cos(ang)) / 111320;
     const lon = lonOf(p) + (off * Math.sin(ang)) / (111320 * Math.cos(latOf(p) * Math.PI / 180));
     return { lat, lon, r };

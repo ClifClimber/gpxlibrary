@@ -890,6 +890,12 @@ function renderResponse(resp, f) {
   $('list-summary').textContent = resp.total && !resp.totalCapped
     ? `${nf0.format(resp.km)} km · ${nf0.format(resp.gain)} m de desnivel acumulado`
     : '';
+  if (resp.fuzzy) {   // no exact match for the text: the server looked for similar words
+    const note = document.createElement('div');
+    note.className = 'fuzzy-note';
+    note.textContent = `Resultados aproximados para «${$('text-search').value.trim()}»`;
+    $('list-summary').appendChild(note);
+  }
   renderList();
   syncMarkersFromResp(resp);
   try { updateFilterCounts(f, resp.facets); } catch (e) { console.error('updateFilterCounts:', e); }

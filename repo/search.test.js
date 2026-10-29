@@ -25,7 +25,7 @@ test('parseSearchParams: lists, numbers, text and limits', () => {
 
 test('buildSearchSql: the box only goes in `where`, never in the pill counts', () => {
   const s = buildSearchSql(P('bbox=-4,40,-3,41&act=MTB'), viewer);
-  assert.match(s.where, /geom_s1 && ST_MakeEnvelope/);
+  assert.match(s.where, /t.box && ST_MakeEnvelope/);
   assert.doesNotMatch(s.base, /ST_MakeEnvelope/);
   assert.doesNotMatch(s.base, /activity/);
   assert.match(s.actC, /t\.activity = ANY/);
@@ -50,6 +50,24 @@ test('buildSearchSql: LIKE wildcards in the text are escaped', () => {
 
 test('bind: renumbers and keeps only the parameters a query uses', () => {
   assert.deepEqual(bind('a = $3 AND b = $1 AND c = $3', ['x', 'y', 'z']), ['a = $2 AND b = $1 AND c = $2', ['x', 'z']]);
+});
+
+test('buildSearchSql: fuzzy mode uses trigram similarity for words of 3+ letters, exact LIKE otherwise', () => {
+  const s = buildSearchSql({ ...P('q=pealara de'), fuzzy: true }, viewer);
+  assert.match(s.base, /::text <<% t.search_text/);
+  assert.match(s.base, /t.search_text LIKE/);
+  assert.match(s.rank, /strict_word_similarity/);
+  const exact = buildSearchSql(P('q=pealara'), viewer);
+  assert.doesNotMatch(exact.base, /<%/);
+  assert.equal(exact.rank, null);
+});
+
+test('buildSearchSql: the radius is evaluated once when its ids are given', () => {
+  const p = P('near=40,-3,25');
+  assert.match(buildSearchSql(p, viewer).base, /ST_DWithin/);
+  const s = buildSearchSql(p, viewer, { nearIds: [1, 2] });
+  assert.doesNotMatch(s.base, /ST_DWithin/);
+  assert.match(s.nearSql, /ST_DWithin/);
 });
 
 test('COUNT_CAP is a sane limit', () => { assert.ok(COUNT_CAP >= 500); });

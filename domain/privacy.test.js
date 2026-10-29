@@ -37,3 +37,15 @@ test('privacyTrim: works with {lat, lon} objects and can hide a short route enti
   const pts = [{ lat: 40, lon: -3.7 }, { lat: 40.0005, lon: -3.7 }, { lat: 40.001, lon: -3.7 }];
   assert.equal(privacyTrim(pts, 500, 1).length, 0);
 });
+
+test('privacyZones: for every seed the disc of the radius around the real start/end is inside the zone', () => {
+  const R = 500, [s0] = [line[0]];
+  for (let seed = 1; seed <= 3000; seed++) {
+    const [z] = privacyZones(line, R, seed);
+    for (let a = 0; a < 360; a += 15) {   // points exactly R metres from the real point, in every direction
+      const lat = s0[0] + (R * Math.cos(a * Math.PI / 180)) / 111320;
+      const lon = s0[1] + (R * Math.sin(a * Math.PI / 180)) / (111320 * Math.cos(s0[0] * Math.PI / 180));
+      assert.ok(havM(lat, lon, z.lat, z.lon) <= z.r + 0.5, `seed ${seed}, angle ${a}`);
+    }
+  }
+});

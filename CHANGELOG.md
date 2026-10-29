@@ -2,6 +2,12 @@
 
 ## Sin publicar
 
+### Criterios de aceptación de la fase 3
+- **Privacidad (corrección):** la zona de privacidad podía dejar ver puntos a menos del radio elegido (el círculo se desplazaba más de lo que se agrandaba). Ahora siempre cubre el radio completo alrededor del inicio y del final reales. Ningún usuario real tenía zona activa, así que no hubo que recalcular nada
+- `scripts/privacy-check.js`: prueba de punta a punta con dos cuentas temporales (búsqueda, ficha, detalle, GPX, exportación y ruta privada); 79 comprobaciones correctas
+- **Búsqueda tolerante a erratas:** si un texto no encuentra nada, se repite por similitud («pealara» → Peñalara, «gredoz» → Gredos) y el visor avisa «Resultados aproximados»
+- **Tabla `track_search`** (migración 020), estrecha y mantenida por triggers: con 100.000 rutas, recuentos sin caché y radio de 25 km por debajo de 125 ms en el p95 (antes hasta 290 ms). `scripts/bench-search.js` para medirlo
+
 ---
 
 ## v2.14.0 — 2026-10-29
