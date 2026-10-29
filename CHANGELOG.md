@@ -3,7 +3,7 @@
 ## Sin publicar
 
 ### Visor: qué rutas enseña el mapa
-- Por defecto el mapa solo enseña los iconos de las rutas de la página de la lista; al cambiar de página o mover el mapa cambian con ella. La línea aparece solo al pasar el ratón
+- Por defecto el mapa solo enseña los iconos de las rutas de la página de la lista; al cambiar de página o mover el mapa cambian con ella. Si las rutas de la zona con los filtros caben en 3 páginas (45), las enseña todas. La línea aparece solo al pasar el ratón
 - Cada usuario puede elegir en Perfil → Mi perfil → Visor: solo la página, la página más un punto en el inicio de las demás rutas de la zona, o todas (migración 017, `users.prefs`)
 
 ### Fase 3 · bloque 2: geometrías derivadas

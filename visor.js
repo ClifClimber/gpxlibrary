@@ -246,8 +246,11 @@ const cluster = L.markerClusterGroup({
 cluster.addLayers(items.map(it => it.marker).filter(Boolean));
 let _clusterKey = '';
 function syncClusterMarkers() {
-  // In 'page' mode only the markers of the list page go on the map
-  const vis = items.filter((it, ri) => it.visible && it.marker && (gMapMode !== 'page' || gPageRis.has(ri)));
+  // In 'page' mode only the markers of the list page go on the map, unless the routes in view fit in
+  // PAGE_MODE_ALL_PAGES pages: then all of them (the map acts as the filter)
+  const nVisible = items.reduce((n, it) => n + (it.visible ? 1 : 0), 0);
+  const pageOnly = gMapMode === 'page' && nVisible > PAGE_MODE_ALL_PAGES * PAGE_SIZE;
+  const vis = items.filter((it, ri) => it.visible && it.marker && (!pageOnly || gPageRis.has(ri)));
   const key = gMapMode + '|' + vis.map(it => it.track.id).join(',');
   if (key === _clusterKey) return;
   _clusterKey = key;
@@ -333,6 +336,7 @@ function previewTrack(i, on) {
 // all   = icono de todas las rutas de la zona
 const gMapMode = ['page', 'mixed', 'all'].includes(gCurrentUser?.prefs?.map_mode) ? gCurrentUser.prefs.map_mode : 'page';
 let gPageRis = new Set();
+const PAGE_MODE_ALL_PAGES = 3;
 const dotIcon = color => L.divIcon({ html: `<div class="start-dot" style="background:${color}"></div>`,
   className: 'start-dot-wrap', iconSize: [12, 12], iconAnchor: [6, 6] });
 function syncMapMode(force) {
