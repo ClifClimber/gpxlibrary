@@ -2,6 +2,12 @@
 
 ## Sin publicar
 
+---
+
+## v2.14.0 — 2026-10-29
+
+Fase 3 (escala) completa: el visor deja de descargar el catálogo entero y pide al servidor solo lo que se ve. La primera carga pasa de unos 920 KB a unos 18 KB, y está medido con 100.000 rutas sintéticas.
+
 ### Visor: qué rutas enseña el mapa
 - Por defecto el mapa solo enseña los iconos de las rutas de la página de la lista; al cambiar de página o mover el mapa cambian con ella. Si las rutas de la zona con los filtros caben en 3 páginas (45), las enseña todas. La línea aparece solo al pasar el ratón
 - Cada usuario puede elegir en Perfil → Mi perfil → Visor: solo la página, la página más un punto en el inicio de las demás rutas de la zona, o todas (migración 017, `users.prefs`)

@@ -650,7 +650,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.13.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.14.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">29 octubre 2026</div>
         </div>
       </div>
@@ -669,8 +669,23 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.13.0</span>
+            <span class="cl-version">v2.14.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">29 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>El visor ya no descarga el catálogo</b>: pide al servidor solo la página que se ve (<code>/api/search</code>); la primera carga pasa de unos 920 KB a unos 18 KB y está medido con 100.000 rutas</li>
+            <li><b>El mapa enseña las rutas de la página de la lista</b> (todas si caben en 3 páginas); la línea aparece al pasar el ratón. Cada usuario puede elegir otro modo en Perfil → Mi perfil → Visor</li>
+            <li><b>Búsqueda por palabras</b> en el visor, Comparar y Trazar: todas las palabras en cualquier orden, sin acentos, también actividad y provincia</li>
+            <li>Respuestas comprimidas (brotli/gzip): el código del visor pasa de 76 KB a 21 KB</li>
+            <li>Geometrías precalculadas por ruta con la zona de privacidad aplicada (migraciones 016–019) y trabajo <code>track-derive</code></li>
+            <li>Retirados el catálogo completo (<code>/api/catalog</code>) y la columna <code>catalog_pts</code></li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.13.0</span>
             <span class="cl-date">29 oct 2026</span>
           </div>
           <ul class="cl-list">
