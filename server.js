@@ -19,6 +19,7 @@ const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampl
         privacyZones, inZones, searchText } = require('./domain');
 const crypto = require('crypto');
 const { sendMail } = require('./mail/smtp');
+const { parseSearchParams, runSearch } = require('./repo/search');
 const { enableCompression } = require('./http/compress');
 const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
@@ -155,7 +156,7 @@ function baseUrl(req) {
 const ADMIN_PAGES = new Set(['/admin', '/config', '/admin.html']);
 const USER_PAGES  = new Set(['/', '/track', '/trazar', '/compare', '/perfil', '/editor', '/editor.html', '/subir', '/subir.html', '/lista']);
 const USER_API = [
-  ['GET',    /^\/api\/(catalog|tags|geo|tracks)$/],
+  ['GET',    /^\/api\/(catalog|search|tags|geo|tracks)$/],
   ['GET',    /^\/api\/config\/(activities|sierras|provinces)$/],
   ['GET',    /^\/api\/tracks\/\d+(\/gpx|\/export-gpx)?$/],
   ['POST',   /^\/api\/tracks\/export-gpx$/],
@@ -736,7 +737,10 @@ async function buildCatalog(viewer) {
 // Catalog cache: keyed by ownerId (null = public only, N = public + own private)
 let _catalogDataVersion = null;
 const _catalogCacheMap = new Map(); // ownerId → { data, etag, size }
-function invalidateCatalogCache() { _catalogDataVersion = null; _catalogCacheMap.clear(); }
+let _dataEpoch = 0;   // bumped on every in-process data change (edits don't go through the job queue)
+function invalidateCatalogCache() { _catalogDataVersion = null; _catalogCacheMap.clear(); _dataEpoch++; }
+// Version of the visible data: job queue (imports and other jobs, also from the external worker) + local edits
+async function dataVersionKey() { return `${await jobQueue().dataVersion().catch(() => 0)}:${_dataEpoch}`; }
 
 async function apiCatalog(req, res) {
   try {
@@ -898,10 +902,10 @@ async function apiMoveTrack(req, res, id) {
 
 // Keeps tracks.search_text in step with name/sierra/province/tags (synchronous; the rest of the derived data doesn't depend on them).
 async function refreshSearchText(ids, changed) {
-  if (!changed.some(k => ['name', 'sierra', 'province', 'tags'].includes(k))) return;
+  if (!changed.some(k => ['name', 'sierra', 'zone', 'province', 'tags'].includes(k))) return;
   try {
     const db = sqlDb();
-    for (const t of await db.all('SELECT id, name, sierra, province, tags FROM tracks WHERE id = ANY(?::int[])', [ids]))
+    for (const t of await db.all('SELECT id, name, sierra, zone, province, tags FROM tracks WHERE id = ANY(?::int[])', [ids]))
       await db.run('UPDATE tracks SET search_text = ? WHERE id = ?', [searchText(t), t.id]);
   } catch (e) { console.error('search_text:', e.message); }
 }
@@ -2000,6 +2004,18 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/catalog' && method === 'GET')
     return apiCatalog(req, res);
+
+  // Visor search (phase 3): one page of routes in the box + totals + cascading pill counts
+  if (pathname === '/api/search' && method === 'GET') {
+    try {
+      const out = await runSearch(sqlDb(), parseSearchParams(searchParams), req.user, { dataVersion: await dataVersionKey() });
+      res.writeHead(200, { ...J, 'Cache-Control': 'no-cache' });
+      return res.end(JSON.stringify(out));
+    } catch (e) {
+      console.error('search:', e.message);
+      res.writeHead(500, J); return res.end(JSON.stringify({ error: e.message }));
+    }
+  }
 
   if (pathname === '/api/tracks/recent-ids' && method === 'GET') {
     try {

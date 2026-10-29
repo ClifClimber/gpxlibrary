@@ -13,6 +13,8 @@ services:
     image: postgis/postgis:17-3.5
     container_name: gpxlibrary-db
     restart: unless-stopped
+    # Parallel queries need shared memory; Docker's default /dev/shm (64 MB) runs out with large tables
+    shm_size: 256mb
     environment:
       POSTGRES_DB: ${PG_DB:-gpxlibrary}
       POSTGRES_USER: ${PG_USER:-gpx}

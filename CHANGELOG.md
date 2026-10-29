@@ -6,6 +6,14 @@
 - Por defecto el mapa solo enseña los iconos de las rutas de la página de la lista; al cambiar de página o mover el mapa cambian con ella. Si las rutas de la zona con los filtros caben en 3 páginas (45), las enseña todas. La línea aparece solo al pasar el ratón
 - Cada usuario puede elegir en Perfil → Mi perfil → Visor: solo la página, la página más un punto en el inicio de las demás rutas de la zona, o todas (migración 017, `users.prefs`)
 
+### Fase 3 · bloque 3: búsqueda en el servidor
+- Nuevo `GET /api/search` (`repo/search.js`): una página de rutas de la zona visible con los mismos filtros, orden y recuentos en cascada que el visor, más el punto de inicio y la línea simplificada de cada ruta para el resaltado. Los recuentos se guardan en caché por filtros y versión de datos
+- Con el mapa muy alejado cuenta hasta 1.000 rutas («más de 1.000») y no suma km ni desnivel
+- `scripts/search-check.js` compara la búsqueda con el visor actual: 0 diferencias en 400 búsquedas aleatorias, salvo dos mejoras (el texto también busca en la provincia y el radio mide la distancia a toda la línea)
+- Con 100.000 rutas sintéticas: 10–40 ms de mediana y menos de 150 ms en el p95 en casi todos los casos (radio 25 km: 270 ms). Índices para el orden por nombre y fecha (migración 018); `track-derive` genera `geom_s1/s2` también para las rutas que la zona de privacidad oculta enteras (solo las ve su dueño)
+- Docker: Postgres con 256 MB de memoria compartida (`shm_size`); con 64 MB fallaban las consultas en paralelo sobre tablas grandes
+- La búsqueda de texto también mira el campo `zone`
+
 ### Fase 3 · bloque 2: geometrías derivadas
 - Migración 016: `geom_view` (lo que ven los demás: geometría limpia o original menos la zona de privacidad del dueño), `geom_s1` (simplificada a 15 m), `geom_s2` (150 m), `start_point`, `search_text` (sin acentos) y `derived_at`, con índices GIST, trigram y btree
 - `domain/derive.js` con tests y trabajo `track-derive` (`--ids`, `--all`, `--owner`, `--missing`), que se encola tras importar, tras limpiar y al cambiar la zona de privacidad; `search_text` se actualiza al editar la ruta. Tolerancias en metros reales (corregidas por la latitud en 3857). El visor sigue recortando al vuelo hasta los bloques 3 y 4

@@ -28,7 +28,7 @@ const BATCH = 200;
   for (let i = 0; i < rows.length; i += BATCH) {
     const ids = rows.slice(i, i + BATCH).map(r => r.id);
     const tracks = await db.all(
-      `SELECT t.id, t.name, t.sierra, t.province, t.tags, t.cleaned, COALESCE(u.privacy_radius, 0) AS radius
+      `SELECT t.id, t.name, t.sierra, t.zone, t.province, t.tags, t.cleaned, COALESCE(u.privacy_radius, 0) AS radius
          FROM tracks t LEFT JOIN users u ON u.id = t.owner_id WHERE t.id = ANY(?::int[])`, [ids]);
     for (const t of tracks) {
       try {
@@ -40,15 +40,17 @@ const BATCH = 200;
         await db.run(
           `UPDATE tracks SET geom_view = CASE WHEN ?::text IS NULL THEN NULL ELSE ST_GeomFromText(?::text, 4326) END,
                   search_text = ?, derived_at = now() WHERE id = ?`, [wkt, wkt, searchText(t), t.id]);
+        // Simplified versions come from geom_view; when the privacy zone hides the whole route (geom_view NULL)
+        // they come from the full geometry, which only the owner gets (search excludes it for everyone else)
         await db.run(
           `UPDATE tracks SET
              -- Tolerances are real metres: 3857 stretches distances by 1/cos(latitude), so they are scaled likewise
-             geom_s1 = CASE WHEN geom_view IS NULL THEN NULL ELSE ST_Transform(ST_Simplify(ST_Transform(geom_view, 3857),
-                         ?::float8 / cos(radians(ST_Y(ST_Centroid(geom_view)))), true), 4326) END,
-             geom_s2 = CASE WHEN geom_view IS NULL THEN NULL ELSE ST_Transform(ST_Simplify(ST_Transform(geom_view, 3857),
-                         ?::float8 / cos(radians(ST_Y(ST_Centroid(geom_view)))), true), 4326) END,
+             geom_s1 = ST_Transform(ST_Simplify(ST_Transform(src.g, 3857), ?::float8 / cos(radians(ST_Y(ST_Centroid(src.g)))), true), 4326),
+             geom_s2 = ST_Transform(ST_Simplify(ST_Transform(src.g, 3857), ?::float8 / cos(radians(ST_Y(ST_Centroid(src.g)))), true), 4326),
              start_point = CASE WHEN geom_view IS NULL THEN NULL ELSE ST_StartPoint(geom_view) END
-           WHERE id = ?`, [DERIVE_TOLERANCES.s1, DERIVE_TOLERANCES.s2, t.id]);
+           FROM (SELECT COALESCE(geom_view, CASE WHEN cleaned = 1 AND geom_clean IS NOT NULL THEN geom_clean ELSE geom END) AS g
+                 FROM tracks WHERE id = ?) src
+           WHERE id = ?`, [DERIVE_TOLERANCES.s1, DERIVE_TOLERANCES.s2, t.id, t.id]);
       } catch (e) { errors++; console.log(`⚠ #${t.id}: ${e.message}`); }
       done++;
     }

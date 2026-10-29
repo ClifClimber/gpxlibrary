@@ -29,6 +29,8 @@ node scripts/db-copy.js --to postgres [--replace]
 # current catalog vs candidate queries (paginated list, ST_AsMVT tiles, trigram search) → data/bench/bench-<date>-<n>rutas.json
 node scripts/synth-tracks.js --count 10000 [--reset]
 node scripts/bench.js [--db bench|real] [--runs 30]
+# /api/search must give what visor.js computes from /api/catalog (random boxes and filters, throwaway account)
+node scripts/search-check.js [--base http://localhost:8081] [--runs 300]
 
 # Clean/smooth raw GPS points
 node scripts/clean-tracks.js [--ids 1,2,3] [--all]
@@ -100,6 +102,7 @@ Pure Node.js HTTP server. No framework. Routes:
 - `GET /trazar[?id=N]` → `trazar.html` (draw a new route or edit a copy of track N)
 - `GET /editor`, `/admin` → static HTML pages (`/config` redirects to `/admin#activities`)
 - `GET /api/catalog` — visor catalog (simplified points, stats, bounds, center, tags parsed, ibp rounded; same shape as the old catalog-data.js)
+- `GET /api/search` — visor search (phase 3, `repo/search.js`): `bbox=w,s,e,n`, filters (`act`, `sierra`, `tag` repeatable; `dmin/dmax`, `emin/emax`, `gmin/gmax` grade, `year`, `q`, `near=lat,lon,km`, `rtype`, `mine`, `user`, `ids`), `sort`, `page`, `size`, `line=s1|s2`, `starts=1`. Returns one page with start point, bounds and simplified hover line, the box totals (counted up to `COUNT_CAP` = 1000, then `totalCapped` and no km/ascent) and the cascading pill counts (not limited to the box, cached per filters + data version). Same semantics as visor.js; `node scripts/search-check.js` compares both against a running server. Others' routes are matched on `geom_s1`; indexes for the sort orders in migration `018`
 - `GET /api/tracks` — full track list for the editor (no points)
 - `GET /api/tracks/:id` — full track (parses `tags`/`waypoints_json`, attaches `points` array from DB, downsampled to 800 unless `?full=1`)
 - `PATCH /api/tracks/:id` — update metadata in the DB only (files are never moved or rewritten)
