@@ -650,7 +650,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.14.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.15.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">29 octubre 2026</div>
         </div>
       </div>
@@ -669,8 +669,22 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.14.0</span>
+            <span class="cl-version">v2.15.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">29 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Privacidad (corrección)</b>: la zona de privacidad podía dejar ver puntos a menos del radio elegido; ahora siempre cubre el radio completo alrededor del inicio y del final reales</li>
+            <li><b>Prueba de privacidad de punta a punta</b> (<code>scripts/privacy-check.js</code>): 79 comprobaciones en búsqueda, ficha, detalle, GPX, exportación y rutas privadas</li>
+            <li><b>Búsqueda tolerante a erratas</b>: si el texto no encuentra nada se busca por similitud («pealara» → Peñalara) y el visor avisa «Resultados aproximados»</li>
+            <li><b>Búsqueda más rápida a escala</b>: tabla <code>track_search</code> mantenida por triggers; con 100.000 rutas los recuentos y el radio responden en menos de 125 ms</li>
+            <li>Fase 3 cerrada: los siete criterios de aceptación verificados</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.14.0</span>
             <span class="cl-date">29 oct 2026</span>
           </div>
           <ul class="cl-list">

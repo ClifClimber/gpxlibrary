@@ -2,6 +2,12 @@
 
 ## Sin publicar
 
+---
+
+## v2.15.0 — 2026-10-29
+
+Cierre de la fase 3: los siete criterios de aceptación cumplidos y una corrección de privacidad.
+
 ### Criterios de aceptación de la fase 3
 - **Privacidad (corrección):** la zona de privacidad podía dejar ver puntos a menos del radio elegido (el círculo se desplazaba más de lo que se agrandaba). Ahora siempre cubre el radio completo alrededor del inicio y del final reales. Ningún usuario real tenía zona activa, así que no hubo que recalcular nada
 - `scripts/privacy-check.js`: prueba de punta a punta con dos cuentas temporales (búsqueda, ficha, detalle, GPX, exportación y ruta privada); 79 comprobaciones correctas
