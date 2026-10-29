@@ -19,7 +19,7 @@ const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampl
         privacyZones, inZones, searchText } = require('./domain');
 const crypto = require('crypto');
 const { sendMail } = require('./mail/smtp');
-const { parseSearchParams, runSearch } = require('./repo/search');
+const { parseSearchParams, runSearch, runMeta } = require('./repo/search');
 const { enableCompression } = require('./http/compress');
 const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
@@ -61,7 +61,7 @@ const MIME = {
 
 // ── Archivos estáticos ─────────────────────────────────────────────
 // Public: the pages and styles at the root, the browser scripts listed here and assets/.
-const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js']);
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js', 'visor2.js']);
 function isPublicFile(rel) {
   if (rel.split('/').some(s => s.startsWith('.'))) return false;
   if (rel.startsWith('assets/')) return true;
@@ -154,11 +154,11 @@ function baseUrl(req) {
 // ── Permisos por rol ───────────────────────────────────────────────
 // Non-admin users: viewer + search, track detail, compare, route drawing and their own profile.
 const ADMIN_PAGES = new Set(['/admin', '/config', '/admin.html']);
-const USER_PAGES  = new Set(['/', '/track', '/trazar', '/compare', '/perfil', '/editor', '/editor.html', '/subir', '/subir.html', '/lista']);
+const USER_PAGES  = new Set(['/', '/visor2', '/track', '/trazar', '/compare', '/perfil', '/editor', '/editor.html', '/subir', '/subir.html', '/lista']);
 const USER_API = [
   ['GET',    /^\/api\/(catalog|search|tags|geo|tracks)$/],
   ['GET',    /^\/api\/config\/(activities|sierras|provinces)$/],
-  ['GET',    /^\/api\/tracks\/\d+(\/gpx|\/export-gpx)?$/],
+  ['GET',    /^\/api\/tracks\/\d+(\/gpx|\/export-gpx|\/preview)?$/],
   ['POST',   /^\/api\/tracks\/export-gpx$/],
   ['POST',   /^\/api\/tracks\/bulk-delete$/],
   ['POST',   /^\/api\/tracks\/bulk-update$/],
@@ -1958,7 +1958,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(302, { Location: '/' }); return res.end();
   }
   // Single-track access: private tracks only for their owner; editing/deleting only for owner or admin.
-  const anyTrackMatch = pathname.match(/^\/api\/tracks\/(\d+)(?:\/(?:gpx|export-gpx))?$/);
+  const anyTrackMatch = pathname.match(/^\/api\/tracks\/(\d+)(?:\/(?:gpx|export-gpx|preview))?$/);
   if (anyTrackMatch && !isAdmin) {
     const t = await sqlDb().get('SELECT owner_id, visibility FROM tracks WHERE id = ?', [parseInt(anyTrackMatch[1])]);
     const own = t && t.owner_id === req.user.sub;
@@ -2008,11 +2008,28 @@ const server = http.createServer(async (req, res) => {
   // Visor search (phase 3): one page of routes in the box + totals + cascading pill counts
   if (pathname === '/api/search' && method === 'GET') {
     try {
-      const out = await runSearch(sqlDb(), parseSearchParams(searchParams), req.user, { dataVersion: await dataVersionKey() });
+      const dataVersion = await dataVersionKey();
+      const out = searchParams.get('meta') === '1'
+        ? await runMeta(sqlDb(), req.user, { dataVersion })
+        : await runSearch(sqlDb(), parseSearchParams(searchParams), req.user, { dataVersion });
       res.writeHead(200, { ...J, 'Cache-Control': 'no-cache' });
       return res.end(JSON.stringify(out));
     } catch (e) {
       console.error('search:', e.message);
+      res.writeHead(500, J); return res.end(JSON.stringify({ error: e.message }));
+    }
+  }
+
+  // Hover card / sheet of one route: the same item as /api/search (15 m line, privacy-trimmed for others)
+  const previewMatch = pathname.match(/^\/api\/tracks\/(\d+)\/preview$/);
+  if (previewMatch && method === 'GET') {
+    try {
+      const p = parseSearchParams(new URLSearchParams({ ids: previewMatch[1], size: '1', line: 's1' }));
+      const { items } = await runSearch(sqlDb(), p, req.user, { lite: true });
+      if (!items.length) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+      res.writeHead(200, { ...J, 'Cache-Control': 'private, max-age=60' });
+      return res.end(JSON.stringify(items[0]));
+    } catch (e) {
       res.writeHead(500, J); return res.end(JSON.stringify({ error: e.message }));
     }
   }
@@ -2775,6 +2792,8 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/track' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'track.html'), req);
 
+  if (pathname === '/visor2' && method === 'GET')
+    return serveStatic(res, path.join(ROOT, 'visor2.html'), req);
   if (pathname === '/trazar' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'trazar.html'), req);
   if (pathname === '/compare' && method === 'GET')

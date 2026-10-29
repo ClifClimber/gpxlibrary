@@ -152,14 +152,14 @@ function bind(sql, args) {
   return [sql.replace(/\$(\d+)/g, (_, n) => '$' + to.get(+n)), used.map(n => args[n - 1])];
 }
 
-async function runSearch(db, p, viewer, { dataVersion = null } = {}) {
+async function runSearch(db, p, viewer, { dataVersion = null, lite = false } = {}) {
   const s = buildSearchSql(p, viewer);
   const all = sql => db.all(...bind(sql, s.args));
   const get = sql => db.get(...bind(sql, s.args));
   const order = `${SORTS[p.sort] || SORTS.name}, ${TIEBREAK}`;
   const from = `FROM tracks t CROSS JOIN LATERAL (SELECT ${s.ibp} AS v) ibp`;
 
-  const totalsQ = get(
+  const totalsQ = lite ? { n: 0, km: 0, gain: 0 } : get(
     `SELECT CAST(COUNT(*) AS INTEGER) AS n, COALESCE(SUM(d), 0) AS km, COALESCE(SUM(g), 0) AS gain
      FROM (SELECT t.distance AS d, t.elevation_gain AS g ${from} WHERE ${s.where} LIMIT ${COUNT_CAP + 1}) x`);
   const itemsQ = all(
@@ -173,14 +173,14 @@ async function runSearch(db, p, viewer, { dataVersion = null } = {}) {
             ST_XMin(${s.geom}) AS w, ST_YMin(${s.geom}) AS s, ST_XMax(${s.geom}) AS e, ST_YMax(${s.geom}) AS n
      ${from} LEFT JOIN users u ON u.id = t.owner_id
      WHERE ${s.where} ORDER BY ${order} LIMIT ${p.size} OFFSET ${p.page * p.size}`);
-  const startsQ = p.starts
+  const startsQ = p.starts && !lite
     ? all(`SELECT t.id, t.activity, ST_Y(ST_StartPoint(${s.geom})) AS lat, ST_X(ST_StartPoint(${s.geom})) AS lon
               ${from} WHERE ${s.where} LIMIT 5000`)
     : null;
 
   const key = facetKey(p, viewer, dataVersion);
-  let facetsQ = dataVersion != null ? _facetCache.get(key) : null;
-  if (!facetsQ) {
+  let facetsQ = lite ? null : dataVersion != null ? _facetCache.get(key) : null;
+  if (!facetsQ && !lite) {
     const one = (expr, extra) => all(
       `SELECT ${expr} AS k, CAST(COUNT(*) AS INTEGER) AS n ${from} WHERE ${s.base} AND ${extra} GROUP BY 1`);
     facetsQ = Promise.all([
@@ -222,6 +222,7 @@ async function runSearch(db, p, viewer, { dataVersion = null } = {}) {
       line: line ? line.map(c => [c[1], c[0]]) : [],
     };
   });
+  if (lite) return { items };
   const capped = totals.n > COUNT_CAP;
   return {
     items, total: capped ? COUNT_CAP : totals.n, totalCapped: capped,
@@ -233,4 +234,38 @@ async function runSearch(db, p, viewer, { dataVersion = null } = {}) {
   };
 }
 
-module.exports = { parseSearchParams, buildSearchSql, runSearch, bind, SORTS, COUNT_CAP };
+// Data the visor used to derive from the whole catalog: years, owners, slider maxima and a robust
+// "where most routes are" box (5th–95th percentile, so a few far-away outliers don't zoom the map out).
+// Depends only on the viewer and the data, so it is cached per data version.
+const _metaCache = new Map();
+async function runMeta(db, viewer, { dataVersion = null } = {}) {
+  const key = JSON.stringify([dataVersion, viewer.sub, viewer.role === 'admin']);
+  if (dataVersion != null && _metaCache.has(key)) return _metaCache.get(key);
+  const q = (async () => {
+    const s = buildSearchSql(parseSearchParams(new URLSearchParams()), viewer);
+    const all = sql => db.all(...bind(sql, s.args));
+    const [years, owners, mx, core] = await Promise.all([
+      all(`SELECT DISTINCT substr(t.date, 1, 4) AS y FROM tracks t WHERE ${s.base} AND t.date ~ '^[0-9]{4}' ORDER BY 1 DESC`),
+      all(`SELECT t.owner_id AS id, u.username, CAST(COUNT(*) AS INTEGER) AS n FROM tracks t JOIN users u ON u.id = t.owner_id
+           WHERE ${s.base} GROUP BY 1, 2 ORDER BY u.username COLLATE "es-x-icu"`),
+      db.get(...bind(`SELECT MAX(t.distance) AS d, MAX(t.elevation_gain) AS e FROM tracks t WHERE ${s.base}`, s.args)),
+      db.get(...bind(`SELECT percentile_cont(0.05) WITHIN GROUP (ORDER BY t.sw_lat) AS s, percentile_cont(0.05) WITHIN GROUP (ORDER BY t.sw_lon) AS w,
+                             percentile_cont(0.95) WITHIN GROUP (ORDER BY t.ne_lat) AS n, percentile_cont(0.95) WITHIN GROUP (ORDER BY t.ne_lon) AS e
+                      FROM tracks t WHERE ${s.base}`, s.args)),
+    ]);
+    return {
+      years: years.map(r => r.y),
+      owners: owners.map(r => ({ id: r.id, username: r.username, n: r.n })),
+      maxDist: mx?.d != null ? Number(mx.d) : 0, maxEle: mx?.e != null ? Number(mx.e) : 0,
+      core: core && core.s != null ? [[Number(core.s), Number(core.w)], [Number(core.n), Number(core.e)]] : null,
+    };
+  })();
+  if (dataVersion != null) {
+    _metaCache.set(key, q);
+    q.catch(() => _metaCache.delete(key));
+    if (_metaCache.size > FACETS_CACHE_MAX) _metaCache.delete(_metaCache.keys().next().value);
+  }
+  return q;
+}
+
+module.exports = { parseSearchParams, buildSearchSql, runSearch, runMeta, bind, SORTS, COUNT_CAP };
