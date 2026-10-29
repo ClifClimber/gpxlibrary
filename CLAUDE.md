@@ -73,6 +73,8 @@ Roles: `admin` can use everything. Any other user only gets what `userMayAccess(
 - **Privacy zones**: `users.privacy_radius` (m, Perfil → Mi perfil). Others never see points near the start/end of that user's routes: `domain/privacy.js` (`privacyZones` moves and enlarges the circle with the track id as seed) applied by `applyPrivacy()` in the catalog (cached per viewer), `GET /api/tracks/:id` (also waypoints, bounds; sets `privacy_hidden`), GPX download and export (a trimmed GPX is generated instead of the original). The owner and admins see everything. Export endpoints skip tracks the viewer may not see.
 - **Own data**: `GET /api/profile/export` (ZIP: account, routes JSON + original GPX, lists, photos, avatar) and `DELETE /api/profile {password}` (deletes routes, files, photos, lists; not the last admin). App logs older than 30 days are deleted (`pruneLogs` in `scripts/applog.js`).
 
+Every response goes through `enableCompression()` (`http/compress.js`): text bodies ≥ 1 KB with status 200 are sent with brotli/gzip (the status line is held until `end`; `res.write` streams such as SSE pass untouched; bodies with an ETag are cached compressed).
+
 Static files are an allow-list (`isPublicFile()` in `server.js`): root `*.html`/`*.css`, the browser scripts in `PUBLIC_JS` and `assets/`. A new front-end script must be added to `PUBLIC_JS`. No CORS headers; non-GET requests with a foreign `Origin` get 403.
 
 Node.js HTTP server (`server.js`); PostgreSQL via `repo/postgres.js`. Requires Node v22+ for `node:sqlite` (used only in `db-copy.js` backup/restore).

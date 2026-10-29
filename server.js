@@ -19,6 +19,7 @@ const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampl
         privacyZones, inZones } = require('./domain');
 const crypto = require('crypto');
 const { sendMail } = require('./mail/smtp');
+const { enableCompression } = require('./http/compress');
 const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
 const { openSql } = require('./repo/sql');
@@ -1224,6 +1225,7 @@ const server = http.createServer(async (req, res) => {
   const _t0 = Date.now();
   const _origEnd = res.end.bind(res);
   res.end = function(...a) { const ms = Date.now() - _t0; if (ms > 80 && !String(res.getHeader('Content-Type')).includes('event-stream')) console.log(`[slow] ${ms}ms  ${method} ${pathname}`); return _origEnd(...a); };
+  enableCompression(req, res);   // brotli/gzip for JSON and text bodies
 
   // Same-origin only: no CORS headers, and changes requested by another site are refused
   // (a page on another origin could otherwise send POST/DELETE to this server from the browser).

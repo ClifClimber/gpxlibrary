@@ -2,6 +2,9 @@
 
 ## Sin publicar
 
+### Fase 3 · bloque 0: compresión
+- Las respuestas de texto (JSON, HTML, CSS, JS, GPX) se envían comprimidas con brotli o gzip cuando el navegador lo acepta (`http/compress.js`, sin dependencias). El catálogo del visor pasa de 3,1 MB a 0,92 MB y `visor.js` de 76 KB a 21 KB. Las respuestas con ETag se comprimen una vez y se guardan en una caché de 64 MB
+
 ---
 
 ## v2.13.0 — 2026-10-29
