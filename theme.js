@@ -67,6 +67,15 @@
       }
       // Admin is admin-only (the server refuses it too); the catalog is open to everyone
       if (me.role !== 'admin') nav.querySelectorAll('a[href="/admin"], a.admin-only').forEach(a => a.remove());
+      // "Actividad" link (feed) for logged-in users
+      if (!nav.querySelector('#nav-actividad')) {
+        const act = document.createElement('a');
+        act.id = 'nav-actividad'; act.href = '/actividad';
+        if (location.pathname === '/actividad') act.classList.add('active');
+        act.textContent = 'Actividad';
+        const uicon = nav.querySelector('#nav-perfil');
+        nav.insertBefore(act, uicon || null);
+      }
       // "Upload Trail" chip next to the user (import/draw a single track)
       if (!nav.querySelector('#nav-upload')) {
         const up = document.createElement('a');
