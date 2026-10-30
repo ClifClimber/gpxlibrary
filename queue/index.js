@@ -85,8 +85,13 @@ function createQueue(db, boss) {
 
     async log(id, lines) {
       if (!lines.length) return;
-      await db.run(`INSERT INTO job_logs (job_id, seq, level, text) VALUES ${lines.map(() => '(?, ?, ?, ?)').join(', ')}`,
+      await db.run(`INSERT INTO job_logs (job_id, seq, level, text) VALUES ${lines.map(() => '(?, ?, ?, ?)').join(', ')} ON CONFLICT (job_id, seq) DO NOTHING`,
         lines.flatMap(l => [id, l.seq, l.level, l.text]));
+    },
+
+    async maxSeq(id) {
+      const r = await db.get('SELECT COALESCE(MAX(seq), 0) AS m FROM job_logs WHERE job_id = ?', [id]);
+      return Number(r?.m ?? 0);
     },
 
     async complete(id, result = null) {
@@ -177,13 +182,14 @@ function createQueue(db, boss) {
     async recoverStale(staleSeconds = STALE_SECONDS) {
       const lost = `heartbeat_at < ${shift(-staleSeconds)}`;
       const a = await db.run(`UPDATE jobs SET status = 'cancelled', finished_at = ${db.NOW} WHERE status = 'cancelling' AND ${lost}`);
-      // Stale running jobs that have retries left: re-queue in our table and in pg-boss
+      // Stale running jobs that have retries left: clear their logs, re-queue in our table and in pg-boss
       const staleRows = await db.all(
         `UPDATE jobs SET status = 'queued', locked_by = NULL, run_at = ${db.NOW},
          error = 'El proceso que lo ejecutaba se detuvo; se reintenta', pgboss_id = NULL
          WHERE status = 'running' AND attempts < max_attempts AND ${lost}
          RETURNING id`);
       for (const row of staleRows) {
+        await db.run('DELETE FROM job_logs WHERE job_id = ?', [row.id]);
         const pgbossId = await boss.send(QUEUE_NAME, { job_id: row.id }).catch(() => null);
         if (pgbossId) await db.run(`UPDATE jobs SET pgboss_id = ? WHERE id = ?`, [pgbossId, row.id]);
       }

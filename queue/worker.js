@@ -14,10 +14,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
  * getQueue: () => queue bound to the current database (the server can switch engines).
  * onFinish(job, code, lines): called after each run (logs, cache invalidation…).
  * isPaused: () => true while the server is switching engine or store.
+ * concurrency: number of parallel job slots (default 3).
  */
 function createWorker({ getQueue, onFinish = () => {}, isPaused = () => false, pollMs = 1000, resolveScript = scriptOf,
-  heartbeatMs = 5000, id = `${os.hostname()}-${process.pid}`, log = console }) {
-  let running = false, current = null, stopping = false, lastHousekeeping = 0;
+  heartbeatMs = 5000, id = `${os.hostname()}-${process.pid}`, log = console, concurrency = 3 }) {
+  let running = false, stopping = false, lastHousekeeping = 0;
+  const active = new Map(); // job.id → { job, child }
 
   async function housekeeping(queue) {
     if (Date.now() - lastHousekeeping < 30000) return;
@@ -27,11 +29,13 @@ function createWorker({ getQueue, onFinish = () => {}, isPaused = () => false, p
     await queue.prune();
   }
 
-  function run(queue, job) {
-    return new Promise(resolve => {
+  async function run(queue, job) {
+    return new Promise(async resolve => {
       const script = resolveScript(job.type);
       const lines = [];
-      let seq = 0, pending = [], buf = '', cancelled = false;
+      // Start seq after any logs already stored (retry-safe: avoids PRIMARY KEY conflicts)
+      let seq = await queue.maxSeq(job.id).catch(() => 0);
+      let pending = [], buf = '', cancelled = false;
       const add = (text, level) => { lines.push(text); pending.push({ seq: ++seq, level: level || levelOf(text), text }); };
       const flush = async () => {
         if (!pending.length) return;
@@ -46,7 +50,7 @@ function createWorker({ getQueue, onFinish = () => {}, isPaused = () => false, p
       if (job.attempts > 1) add(`↻ Intento ${job.attempts} de ${job.maxAttempts}`);
 
       const child = spawn(process.execPath, [script, ...(job.payload.args || [])], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
-      current = { job, child, queue };
+      active.set(job.id, { job, child });
       child.stdout.on('data', chunk => {
         buf += chunk.toString().replace(/\r(?!\n)/g, '\n');
         const parts = buf.split('\n'); buf = parts.pop();
@@ -80,7 +84,7 @@ function createWorker({ getQueue, onFinish = () => {}, isPaused = () => false, p
             await queue.log(job.id, [{ seq: ++seq, level: 'warn', text: '⚠ Ha fallado; se reintentará más tarde' }]);
           }
         } catch (e) { log.error(`[worker] cerrar job ${job.id}: ${e.message}`); }
-        current = null;
+        active.delete(job.id);
         try { await onFinish(job, cancelled ? 130 : code, lines); } catch (e) { log.error(`[worker] onFinish: ${e.message}`); }
         resolve(code);
       };
@@ -109,17 +113,20 @@ function createWorker({ getQueue, onFinish = () => {}, isPaused = () => false, p
 
   return {
     id,
-    start() { if (!running) { running = true; stopping = false; loop(); } },
-    /** Stops claiming; a running job is interrupted and goes back to the queue. */
+    start() {
+      if (!running) {
+        running = true; stopping = false;
+        for (let i = 0; i < concurrency; i++) loop();
+      }
+    },
+    /** Stops claiming; running jobs are interrupted and go back to the queue. */
     async stop() {
       running = false;
       stopping = true;
-      if (current) {
-        current.child.kill();
-        for (let i = 0; i < 50 && current; i++) await sleep(100);
-      }
+      for (const { child } of active.values()) child.kill();
+      for (let i = 0; i < 50 && active.size; i++) await sleep(100);
     },
-    get busy() { return !!current; },
+    get busy() { return active.size > 0; },
   };
 }
 
