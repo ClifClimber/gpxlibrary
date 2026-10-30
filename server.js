@@ -208,6 +208,7 @@ const USER_API = [
   ['GET',    /^\/api\/tracks\/\d+\/rating$/],
   ['PUT',    /^\/api\/tracks\/\d+\/done$/],
   ['DELETE', /^\/api\/tracks\/\d+\/done$/],
+  ['GET',    /^\/api\/tracks\/\d+\/done$/],
   ['GET',    /^\/api\/feed$/],
 ];
 function userMayAccess(pathname, method) {
@@ -2984,6 +2985,11 @@ const server = http.createServer(async (req, res) => {
   if (doneMatch) {
     const tid = parseInt(doneMatch[1]);
     if (!req.user) { res.writeHead(401, J); return res.end(JSON.stringify({ error: 'Requiere sesión' })); }
+    if (method === 'GET') {
+      const mine = await sqlDb().get('SELECT done_on FROM track_done WHERE track_id=? AND user_id=?', [tid, req.user.sub]);
+      const agg  = await sqlDb().get('SELECT CAST(COUNT(*) AS INTEGER) AS cnt FROM track_done WHERE track_id=?', [tid]);
+      res.writeHead(200, J); return res.end(JSON.stringify({ done_on: mine?.done_on || null, count: agg?.cnt || 0 }));
+    }
     if (method === 'PUT') {
       const body = await parseBody(req);
       const doneOn = body.done_on || null;

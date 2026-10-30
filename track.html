@@ -1906,12 +1906,12 @@ async function loadRatingAndDone() {
       fetch(`/api/tracks/${trackId}/done`).then(r => r.ok ? r.json() : null),
     ]);
     if (rr) {
-      gMyRating = rr.my_stars;
-      renderStars(rr.my_stars, rr.avg, rr.count);
+      gMyRating = rr.mine;
+      renderStars(rr.mine, rr.avg, rr.count);
     }
     if (dr) {
       gMyDone = dr.done_on;
-      renderDoneBtn(dr.done_on);
+      renderDoneBtn(dr.done_on, dr.count);
     }
   } catch {}
 }
@@ -1929,19 +1929,24 @@ function renderStars(mine, avg, count) {
   }
 }
 
-function renderDoneBtn(doneOn) {
+let gDoneCount = 0;
+
+function renderDoneBtn(doneOn, count) {
   const btn = document.getElementById('done-btn');
   const lbl = document.getElementById('done-date-label');
   if (!btn) return;
+  if (count !== undefined) gDoneCount = count;
+  const countStr = gDoneCount > 0 ? ` (${gDoneCount})` : '';
   if (doneOn) {
-    btn.textContent = '✓ La he hecho';
+    btn.textContent = '✓ La he hecho' + countStr;
     btn.classList.add('active');
-    if (lbl) lbl.textContent = new Date(doneOn).toLocaleDateString('es-ES', { day:'numeric', month:'short', year:'numeric' });
+    if (lbl) lbl.textContent = 'desde ' + new Date(doneOn).toLocaleDateString('es-ES', { day:'numeric', month:'short', year:'numeric' });
   } else {
-    btn.textContent = 'La he hecho';
+    btn.textContent = 'La he hecho' + countStr;
     btn.classList.remove('active');
     if (lbl) lbl.textContent = '';
   }
+  btn.hidden = false;
 }
 
 async function setRating(stars) {
@@ -1966,7 +1971,7 @@ async function toggleDone() {
     if (gMyDone) {
       await fetch(`/api/tracks/${trackId}/done`, { method: 'DELETE' });
       gMyDone = null;
-      renderDoneBtn(null);
+      renderDoneBtn(null, gDoneCount - 1);
     } else {
       const today = new Date().toISOString().slice(0,10);
       const r = await fetch(`/api/tracks/${trackId}/done`, {
@@ -1976,7 +1981,7 @@ async function toggleDone() {
       });
       if (!r.ok) { alert('Error'); return; }
       gMyDone = today;
-      renderDoneBtn(today);
+      renderDoneBtn(today, gDoneCount + 1);
     }
   } catch { alert('Error'); }
 }
