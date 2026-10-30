@@ -227,6 +227,7 @@ tr.inactive td { opacity: .4; }
     <button class="seg-tab" data-tab="params">Parámetros</button>
     <button class="seg-tab" data-tab="gami">Gamificación</button>
     <button class="seg-tab" data-tab="multidia">Varios días</button>
+    <button class="seg-tab" data-tab="moderation">Moderación</button>
     <button class="seg-tab" data-tab="jobs">Trabajos</button>
     <button class="seg-tab" data-tab="logs">Logs</button>
     <button class="seg-tab" data-tab="about">Acerca de</button>
@@ -583,6 +584,62 @@ tr.inactive td { opacity: .4; }
       <div style="display:flex;gap:8px;margin-top:4px">
         <button class="btn btn-primary btn-sm" id="btn-params-save">Guardar</button>
         <button class="btn btn-ghost btn-sm" id="btn-params-reset">Restablecer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Moderación ── -->
+  <div class="tab-panel" id="tab-moderation">
+    <div class="card">
+      <div class="card-head">
+        <h2>Moderación</h2>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select class="select select-sm" id="mod-status-filter">
+            <option value="open">Abiertas</option>
+            <option value="resolved">Resueltas</option>
+            <option value="dismissed">Desestimadas</option>
+            <option value="all">Todas</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" id="btn-mod-refresh">↻</button>
+        </div>
+      </div>
+      <div id="mod-table-wrap">
+        <table class="table" id="mod-table">
+          <thead><tr>
+            <th>#</th><th>Tipo</th><th>ID</th><th>Motivo</th><th>Denunciante</th><th>Fecha</th><th>Estado</th><th>Acción</th>
+          </tr></thead>
+          <tbody id="mod-tbody"></tbody>
+        </table>
+        <div id="mod-empty" hidden style="padding:24px;text-align:center;color:var(--muted)">No hay denuncias con este filtro.</div>
+      </div>
+      <div id="mod-pages" style="display:flex;gap:6px;padding:12px 16px"></div>
+    </div>
+
+    <!-- Resolve modal -->
+    <div id="mod-resolve-modal" class="modal-overlay" hidden onclick="if(event.target===this)closeResolveModal()">
+      <div class="modal" style="max-width:440px">
+        <div class="modal-head">
+          <strong>Resolver denuncia</strong>
+          <button class="modal-close" onclick="closeResolveModal()">✕</button>
+        </div>
+        <div class="modal-body" style="display:grid;gap:10px">
+          <div id="mod-resolve-info" style="font-size:.88em;color:var(--ink-2);background:var(--soft);padding:10px;border-radius:6px"></div>
+          <label style="font-size:.88em;font-weight:600">Acción</label>
+          <select class="select" id="mod-resolve-action">
+            <option value="none">Sin acción (solo cerrar)</option>
+            <option value="dismiss">Desestimar (no infracción)</option>
+            <option value="hide">Ocultar contenido (poner privado)</option>
+            <option value="delete">Eliminar contenido</option>
+            <option value="warn">Avisar al usuario</option>
+            <option value="deactivate">Desactivar cuenta del usuario</option>
+          </select>
+          <label style="font-size:.88em;font-weight:600">Nota interna (opcional)</label>
+          <textarea class="input" id="mod-resolve-note" rows="3" placeholder="Nota para el registro…" style="resize:vertical"></textarea>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn-outline" onclick="closeResolveModal()">Cancelar</button>
+            <button class="btn" id="mod-resolve-submit">Resolver</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -3168,6 +3225,86 @@ loadActivities();
     window.gamiEnsureLoaded();  // populate gm-md-* and gm-groups before user edits them
     if (!loaded) { loaded = true; load(); }
   });
+})();
+</script>
+
+<script>
+// ── Moderación ────────────────────────────────────────────────────
+(function () {
+  let modPage = 1, modTotal = 0, modResolvingId = null;
+  const kindLabel = { track: 'Ruta', photo: 'Foto', user: 'Usuario', comment: 'Comentario' };
+  const actionLabel = { none: 'Cerrada', dismiss: 'Desestimada', hide: 'Oculta', delete: 'Eliminada', warn: 'Avisado', deactivate: 'Desactivada' };
+  const fmt = ts => ts ? new Date(ts).toLocaleDateString('es', { day:'2-digit', month:'2-digit', year:'2-digit' }) : '';
+
+  async function loadMod(page) {
+    modPage = page || 1;
+    const status = document.getElementById('mod-status-filter').value;
+    const r = await fetch(`/api/admin/reports?status=${encodeURIComponent(status)}&page=${modPage}`);
+    if (!r.ok) return;
+    const { total, rows } = await r.json();
+    modTotal = total;
+    const tbody = document.getElementById('mod-tbody');
+    const empty = document.getElementById('mod-empty');
+    if (!rows.length) { tbody.innerHTML = ''; empty.hidden = false; } else {
+      empty.hidden = true;
+      tbody.innerHTML = rows.map(rep => `<tr>
+        <td>${rep.id}</td>
+        <td>${kindLabel[rep.kind] || rep.kind}</td>
+        <td><a href="${linkFor(rep)}" target="_blank">#${rep.target_id}</a></td>
+        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(rep.reason)}">${esc(rep.reason)}</td>
+        <td>${esc(rep.reporter_name || '—')}</td>
+        <td>${fmt(rep.created_at)}</td>
+        <td><span class="chip${rep.status === 'open' ? ' active' : ''}">${rep.status}</span></td>
+        <td>${rep.status === 'open' ? `<button class="btn btn-sm btn-outline" onclick="openResolveModal(${rep.id}, ${JSON.stringify(esc(rep.reason)).replace(/"/g,"'")})">Resolver</button>` : (actionLabel[rep.action] || rep.action || '—')}</td>
+      </tr>`).join('');
+    }
+    renderModPages(total);
+  }
+
+  function linkFor(rep) {
+    if (rep.kind === 'track') return `/track?id=${rep.target_id}`;
+    if (rep.kind === 'user') return `/u/${rep.target_id}`;
+    if (rep.kind === 'photo') return `/api/photos/${rep.target_id}`;
+    return '#';
+  }
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function renderModPages(total) {
+    const pages = Math.ceil(total / 50) || 1;
+    const el = document.getElementById('mod-pages');
+    el.innerHTML = pages <= 1 ? '' : Array.from({length: pages}, (_,i) =>
+      `<button class="btn btn-sm${i+1===modPage?' active':''}" onclick="window._modLoad(${i+1})">${i+1}</button>`).join('');
+  }
+
+  window._modLoad = loadMod;
+  window.openResolveModal = function(id, reason) {
+    modResolvingId = id;
+    document.getElementById('mod-resolve-info').textContent = reason;
+    document.getElementById('mod-resolve-action').value = 'none';
+    document.getElementById('mod-resolve-note').value = '';
+    document.getElementById('mod-resolve-modal').removeAttribute('hidden');
+  };
+  window.closeResolveModal = function() { document.getElementById('mod-resolve-modal').setAttribute('hidden',''); };
+
+  document.getElementById('mod-resolve-submit').addEventListener('click', async () => {
+    const action = document.getElementById('mod-resolve-action').value;
+    const note = document.getElementById('mod-resolve-note').value.trim();
+    const btn = document.getElementById('mod-resolve-submit');
+    btn.disabled = true;
+    try {
+      const r = await fetch(`/api/admin/reports/${modResolvingId}/resolve`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ action, note }) });
+      if (!r.ok) throw new Error('Error');
+      closeResolveModal();
+      loadMod(modPage);
+    } catch { alert('Error al resolver la denuncia.'); }
+    btn.disabled = false;
+  });
+
+  document.getElementById('btn-mod-refresh').addEventListener('click', () => loadMod(modPage));
+  document.getElementById('mod-status-filter').addEventListener('change', () => loadMod(1));
+
+  document.querySelector('#admin-tabs [data-tab="moderation"]').addEventListener('click', () => loadMod(1));
 })();
 </script>
 

@@ -41,6 +41,8 @@
       if (btn.dataset.tab === 'planeadas' && !gPlaneadasLoaded) loadPlaneadas();
       if (btn.dataset.tab === 'stats' && !gStatsLoaded) loadStats();
       if (btn.dataset.tab === 'logros' && !gLogrosLoaded) loadLogros();
+      if (btn.dataset.tab === 'siguiendo' && !gSiguiendoLoaded) loadSiguiendo();
+      if (btn.dataset.tab === 'bloqueados' && !gBloqueadosLoaded) loadBloqueados();
     });
   });
 
@@ -276,8 +278,10 @@
 
   function renderListas() {
     const grid = $('lists-grid');
-    if (!gListas.length) { $('lists-empty').hidden = false; grid.innerHTML = ''; grid.appendChild($('lists-empty')); return; }
-    $('lists-empty').hidden = true;
+    if (!gListas.length) {
+      grid.innerHTML = '<div class="empty-state" id="lists-empty"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>Aún no tienes listas. ¡Crea una!</div>';
+      return;
+    }
     grid.innerHTML = gListas.map(l => `
       <div class="list-card" data-lid="${l.id}">
         <div class="list-card-head">
@@ -602,6 +606,49 @@
         ex.slice(0, 8).map(m => `<a href="/track?id=${m.id}" target="_blank">${esc(m.name)}</a> (${esc(m.reason)})`).join(', ') + (ex.length > 8 ? '…' : '');
     } catch {}
   }
+
+  // ── Siguiendo / Seguidores ───────────────────────────────────────
+  let gSiguiendoLoaded = false;
+  async function loadSiguiendo() {
+    gSiguiendoLoaded = true;
+    const avatarUrl = u => u.avatar_url ? `<img class="pf-avatar-sm" src="${esc(u.avatar_url)}" alt="">` : `<span class="pf-avatar-sm">${esc((u.display_name || u.username).charAt(0).toUpperCase())}</span>`;
+    const userCard = u => `<a class="sg-item" href="/u/${encodeURIComponent(u.username)}">
+      ${avatarUrl(u)}
+      <div class="sg-info"><div class="sg-name">${esc(u.display_name || u.username)}</div><div class="sg-user">@${esc(u.username)}</div></div>
+    </a>`;
+    try {
+      const r = await api('/api/profile/follows'); if (!r.ok) return;
+      const d = await r.json();
+      $('sg-following').innerHTML = d.following.length ? d.following.map(userCard).join('') : '<p style="color:var(--muted);font-size:14px">Todavía no sigues a nadie.</p>';
+      $('sg-followers').innerHTML = d.followers.length ? d.followers.map(userCard).join('') : '<p style="color:var(--muted);font-size:14px">Todavía no tienes seguidores.</p>';
+    } catch {}
+  }
+
+  let gBloqueadosLoaded = false;
+  async function loadBloqueados() {
+    gBloqueadosLoaded = true;
+    const el = $('bl-list');
+    try {
+      const r = await api('/api/profile/blocks'); if (!r.ok) return;
+      const list = await r.json();
+      if (!list.length) { el.innerHTML = '<p style="color:var(--muted);font-size:14px">No tienes ningún usuario bloqueado.</p>'; return; }
+      el.innerHTML = list.map(u => `<div class="sg-item" style="justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="pf-avatar-sm">${esc((u.display_name || u.username).charAt(0).toUpperCase())}</span>
+          <div class="sg-info"><div class="sg-name">${esc(u.display_name || u.username)}</div><div class="sg-user">@${esc(u.username)}</div></div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="unblockUser(${u.id}, this)">Desbloquear</button>
+      </div>`).join('');
+    } catch {}
+  }
+  window.unblockUser = async function(uid, btn) {
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/users/' + uid + '/block', { method: 'DELETE', headers: {'Content-Type':'application/json'} });
+      if (r.ok) { btn.closest('.sg-item').remove(); if (!$('bl-list').children.length) $('bl-list').innerHTML = '<p style="color:var(--muted);font-size:14px">No tienes ningún usuario bloqueado.</p>'; }
+    } catch {}
+    btn.disabled = false;
+  };
 
   // ── Init ─────────────────────────────────────────────────────────
   await loadProfile();

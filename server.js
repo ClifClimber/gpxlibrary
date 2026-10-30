@@ -191,6 +191,17 @@ const USER_API = [
   ['GET',    /^\/api\/lists\/\d+\/shares$/],
   ['POST',   /^\/api\/lists\/\d+\/shares$/],
   ['DELETE', /^\/api\/lists\/\d+\/shares\/\d+$/],
+  ['GET',    /^\/api\/profile\/follows$/],
+  ['POST',   /^\/api\/users\/\d+\/follow$/],
+  ['DELETE', /^\/api\/users\/\d+\/follow$/],
+  ['GET',    /^\/api\/users\/\d+\/follow-status$/],
+  ['GET',    /^\/api\/tracks\/\d+\/comments$/],
+  ['POST',   /^\/api\/tracks\/\d+\/comments$/],
+  ['DELETE', /^\/api\/tracks\/\d+\/comments\/\d+$/],
+  ['POST',   /^\/api\/users\/\d+\/block$/],
+  ['DELETE', /^\/api\/users\/\d+\/block$/],
+  ['GET',    /^\/api\/profile\/blocks$/],
+  ['POST',   /^\/api\/reports$/],
 ];
 function userMayAccess(pathname, method) {
   if (ADMIN_PAGES.has(pathname)) return false;
@@ -1231,6 +1242,19 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify(rows.map(p => ({ id: p.id, caption: p.caption, mime: p.mime, position: p.position,
           url: `/api/photos/${p.id}`, thumb: `/api/photos/${p.id}?size=thumb`, is_cover: p.id === cover }))));
       }
+      // Comentarios de una ruta pública (acceso anónimo)
+      const anonComments = pathname.match(/^\/api\/tracks\/(\d+)\/comments$/);
+      if (anonComments && method === 'GET') {
+        const tid = parseInt(anonComments[1]);
+        const ok = await sqlDb().get(`SELECT 1 FROM tracks t JOIN users u ON u.id = t.owner_id WHERE t.id = ? AND ${publicPages.WEB_VISIBLE}`, [tid]);
+        if (!ok) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+        const rows = await sqlDb().all(
+          `SELECT c.id, c.user_id, u.username, u.display_name, c.body, c.created_at
+           FROM track_comments c JOIN users u ON u.id = c.user_id
+           WHERE c.track_id = ? ORDER BY c.created_at`, [tid]);
+        res.writeHead(200, { ...J, 'Cache-Control': 'public, max-age=60' });
+        return res.end(JSON.stringify(rows));
+      }
       if (pathname === '/api/config/activities') return apiConfigList(res, 'config_activities');
       const pubPhoto = pathname.match(/^\/api\/photos\/(\d+)$/);
       if (pubPhoto) {
@@ -1765,6 +1789,95 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, J); return res.end(JSON.stringify({ totals, byActivity, byYear }));
   }
 
+  // ── Follows ──────────────────────────────────────────────────────
+  // GET /api/profile/follows  → { following: [...], followers: [...] }
+  if (pathname === '/api/profile/follows' && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const db = sqlDb();
+    const [following, followers] = await Promise.all([
+      db.all(`SELECT u.id, u.username, u.display_name, u.avatar_key, u.profile_public
+              FROM follows f JOIN users u ON u.id = f.followee_id
+              WHERE f.follower_id = ? AND u.active ORDER BY f.created_at DESC`, [req.user.sub]),
+      db.all(`SELECT u.id, u.username, u.display_name, u.avatar_key, u.profile_public
+              FROM follows f JOIN users u ON u.id = f.follower_id
+              WHERE f.followee_id = ? AND u.active ORDER BY f.created_at DESC`, [req.user.sub]),
+    ]);
+    const avatarUrl = key => key ? `/api/profile/avatar/${encodeURIComponent(key)}` : null;
+    following.forEach(u => { u.avatar_url = avatarUrl(u.avatar_key); delete u.avatar_key; });
+    followers.forEach(u => { u.avatar_url = avatarUrl(u.avatar_key); delete u.avatar_key; });
+    res.writeHead(200, J); return res.end(JSON.stringify({ following, followers }));
+  }
+
+  // POST /api/users/:id/follow  DELETE /api/users/:id/follow
+  const followMatch = pathname.match(/^\/api\/users\/(\d+)\/follow$/);
+  if (followMatch) {
+    if (!requireAuth(req, res)) return;
+    const targetId = parseInt(followMatch[1]);
+    if (targetId === req.user.sub) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'No puedes seguirte a ti mismo' })); }
+    const db = sqlDb();
+    const target = await db.get('SELECT id FROM users WHERE id = ? AND active', [targetId]);
+    if (!target) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Usuario no encontrado' })); }
+    if (method === 'POST') {
+      await db.run('INSERT INTO follows (follower_id, followee_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [req.user.sub, targetId]);
+      res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, following: true }));
+    }
+    if (method === 'DELETE') {
+      await db.run('DELETE FROM follows WHERE follower_id = ? AND followee_id = ?', [req.user.sub, targetId]);
+      res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, following: false }));
+    }
+  }
+
+  // GET /api/users/:id/follow  → { following: bool }
+  const followCheckMatch = pathname.match(/^\/api\/users\/(\d+)\/follow-status$/);
+  if (followCheckMatch && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const targetId = parseInt(followCheckMatch[1]);
+    const row = await sqlDb().get('SELECT 1 FROM follows WHERE follower_id = ? AND followee_id = ?', [req.user.sub, targetId]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ following: !!row }));
+  }
+
+  // ── Bloqueos ──────────────────────────────────────────────────────
+  const blockMatch = pathname.match(/^\/api\/users\/(\d+)\/block$/);
+  if (blockMatch) {
+    if (!requireAuth(req, res)) return;
+    const targetId = parseInt(blockMatch[1]);
+    if (targetId === req.user.sub) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'No puedes bloquearte a ti mismo' })); }
+    if (method === 'POST') {
+      await sqlDb().run('INSERT INTO blocks(blocker_id, blocked_id) VALUES(?,?) ON CONFLICT DO NOTHING', [req.user.sub, targetId]);
+      await sqlDb().run('DELETE FROM follows WHERE (follower_id=? AND followee_id=?) OR (follower_id=? AND followee_id=?)', [req.user.sub, targetId, targetId, req.user.sub]);
+      res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, blocked: true }));
+    }
+    if (method === 'DELETE') {
+      await sqlDb().run('DELETE FROM blocks WHERE blocker_id=? AND blocked_id=?', [req.user.sub, targetId]);
+      res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, blocked: false }));
+    }
+  }
+
+  // GET /api/profile/blocks → lista de usuarios bloqueados por mí
+  if (pathname === '/api/profile/blocks' && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const rows = await sqlDb().all(
+      `SELECT u.id, u.username, u.display_name, u.avatar_key, b.created_at
+       FROM blocks b JOIN users u ON u.id = b.blocked_id
+       WHERE b.blocker_id = ? ORDER BY b.created_at DESC`, [req.user.sub]);
+    res.writeHead(200, J); return res.end(JSON.stringify(rows));
+  }
+
+  // ── Denuncias ─────────────────────────────────────────────────────
+  // POST /api/reports  { kind, target_id, reason }
+  if (pathname === '/api/reports' && method === 'POST') {
+    if (!requireAuth(req, res)) return;
+    const { kind, target_id, reason } = await parseBody(req);
+    const validKinds = ['track', 'photo', 'user', 'comment'];
+    if (!validKinds.includes(kind) || !target_id || !reason?.trim()) {
+      res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Datos incompletos' }));
+    }
+    await sqlDb().run(
+      'INSERT INTO reports(reporter_id, kind, target_id, reason) VALUES(?,?,?,?)',
+      [req.user.sub, kind, parseInt(target_id), reason.trim().slice(0, 500)]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+  }
+
   // ── Listas de rutas del usuario ───────────────────────────────────
   // Mis listas (propias)
   if (pathname === '/api/lists' && method === 'GET') {
@@ -2153,6 +2266,50 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, cover_photo_id: newCover }));
   }
 
+
+  // ── Comentarios de un track ───────────────────────────────────────
+  const commentsMatch = pathname.match(/^\/api\/tracks\/(\d+)\/comments$/);
+  if (commentsMatch) {
+    const tid = parseInt(commentsMatch[1]);
+    if (method === 'GET') {
+      const t = await sqlDb().get('SELECT owner_id, visibility FROM tracks WHERE id = ?', [tid]);
+      if (!t) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+      if (!isAdmin && t.visibility !== 'public' && t.owner_id !== req.user?.sub)
+        { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+      const rows = await sqlDb().all(
+        `SELECT c.id, c.user_id, u.username, u.display_name, c.body, c.created_at
+         FROM track_comments c JOIN users u ON u.id = c.user_id
+         WHERE c.track_id = ? ORDER BY c.created_at`, [tid]);
+      res.writeHead(200, { ...J, 'Cache-Control': 'no-cache' });
+      return res.end(JSON.stringify(rows));
+    }
+    if (method === 'POST') {
+      if (!req.user) { res.writeHead(401, J); return res.end(JSON.stringify({ error: 'Requiere sesión' })); }
+      const t = await sqlDb().get('SELECT owner_id, visibility FROM tracks WHERE id = ?', [tid]);
+      if (!t) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+      if (!isAdmin && t.visibility !== 'public' && t.owner_id !== req.user.sub)
+        { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
+      const body = await parseBody(req);
+      const text = (body.body || '').trim();
+      if (!text || text.length > 4000) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Comentario inválido (1–4000 caracteres)' })); }
+      const row = await sqlDb().get(
+        'INSERT INTO track_comments (track_id, user_id, body) VALUES (?, ?, ?) RETURNING id, created_at',
+        [tid, req.user.sub, text]);
+      const me = await sqlDb().get('SELECT username, display_name FROM users WHERE id = ?', [req.user.sub]);
+      res.writeHead(201, J);
+      return res.end(JSON.stringify({ id: row.id, user_id: req.user.sub, username: me.username, display_name: me.display_name, body: text, created_at: row.created_at }));
+    }
+  }
+  const commentDelMatch = pathname.match(/^\/api\/tracks\/(\d+)\/comments\/(\d+)$/);
+  if (commentDelMatch && method === 'DELETE') {
+    const tid = parseInt(commentDelMatch[1]), cid = parseInt(commentDelMatch[2]);
+    if (!req.user) { res.writeHead(401, J); return res.end(JSON.stringify({ error: 'Requiere sesión' })); }
+    const c = await sqlDb().get('SELECT user_id FROM track_comments WHERE id = ? AND track_id = ?', [cid, tid]);
+    if (!c) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+    if (!isAdmin && c.user_id !== req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Sin permiso' })); }
+    await sqlDb().run('DELETE FROM track_comments WHERE id = ?', [cid]);
+    res.writeHead(204); return res.end();
+  }
 
   if (pathname === '/api/db/temp-files' && method === 'GET') {
     const srcParam = searchParams.get('src');
@@ -2754,6 +2911,58 @@ const server = http.createServer(async (req, res) => {
     return apiAdminVacuum(res);
   if (pathname === '/api/admin/integrity' && method === 'GET')
     return apiAdminIntegrity(res);
+
+  // ── Moderación ────────────────────────────────────────────────────
+  // GET /api/admin/reports?status=open&page=1
+  if (pathname === '/api/admin/reports' && method === 'GET') {
+    const sp = new URL(req.url, 'http://x').searchParams;
+    const status = sp.get('status') || 'open';
+    const page = Math.max(1, parseInt(sp.get('page') || '1'));
+    const size = 50;
+    const db = sqlDb();
+    const where = status === 'all' ? '' : 'WHERE r.status = ?';
+    const params = status === 'all' ? [] : [status];
+    const total = (await db.get(`SELECT CAST(COUNT(*) AS INTEGER) AS n FROM reports r ${where}`, params)).n;
+    const rows = await db.all(
+      `SELECT r.*, reporter.username AS reporter_name, resolver.username AS resolved_by_name
+       FROM reports r
+       LEFT JOIN users reporter ON reporter.id = r.reporter_id
+       LEFT JOIN users resolver ON resolver.id = r.resolved_by
+       ${where} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
+      [...params, size, (page - 1) * size]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ total, page, size, rows }));
+  }
+
+  // POST /api/admin/reports/:id/resolve  { action, note? }
+  const reportResolveMatch = pathname.match(/^\/api\/admin\/reports\/(\d+)\/resolve$/);
+  if (reportResolveMatch && method === 'POST') {
+    const rid = parseInt(reportResolveMatch[1]);
+    const { action, note } = await parseBody(req);
+    const validActions = ['hide', 'delete', 'warn', 'deactivate', 'none', 'dismiss'];
+    if (!validActions.includes(action)) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Acción no válida' })); }
+    const db = sqlDb();
+    const report = await db.get('SELECT * FROM reports WHERE id = ?', [rid]);
+    if (!report) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+
+    if (action === 'hide' || action === 'delete') {
+      if (report.kind === 'track') {
+        if (action === 'hide') await db.run("UPDATE tracks SET visibility='private' WHERE id=?", [report.target_id]);
+        else await db.run('DELETE FROM tracks WHERE id=?', [report.target_id]);
+      } else if (report.kind === 'photo') {
+        if (action === 'delete') await db.run('DELETE FROM track_photos WHERE id=?', [report.target_id]);
+      } else if (report.kind === 'comment') {
+        if (action === 'delete') await db.run('DELETE FROM track_comments WHERE id=?', [report.target_id]);
+      }
+    } else if (action === 'deactivate') {
+      if (report.kind === 'user') await db.run("UPDATE users SET active=false WHERE id=?", [report.target_id]);
+    }
+
+    await db.run(
+      `UPDATE reports SET status=?, action=?, note=?, resolved_by=?, resolved_at=NOW()
+       WHERE id=?`,
+      [action === 'dismiss' ? 'dismissed' : 'resolved', action, note || null, req.user.sub, rid]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+  }
 
   const restoreMatch = pathname.match(/^\/api\/admin\/restore\/(.+)$/);
   if (restoreMatch && method === 'POST')

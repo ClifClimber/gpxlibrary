@@ -180,50 +180,366 @@ function injectRoute(trackHtml, meta) {
 
 // ── Profile ─────────────────────────────────────────────────────────
 const PROFILE_PAGE = 24;
+// IBP → difficulty label + CSS class
+function ibpDiff(ibp) {
+  if (ibp == null) return null;
+  if (ibp < 50)  return { label: 'Fácil',       cls: 'diff-easy' };
+  if (ibp < 100) return { label: 'Moderado',    cls: 'diff-mod' };
+  if (ibp < 200) return { label: 'Difícil',     cls: 'diff-hard' };
+  if (ibp < 400) return { label: 'Muy difícil', cls: 'diff-vhard' };
+  return                 { label: 'Extremo',     cls: 'diff-xtreme' };
+}
+
 async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
   const u = await db.get(
     `SELECT id, username, display_name, bio, avatar_key, profile_public, web_visible,
-            to_char(created_at, 'YYYY') AS since FROM users WHERE lower(username) = lower(?) AND active`, [username]);
-  // A private profile is only for people with an account
+            to_char(created_at, 'YYYY-MM') AS since FROM users WHERE lower(username) = lower(?) AND active`, [username]);
   if (!u || (!u.profile_public && !viewer)) return { status: 404, html: notFound({ base, viewer, what: 'Este perfil' }) };
   const canonical = userPath(u.username);
-  const totals = await db.get(
-    `SELECT CAST(COUNT(*) AS INTEGER) AS n, COALESCE(SUM(t.distance), 0) AS km, COALESCE(SUM(t.elevation_gain), 0) AS gain
-     FROM tracks t JOIN users u ON u.id = t.owner_id WHERE t.owner_id = ? AND ${WEB_VISIBLE}`, [u.id]);
-  const routes = await db.all(
-    `SELECT t.id, t.name, t.activity, t.sierra, t.distance, t.elevation_gain, t.cover_photo_id
-     FROM tracks t JOIN users u ON u.id = t.owner_id WHERE t.owner_id = ? AND ${WEB_VISIBLE}
-     ORDER BY t.date DESC NULLS LAST, t.id DESC LIMIT ${PROFILE_PAGE} OFFSET ${pageNo * PROFILE_PAGE}`, [u.id]);
-  const lists = await db.all(
-    `SELECT l.id, l.name, CAST((SELECT COUNT(*) FROM user_list_tracks lt WHERE lt.list_id = l.id) AS INTEGER) AS n
-     FROM user_lists l WHERE l.owner_id = ? AND l.visibility = 'public' ORDER BY l.created_at DESC`, [u.id]);
-  const actImg = await activityImages(db);
+  const [totals, routes, lists, actImg, followCounts, statsByActivity, statsByYear] = await Promise.all([
+    db.get(`SELECT CAST(COUNT(*) AS INTEGER) AS n, COALESCE(SUM(t.distance),0) AS km, COALESCE(SUM(t.elevation_gain),0) AS gain,
+                   CAST(SUM(CASE WHEN t.circular=1 THEN 1 ELSE 0 END) AS INTEGER) AS circular
+            FROM tracks t JOIN users u ON u.id=t.owner_id WHERE t.owner_id=? AND ${WEB_VISIBLE}`, [u.id]),
+    db.all(`SELECT t.id, t.name, t.activity, t.sierra, t.province, t.date, t.distance, t.elevation_gain, t.cover_photo_id,
+                   t.ibp_hiking, t.ibp_bicycle, t.ibp_running
+            FROM tracks t JOIN users u ON u.id=t.owner_id WHERE t.owner_id=? AND ${WEB_VISIBLE}
+            ORDER BY t.date DESC NULLS LAST, t.id DESC LIMIT ${PROFILE_PAGE} OFFSET ${pageNo * PROFILE_PAGE}`, [u.id]),
+    db.all(`SELECT l.id, l.name, l.description,
+                   CAST((SELECT COUNT(*) FROM user_list_tracks lt WHERE lt.list_id=l.id) AS INTEGER) AS n
+            FROM user_lists l WHERE l.owner_id=? AND l.visibility='public' ORDER BY l.created_at DESC`, [u.id]),
+    activityImages(db),
+    db.get(`SELECT CAST((SELECT COUNT(*) FROM follows WHERE followee_id=?) AS INTEGER) AS followers,
+                   CAST((SELECT COUNT(*) FROM follows WHERE follower_id=?) AS INTEGER) AS following`, [u.id, u.id]),
+    db.all(`SELECT t.activity, CAST(COUNT(*) AS INTEGER) AS count,
+                   ROUND(CAST(SUM(t.distance) AS NUMERIC),1) AS km, CAST(SUM(t.elevation_gain) AS INTEGER) AS gain
+            FROM tracks t JOIN users u ON u.id=t.owner_id
+            WHERE t.owner_id=? AND t.activity IS NOT NULL AND ${WEB_VISIBLE}
+            GROUP BY t.activity ORDER BY count DESC`, [u.id]),
+    db.all(`SELECT CAST(left(t.date,4) AS INTEGER) AS year, CAST(COUNT(*) AS INTEGER) AS count,
+                   ROUND(CAST(SUM(t.distance) AS NUMERIC),1) AS km
+            FROM tracks t JOIN users u ON u.id=t.owner_id
+            WHERE t.owner_id=? AND t.date IS NOT NULL AND length(t.date)>=4 AND ${WEB_VISIBLE}
+            GROUP BY year ORDER BY year DESC`, [u.id]),
+  ]);
+
   const name = u.display_name || u.username;
+  const sinceFormatted = u.since ? new Date(u.since + '-01').toLocaleDateString('es-ES', { year: 'numeric', month: 'long' }) : '';
   const description = clip(u.bio || `Rutas de ${name} en GPX Library: ${totals.n} rutas, ${nf0.format(totals.km)} km y ${nf0.format(totals.gain)} m de desnivel.`, 160);
   const pages = Math.ceil(totals.n / PROFILE_PAGE);
+  const viewerIsOwner = viewer && viewer.sub === u.id;
+
+  const avatarEl = u.avatar_key
+    ? `<img class="up-avatar-img" src="${esc(avatarUrl(u.avatar_key))}" alt="${esc(name)}">`
+    : `<span class="up-avatar-img up-avatar-init">${esc(name.charAt(0).toUpperCase())}</span>`;
+
+  // Follow button (JS fills in state for logged-in non-owners; static "Entrar" for anonymous)
+  const followBtnSidebar = viewerIsOwner ? ''
+    : viewer
+      ? `<button class="btn up-follow-btn" id="follow-btn" data-uid="${u.id}">Seguir</button>`
+      : `<a class="btn up-follow-btn" href="/login?next=${encodeURIComponent(canonical)}">Seguir</a>`;
+
+  // Bar chart helper (same style as perfil.js)
+  const barChart = (data, labelFn, valFn, hintFn) => {
+    if (!data || !data.length) return '<span style="color:var(--muted);font-size:12px">Sin datos</span>';
+    const max = Math.max(...data.map(valFn)) || 1;
+    return data.map(d => {
+      const pct = Math.max(2, Math.round((valFn(d) / max) * 100));
+      return `<div class="bar-row" title="${esc(hintFn(d))}">
+        <div class="bar-label">${esc(labelFn(d))}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+        <div class="bar-val">${esc(String(valFn(d)))}</div>
+      </div>`;
+    }).join('');
+  };
+  const fmtKm = n => n == null ? '—' : Number(n).toLocaleString('es', { maximumFractionDigits: 0 }) + ' km';
+
+  // Tabs: anchor-based, JS switches active class
+  const tabRoutes  = `Rutas<span class="up-tab-count">${totals.n}</span>`;
+  const tabLists   = lists.length ? `Listas<span class="up-tab-count">${lists.length}</span>` : null;
+
+  // Route cards (feed style)
+  const trailCards = routes.map(t => {
+    const img = routeImage(t, actImg);
+    const ibp = t.ibp_hiking ?? t.ibp_bicycle ?? t.ibp_running;
+    const diff = ibpDiff(ibp);
+    const stats = [
+      t.distance ? `<span class="up-trail-stat"><b>${nf1.format(t.distance)}</b> km</span>` : '',
+      t.elevation_gain ? `<span class="up-trail-stat"><b>${nf0.format(t.elevation_gain)}</b> m+</span>` : '',
+      diff ? `<span class="up-trail-diff ${diff.cls}">${diff.label}</span>` : '',
+    ].filter(Boolean).join('');
+    const where = [t.sierra, t.province].filter(Boolean).join(' · ');
+    return `<div class="up-trail-card">
+      <div class="up-trail-head">
+        <span class="up-trail-act">${esc(t.activity || 'Ruta')}</span>
+        ${where ? `<span class="up-trail-where">${esc(where)}</span>` : ''}
+      </div>
+      <a class="up-trail-name" href="${esc(trackPath(t))}">${esc(t.name)}</a>
+      <div class="up-trail-stats">${stats}</div>
+      ${img ? `<a href="${esc(trackPath(t))}" class="up-trail-photo" style="background-image:url('${esc(img)}')"></a>` : ''}
+      <div class="up-trail-foot">
+        ${t.date ? `<span class="up-trail-date">${new Date(t.date + 'T00:00:00').toLocaleDateString('es-ES', { year:'numeric', month:'short', day:'numeric' })}</span>` : ''}
+        <a class="up-trail-link" href="${esc(trackPath(t))}">Ver ruta →</a>
+      </div>
+    </div>`;
+  }).join('');
+
+  const listCards = lists.map(l =>
+    `<a class="up-list-card" href="${esc(listPath(l))}">
+      <span class="up-list-icon">☰</span>
+      <div>
+        <div class="up-list-name">${esc(l.name)}</div>
+        <div class="up-list-sub">${l.n} ruta${l.n === 1 ? '' : 's'}</div>
+        ${l.description ? `<div class="up-list-desc">${esc(clip(l.description, 80))}</div>` : ''}
+      </div>
+    </a>`).join('');
+
+  const pager = pages > 1 ? `<div class="pub-pages">${pageNo > 0 ? `<a class="btn" href="${esc(canonical)}?p=${pageNo - 1}">← Anteriores</a>` : ''}${pageNo < pages - 1 ? `<a class="btn" href="${esc(canonical)}?p=${pageNo + 1}">Siguientes →</a>` : ''}</div>` : '';
+
   const body = `
-  <div class="pub-head">
-    <div style="display:flex;gap:16px;align-items:center">
-      ${u.avatar_key ? `<img class="pub-avatar lg" src="${esc(avatarUrl(u.avatar_key))}" alt="">` : `<span class="pub-avatar lg">${esc(name.charAt(0).toUpperCase())}</span>`}
-      <div><h1 style="margin:0">${esc(name)}</h1><div class="pub-kicker">@${esc(u.username)} · en GPX Library desde ${esc(u.since)}</div></div>
+<div class="up-layout">
+  <!-- Sidebar -->
+  <aside class="up-sidebar">
+    <div class="up-avatar-wrap">${avatarEl}</div>
+    ${followBtnSidebar}
+    ${u.display_name ? `<div class="up-sidebar-dname">${esc(u.display_name)}</div>` : ''}
+    <div class="up-sidebar-uname">@${esc(u.username)}</div>
+    ${u.bio ? `<p class="up-sidebar-bio">${esc(u.bio)}</p>` : ''}
+    <div class="up-follow-counts">
+      <div class="up-follow-stat"><b>${nf0.format(followCounts.followers)}</b><span>Seguidores</span></div>
+      <div class="up-follow-stat"><b>${nf0.format(followCounts.following)}</b><span>Siguiendo</span></div>
+    </div>
+    <hr class="up-divider">
+    <div class="up-sidebar-stats">
+      <div class="up-sstat"><b>${nf0.format(totals.n)}</b> rutas</div>
+      <div class="up-sstat"><b>${nf0.format(totals.km)} km</b> totales</div>
+      <div class="up-sstat"><b>${nf0.format(totals.gain)} m+</b> desnivel</div>
+    </div>
+    ${sinceFormatted ? `<div class="up-since">Miembro desde ${esc(sinceFormatted)}</div>` : ''}
+    ${viewer && !viewerIsOwner ? `<div class="up-extra-actions">
+      <button class="btn btn-outline btn-sm up-block-btn" id="block-btn" data-uid="${u.id}">Bloquear</button>
+      <button class="btn btn-outline btn-sm up-report-btn" id="report-user-btn" data-uid="${u.id}" onclick="openUserReport(${u.id})">Denunciar</button>
+    </div>` : ''}
+  </aside>
+
+  <!-- Main -->
+  <div class="up-main">
+    <div class="up-main-head">
+      <h1 class="up-main-title">${esc(name)}</h1>
+      <button class="btn btn-sm up-share-btn" id="up-share-btn" title="Compartir perfil">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Compartir
+      </button>
+    </div>
+
+    <nav class="up-tabs" id="up-tabs">
+      <button class="up-tab active" data-section="up-sec-rutas">${tabRoutes}</button>
+      ${tabLists ? `<button class="up-tab" data-section="up-sec-listas">${tabLists}</button>` : ''}
+      <button class="up-tab" data-section="up-sec-stats">Estadísticas</button>
+    </nav>
+
+    <div id="up-sec-rutas" class="up-section">
+      ${trailCards || `<p class="pub-note" style="padding:24px 0">${u.web_visible ? 'Todavía no hay rutas públicas.' : 'Las rutas de este usuario solo se ven dentro de GPX Library.'}</p>`}
+      ${pager}
+    </div>
+
+    ${tabLists ? `<div id="up-sec-listas" class="up-section" hidden>
+      <div class="up-list-grid">${listCards}</div>
+    </div>` : ''}
+
+    <div id="up-sec-stats" class="up-section" hidden>
+      <div class="up-stats-boxes">
+        <div class="up-stat-box"><div class="up-stat-val">${nf0.format(totals.n)}</div><div class="up-stat-lbl">Rutas públicas</div></div>
+        <div class="up-stat-box"><div class="up-stat-val">${fmtKm(totals.km)}</div><div class="up-stat-lbl">Kilómetros</div></div>
+        <div class="up-stat-box"><div class="up-stat-val">${nf0.format(totals.gain)} m</div><div class="up-stat-lbl">Desnivel acumulado</div></div>
+        <div class="up-stat-box"><div class="up-stat-val">${nf0.format(totals.circular)}</div><div class="up-stat-lbl">Rutas circulares</div></div>
+      </div>
+      ${statsByActivity.length ? `<h3 class="up-chart-title">Por actividad</h3>
+      <div class="up-chart">${barChart(statsByActivity, d => d.activity, d => Number(d.km), d => `${fmtKm(d.km)} · ${d.count} rutas`)}</div>` : ''}
+      ${statsByYear.length ? `<h3 class="up-chart-title">Por año</h3>
+      <div class="up-chart">${barChart(statsByYear, d => String(d.year), d => Number(d.km), d => `${fmtKm(d.km)} · ${d.count} rutas`)}</div>` : ''}
     </div>
   </div>
-  ${u.bio ? `<p class="pub-desc" style="max-width:68ch">${esc(u.bio)}</p>` : ''}
-  <div class="pub-card" style="max-width:520px"><div class="pub-stats" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-    <div class="pub-stat"><b>${nf0.format(totals.n)}</b><span>Rutas</span></div>
-    <div class="pub-stat"><b>${nf0.format(totals.km)} km</b><span>Distancia</span></div>
-    <div class="pub-stat"><b>${nf0.format(totals.gain)} m</b><span>Desnivel +</span></div>
-  </div></div>
-  <h2 style="font-size:18px;margin:24px 0 12px">Rutas</h2>
-  ${routes.length ? `<div class="pub-list">${routes.map(t => routeCard(t, routeImage(t, actImg))).join('')}</div>`
-    : `<p class="pub-note">${u.web_visible ? 'Todavía no hay rutas públicas.' : 'Las rutas de este usuario solo se ven dentro de GPX Library.'}</p>`}
-  ${pages > 1 ? `<div class="pub-pages">${pageNo > 0 ? `<a class="btn" href="${esc(canonical)}?p=${pageNo - 1}">← Anteriores</a>` : ''}
-    ${pageNo < pages - 1 ? `<a class="btn" href="${esc(canonical)}?p=${pageNo + 1}">Siguientes →</a>` : ''}</div>` : ''}
-  ${lists.length ? `<h2 style="font-size:18px;margin:28px 0 12px">Listas</h2><div class="pub-list">${lists.map(l =>
-    `<a class="pub-item" href="${esc(listPath(l))}"><div class="pub-item-body"><div class="pub-item-name">${esc(l.name)}</div><div class="pub-item-sub">${l.n} rutas</div></div></a>`).join('')}</div>` : ''}`;
+</div>
+
+${viewer && !viewerIsOwner ? `<script>
+(async function() {
+  const uid = ${u.id};
+
+  // Follow button
+  const followBtn = document.getElementById('follow-btn');
+  if (followBtn) {
+    try {
+      const r = await fetch('/api/users/' + uid + '/follow-status');
+      if (r.ok) {
+        const d = await r.json();
+        followBtn.textContent = d.following ? 'Dejar de seguir' : 'Seguir';
+        followBtn.classList.toggle('active', d.following);
+        followBtn.addEventListener('click', async () => {
+          followBtn.disabled = true;
+          const method = d.following ? 'DELETE' : 'POST';
+          const res = await fetch('/api/users/' + uid + '/follow', { method });
+          if (res.ok) { const j = await res.json(); d.following = j.following; followBtn.textContent = d.following ? 'Dejar de seguir' : 'Seguir'; followBtn.classList.toggle('active', d.following); }
+          followBtn.disabled = false;
+        });
+      }
+    } catch {}
+  }
+
+  // Block button
+  const blockBtn = document.getElementById('block-btn');
+  if (blockBtn) {
+    let blocked = false;
+    try {
+      const r = await fetch('/api/profile/blocks');
+      if (r.ok) { const list = await r.json(); blocked = list.some(b => b.id === uid); }
+    } catch {}
+    blockBtn.textContent = blocked ? 'Desbloquear' : 'Bloquear';
+    blockBtn.classList.toggle('active', blocked);
+    blockBtn.addEventListener('click', async () => {
+      blockBtn.disabled = true;
+      const res = await fetch('/api/users/' + uid + '/block', { method: blocked ? 'DELETE' : 'POST' });
+      if (res.ok) { blocked = !blocked; blockBtn.textContent = blocked ? 'Desbloquear' : 'Bloquear'; blockBtn.classList.toggle('active', blocked); }
+      blockBtn.disabled = false;
+    });
+  }
+})();
+
+// Report user modal
+function openUserReport(uid) {
+  const reason = prompt('Motivo de la denuncia (máx. 500 caracteres):');
+  if (!reason || !reason.trim()) return;
+  fetch('/api/reports', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'user', target_id: uid, reason: reason.trim().slice(0, 500) }) })
+    .then(r => r.ok ? alert('Denuncia enviada. La revisaremos en breve.') : alert('Error al enviar la denuncia.'))
+    .catch(() => alert('Error al enviar la denuncia.'));
+}
+</script>` : ''}
+<script>
+// Tab switching
+document.getElementById('up-tabs')?.addEventListener('click', e => {
+  const btn = e.target.closest('.up-tab'); if (!btn) return;
+  document.querySelectorAll('.up-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.up-section').forEach(s => s.hidden = true);
+  btn.classList.add('active');
+  const sec = document.getElementById(btn.dataset.section);
+  if (sec) sec.hidden = false;
+});
+// Share button
+document.getElementById('up-share-btn')?.addEventListener('click', async () => {
+  const url = location.href;
+  try { await navigator.clipboard.writeText(url); } catch { prompt('Copia el enlace:', url); }
+});
+</script>`;
+
+  const head = `<style>
+/* ── User profile layout ───────────────────────────── */
+.pub { max-width: 1100px; padding-top: 28px; }
+.up-layout { display: grid; grid-template-columns: 240px 1fr; gap: 32px; align-items: start; }
+@media (max-width: 720px) { .up-layout { grid-template-columns: 1fr; } }
+
+/* Sidebar */
+.up-sidebar { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 0 0 20px; overflow: hidden; position: sticky; top: 72px; }
+.up-avatar-wrap { width: 100%; aspect-ratio: 1; overflow: hidden; background: var(--soft); }
+.up-avatar-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.up-avatar-init { display: flex; align-items: center; justify-content: center; font-size: 56px; font-weight: 700; color: #fff; background: var(--accent); }
+.up-follow-btn { margin: 14px 16px 0; width: calc(100% - 32px); font-size: 14px; font-weight: 600; background: var(--accent); color: #fff; border: none; }
+.up-follow-btn:hover { opacity: .88; }
+.up-follow-btn.active { background: var(--soft); color: var(--ink-2); }
+.up-sidebar-dname { margin: 14px 16px 0; font-weight: 600; font-size: 16px; }
+.up-sidebar-uname { margin: 4px 16px 0; font-size: 13px; color: var(--muted); }
+.up-sidebar-bio { margin: 10px 16px 0; font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+.up-follow-counts { display: flex; gap: 0; margin: 14px 0 0; padding: 0 16px; }
+.up-follow-stat { flex: 1; text-align: center; }
+.up-follow-stat b { display: block; font-size: 18px; font-weight: 700; }
+.up-follow-stat span { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.up-divider { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
+.up-sidebar-stats { padding: 0 16px; display: flex; flex-direction: column; gap: 5px; }
+.up-sstat { font-size: 13px; color: var(--ink-2); }
+.up-sstat b { color: var(--ink); font-weight: 600; }
+.up-since { margin: 12px 16px 0; font-size: 12px; color: var(--muted); }
+.up-msg-btn { margin: 14px 16px 0; width: calc(100% - 32px); font-size: 13px; text-align: center; }
+.up-extra-actions { display: flex; gap: 6px; margin: 10px 16px 0; }
+.up-extra-actions .btn { flex: 1; font-size: 12px; }
+.up-block-btn.active { color: var(--danger); border-color: var(--danger); }
+
+/* Main header */
+.up-main-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.up-main-title { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.up-share-btn { display: flex; align-items: center; gap: 6px; }
+
+/* Tabs */
+.up-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--line); margin-bottom: 20px; }
+.up-tab { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; padding: 8px 16px; font-size: 14px; font-weight: 500; color: var(--ink-2); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: color .15s; }
+.up-tab:hover { color: var(--ink); }
+.up-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.up-tab-count { background: var(--soft); border-radius: 20px; padding: 1px 7px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.up-tab.active .up-tab-count { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+
+/* Trail cards */
+.up-trail-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
+.up-trail-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px 0; }
+.up-trail-act { font-size: 12px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .06em; }
+.up-trail-where { font-size: 12px; color: var(--muted); }
+.up-trail-name { display: block; font-size: 18px; font-weight: 700; line-height: 1.3; color: var(--ink); text-decoration: none; padding: 6px 16px 8px; }
+.up-trail-name:hover { color: var(--accent); }
+.up-trail-stats { display: flex; align-items: center; gap: 12px; padding: 0 16px 10px; flex-wrap: wrap; }
+.up-trail-stat { font-size: 14px; color: var(--ink-2); }
+.up-trail-stat b { color: var(--ink); }
+.up-trail-diff { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+.diff-easy   { background: #d1fae5; color: #065f46; }
+.diff-mod    { background: #fef9c3; color: #713f12; }
+.diff-hard   { background: #ffedd5; color: #9a3412; }
+.diff-vhard  { background: #fee2e2; color: #7f1d1d; }
+.diff-xtreme { background: #1a1a1a; color: #fff; }
+@media (prefers-color-scheme: dark) {
+  .diff-easy   { background: #064e3b; color: #6ee7b7; }
+  .diff-mod    { background: #422006; color: #fde68a; }
+  .diff-hard   { background: #431407; color: #fdba74; }
+  .diff-vhard  { background: #450a0a; color: #fca5a5; }
+  .diff-xtreme { background: #333; color: #fff; }
+}
+:root[data-theme="dark"] .diff-easy   { background: #064e3b; color: #6ee7b7; }
+:root[data-theme="dark"] .diff-mod    { background: #422006; color: #fde68a; }
+:root[data-theme="dark"] .diff-hard   { background: #431407; color: #fdba74; }
+:root[data-theme="dark"] .diff-vhard  { background: #450a0a; color: #fca5a5; }
+:root[data-theme="dark"] .diff-xtreme { background: #333; color: #fff; }
+:root[data-theme="light"] .diff-easy   { background: #d1fae5; color: #065f46; }
+:root[data-theme="light"] .diff-mod    { background: #fef9c3; color: #713f12; }
+:root[data-theme="light"] .diff-hard   { background: #ffedd5; color: #9a3412; }
+:root[data-theme="light"] .diff-vhard  { background: #fee2e2; color: #7f1d1d; }
+:root[data-theme="light"] .diff-xtreme { background: #1a1a1a; color: #fff; }
+.up-trail-photo { display: block; width: 100%; height: 220px; background: var(--soft) center/cover no-repeat; }
+.up-trail-foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; }
+.up-trail-date { font-size: 12px; color: var(--muted); }
+.up-trail-link { font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
+.up-trail-link:hover { text-decoration: underline; }
+
+/* Lists tab */
+.up-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.up-list-card { display: flex; align-items: flex-start; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; color: var(--ink); text-decoration: none; transition: box-shadow .15s; }
+.up-list-card:hover { box-shadow: var(--shadow); }
+.up-list-icon { font-size: 20px; opacity: .4; flex-shrink: 0; margin-top: 2px; }
+.up-list-name { font-weight: 600; font-size: 14px; line-height: 1.3; }
+.up-list-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.up-list-desc { font-size: 12px; color: var(--ink-2); margin-top: 4px; line-height: 1.4; }
+
+/* Stats tab */
+.up-stats-boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 28px; }
+.up-stat-box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.up-stat-val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.up-stat-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 3px; }
+.up-chart-title { font-size: 14px; font-weight: 600; color: var(--ink-2); margin: 20px 0 10px; text-transform: uppercase; letter-spacing: .04em; }
+.up-chart { display: flex; flex-direction: column; gap: 6px; }
+.bar-row { display: flex; align-items: center; gap: 8px; }
+.bar-label { width: 110px; font-size: 12px; color: var(--ink-2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+.bar-track { flex: 1; height: 14px; background: var(--soft); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; background: var(--accent); }
+.bar-val { width: 68px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+</style>`;
+
   return {
     status: 200,
-    html: page({ title: name, description, canonical: canonical + (pageNo ? `?p=${pageNo}` : ''), base, viewer, body,
+    html: page({ title: name, description, canonical: canonical + (pageNo ? `?p=${pageNo}` : ''), base, viewer, body, head,
       image: avatarUrl(u.avatar_key), noindex: !u.profile_public,
       jsonLd: { '@context': 'https://schema.org', '@type': 'ProfilePage', mainEntity: { '@type': 'Person', name, alternateName: u.username, url: base + canonical } } }),
   };
