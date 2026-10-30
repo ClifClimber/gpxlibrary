@@ -43,9 +43,12 @@
 .log-line.err { color: #f87171; } .log-line.ok { color: #4ade80; } .log-line.warn { color: #fbbf24; }
 
 /* Panel flotante de job (lateral derecho) */
-#job-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); z-index: 2100;
-  background: var(--surface); border-left: 1px solid var(--line); box-shadow: -6px 0 32px rgba(0,0,0,.18);
-  display: flex; flex-direction: column; transform: translateX(100%); transition: transform .22s cubic-bezier(.4,0,.2,1); }
+#job-panel-backdrop { position: fixed; inset: 0; z-index: 2099; background: rgba(15,23,42,.38);
+  opacity: 0; pointer-events: none; transition: opacity .22s; }
+#job-panel-backdrop.open { opacity: 1; pointer-events: auto; }
+#job-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); z-index: 2100;
+  background: var(--surface); border-left: 2px solid var(--accent); box-shadow: -8px 0 40px rgba(0,0,0,.25);
+  display: flex; flex-direction: column; transform: translateX(100%); transition: transform .25s cubic-bezier(.4,0,.2,1); }
 #job-panel.open { transform: translateX(0); }
 #job-panel-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 #job-panel-title { flex: 1; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1478,6 +1481,7 @@ tr.inactive td { opacity: .4; }
 </main>
 
 <!-- Panel flotante lateral para ver/cancelar un job -->
+<div id="job-panel-backdrop"></div>
 <div id="job-panel">
   <div id="job-panel-head">
     <div id="job-panel-title">Trabajo</div>
@@ -1922,6 +1926,7 @@ async function loadJobs() {
 // ── Panel flotante de job ─────────────────────────────────────────
 (function () {
   const panel      = document.getElementById('job-panel');
+  const backdrop   = document.getElementById('job-panel-backdrop');
   const panelTitle = document.getElementById('job-panel-title');
   const panelStatus= document.getElementById('job-panel-status');
   const panelBody  = document.getElementById('job-panel-body');
@@ -1932,6 +1937,7 @@ async function loadJobs() {
 
   function closePanel() {
     panel.classList.remove('open');
+    backdrop.classList.remove('open');
     clearInterval(panelPollTimer); panelPollTimer = null;
     panelJobId = null;
     panelCancel.hidden = true;
@@ -1940,6 +1946,7 @@ async function loadJobs() {
   }
   document.getElementById('job-panel-close').addEventListener('click', closePanel);
   document.getElementById('job-panel-close-btn').addEventListener('click', closePanel);
+  backdrop.addEventListener('click', closePanel);
   panelCat.addEventListener('click', () => { location.href = '/editor?last-import=1'; });
 
   function addLine(text, cls) {
@@ -1976,6 +1983,7 @@ async function loadJobs() {
     panelStatus.innerHTML = '';
     panelBody.innerHTML = '';
     panel.classList.add('open');
+    backdrop.classList.add('open');
 
     // Stream the log
     const r = await fetch(`/api/jobs/${id}/stream`).catch(e => { addLine('Error: ' + e.message, 'err'); return null; });
