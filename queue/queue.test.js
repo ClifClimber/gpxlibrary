@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
 const config = require('../config');
 const { openSql } = require('../repo/sql');
 const { migrate } = require('../repo/pg-migrate');
-const { createQueue } = require('./index');
+const { createQueue, startBoss } = require('./index');
 const { createWorker } = require('./worker');
 
 // Tiny scripts the worker runs in place of the real ones
@@ -34,7 +34,14 @@ async function postgresFixture() {
   const pool = new Pool({ connectionString: url.toString() });
   await migrate(pool);
   await pool.query('TRUNCATE jobs, job_logs RESTART IDENTITY');
-  return { db: openSql({ pool }), close: () => pool.end() };
+  // Override DATABASE_URL so startBoss connects to the test database
+  const origUrl = config.DATABASE_URL;
+  config.DATABASE_URL = url.toString();
+  const boss = await startBoss();
+  config.DATABASE_URL = origUrl;
+  // Flush any pending pg-boss jobs from previous runs
+  await pool.query("DELETE FROM pgboss.job").catch(() => {});
+  return { db: openSql({ pool }), boss, close: async () => { await boss.stop(); await pool.end(); } };
 }
 
 const until = async (fn, ms = 8000) => {
@@ -43,10 +50,15 @@ const until = async (fn, ms = 8000) => {
 };
 
 describe('postgres', () => {
-  let db, q, close;
-  before(async () => { const f = await postgresFixture(); if (f) ({ db, close } = f), q = createQueue(db); });
+  let db, boss, q, close;
+  before(async () => { const f = await postgresFixture(); if (f) ({ db, boss, close } = f), q = createQueue(db, boss); });
   after(async () => { if (close) await close(); });
-  const it = (title, fn) => test(title, async t => { if (!db) return t.skip('postgres no disponible'); await db.exec('DELETE FROM jobs'); await fn(); });
+  const it = (title, fn) => test(title, async t => {
+    if (!db) return t.skip('postgres no disponible');
+    await db.exec('DELETE FROM jobs');
+    await db.exec("DELETE FROM pgboss.job WHERE name = 'job'");
+    await fn();
+  });
 
   it('enqueue → claim → complete keeps the payload and records times', async () => {
     const j = await q.enqueue('ok', { args: ['--ids', '1,2'], n: 'ñ' });
@@ -77,6 +89,7 @@ describe('postgres', () => {
     assert.equal((await q.get(j.id)).status, 'queued');
     assert.equal(await q.claim('w'), null, 'not due yet (backoff)');
     await db.run('UPDATE jobs SET run_at = created_at WHERE id = ?', [j.id]);
+    await db.run(`UPDATE pgboss.job SET start_after = now() WHERE id = (SELECT pgboss_id FROM jobs WHERE id = ?)`, [j.id]);
     c = await q.claim('w');
     assert.equal(c.attempts, 2);
     assert.equal(await q.fail(c, 'boom again'), false);

@@ -5,14 +5,15 @@
 const { createRepo } = require('./repo');
 const { openSql } = require('./repo/sql');
 const { migrate } = require('./repo/pg-migrate');
-const { createQueue } = require('./queue');
+const { createQueue, startBoss } = require('./queue');
 const { createWorker } = require('./queue/worker');
 const { appendLog } = require('./scripts/applog');
 
 (async () => {
   const repo = createRepo();
   await migrate(repo.pool);
-  const queue = createQueue(openSql({ pool: repo.pool }));
+  const boss = await startBoss();
+  const queue = createQueue(openSql({ pool: repo.pool }), boss);
   const worker = createWorker({
     getQueue: () => queue,
     onFinish: (job, code, lines) => {
@@ -30,6 +31,7 @@ const { appendLog } = require('./scripts/applog');
     process.once(sig, async () => {
       console.log('[worker] parando…');
       await worker.stop();
+      await boss.stop().catch(() => {});
       await repo.close().catch(() => {});
       process.exit(0);
     });

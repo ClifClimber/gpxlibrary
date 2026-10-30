@@ -268,10 +268,11 @@ function countGpx(dir) {
 // use, or the separate `worker` service in docker-compose (EMBEDDED_WORKER=0). The pages still get the
 // same SSE stream: apiRunScript queues the job and relays its output from the database, so a closed
 // browser no longer stops an import.
-const { createQueue, TERMINAL } = require('./queue');
+const { createQueue, startBoss, TERMINAL } = require('./queue');
 const { createWorker } = require('./queue/worker');
 const { JOBS, IMPORT_TYPES, summarize, deriveArgsAfter } = require('./queue/jobs');
-const jobQueue = () => createQueue(sqlDb());
+let boss = null;
+const jobQueue = () => createQueue(sqlDb(), boss);
 
 const worker = process.env.EMBEDDED_WORKER === '0' ? null : createWorker({
   getQueue: jobQueue,
@@ -2855,14 +2856,17 @@ if (!process.env.HOST) {
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.once(sig, () => {
     server.close();
-    Promise.allSettled([worker ? worker.stop() : null]).then(() => Promise.allSettled([repo.close(), blob.close()])).finally(() => process.exit(0));
+    Promise.allSettled([worker ? worker.stop() : null, boss ? boss.stop() : null]).then(() => Promise.allSettled([repo.close(), blob.close()])).finally(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();
   });
 }
 
-// Run schema migrations before serving
-const ready = require('./repo/pg-migrate').migrate(repo.pool, console.log);
-ready.catch(e => { console.error('✗ Migración de PostgreSQL: ' + e.message); process.exit(1); });
+// Run schema migrations then start pg-boss before serving
+const ready = (async () => {
+  await require('./repo/pg-migrate').migrate(repo.pool, console.log);
+  boss = await startBoss();
+})();
+ready.catch(e => { console.error('✗ Arranque: ' + e.message); process.exit(1); });
 
 ready.then(() => server.listen(PORT, HOST, () => {
   if (worker) { worker.start(); console.log(`  Worker integrado: ${worker.id}`); }
