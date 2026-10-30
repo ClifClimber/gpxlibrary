@@ -152,7 +152,6 @@ const nf0 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 });
 const map = L.map('map', { center:[40.4,-3.7], zoom:7, zoomControl:false, renderer:L.canvas({ tolerance:4 }) });
 
 const tileLayers = {
-  'Carto Voyager':   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>', subdomains:'abcd', maxZoom:20 }),
   'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19 }),
   'Stadia Outdoors': L.tileLayer('https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png', { attribution:'© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://openmaptiles.org/">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/about">OpenStreetMap</a>', maxZoom:20 }),
   'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',   { attribution:'© OpenTopoMap', maxZoom:17 }),
@@ -973,7 +972,7 @@ function trackItemHtml(track) {
       ${photo ? `<div class="ti-photo" style="background-image:url('${photo}')"></div>` : ''}
       ${ownerName ? `<div class="ti-owner-row">
         <div class="ti-avatar" style="background:${c}" title="${escHtml(ownerName)}">${escHtml(ownerInitial)}</div>
-        <span class="ti-owner">${escHtml(ownerName)}</span>
+        <a class="ti-owner" href="/u/${encodeURIComponent(ownerName)}" target="_blank" title="Ver perfil de ${escHtml(ownerName)}">${escHtml(ownerName)}</a>
       </div>` : ''}
     </div>
   </div>`;

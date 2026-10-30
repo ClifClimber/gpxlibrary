@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Upload Trail — GPX Library</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.snow.css">
 <link rel="stylesheet" href="/shared.css">
 <script src="/theme.js"></script>
 <style>
@@ -49,6 +50,11 @@
 .wz-field textarea { min-height: 72px; resize: vertical; }
 .wz-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .precalc { font-size: 11px; color: var(--accent); margin-left: 6px; font-weight: 600; }
+/* Quill editor in subir */
+#f-desc-editor .ql-toolbar.ql-snow { border: 1px solid var(--border); border-radius: 9px 9px 0 0; background: var(--soft); }
+#f-desc-editor .ql-container.ql-snow { border: 1px solid var(--border); border-top: none; border-radius: 0 0 9px 9px; background: var(--surface); }
+#f-desc-editor .ql-editor { min-height: 72px; font-size: 13px; color: var(--ink); }
+#f-desc-editor .ql-editor.ql-blank::before { color: var(--ink-3); font-style: normal; }
 .priv-toggle { display: flex; gap: 8px; }
 .priv-opt { flex: 1; border: 1.5px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; cursor: pointer; font-size: 13px; text-align: center; }
 .priv-opt.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
@@ -177,7 +183,7 @@ body.edit-mode a.edit-only { display: inline-flex; }
       </div>
       <div class="wz-field">
         <label>Descripción <span class="precalc" id="wpt-fill" style="cursor:pointer" hidden>+ añadir puntos de paso</span></label>
-        <textarea class="input" id="f-desc" placeholder="Cuenta cómo es la ruta…"></textarea>
+        <div id="f-desc-editor" style="border-radius:9px;overflow:hidden;background:var(--surface)"></div>
       </div>
       <div class="wz-row">
         <div class="wz-field">
@@ -277,6 +283,7 @@ body.edit-mode a.edit-only { display: inline-flex; }
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.min.js"></script>
 <script src="/subir.js"></script>
 </body>
 </html>

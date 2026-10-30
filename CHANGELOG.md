@@ -2,6 +2,44 @@
 
 ## Sin publicar
 
+---
+
+## v2.16.0 — 2026-10-30
+
+Fase 4 bloques B, C, D, E y G: función social completa (seguir, comentarios, valoraciones, feed de actividad y moderación).
+
+### Fase 4 · bloque B: perfil público `/u/{usuario}`
+- Página pública del perfil con rutas, estadísticas y bio visible sin cuenta
+- Botón «Seguir / Dejar de seguir» en perfiles ajenos (seguidores sin aceptación)
+
+### Fase 4 · bloque C: seguir y feed de actividad
+- `/actividad`: página de actividad reciente de las personas que sigues (comentarios, valoraciones, marcas «la he hecho»); paginación por cursor; accesible para todos los usuarios
+- `/api/feed?cursor=`: devuelve notificaciones de los seguidos con cursor ISO
+
+### Fase 4 · bloque D: comentarios en rutas
+- Cualquier usuario con cuenta puede comentar rutas públicas (hasta 2000 caracteres, límite 10/hora)
+- Indicador de caracteres en el formulario; indicador «editado» en comentarios modificados
+- El autor puede editar su comentario hasta 15 min después de publicarlo (`PATCH /api/comments/:id`)
+- El autor, el dueño de la ruta y los administradores pueden eliminar comentarios
+- Botón «Denunciar» por comentario (para moderar)
+- El dueño puede desactivar los comentarios de su ruta (`comments_enabled`)
+
+### Fase 4 · bloque E: valoraciones y «la he hecho»
+- Widget de 5 estrellas en la ficha de cada ruta; media y recuento visibles; trigger SQL sincroniza `track_search`
+- Botón «La he hecho» con fecha; cada usuario puede registrar su propia marca y quitarla
+- El dueño de la ruta no puede valorar su propia ruta
+
+### Fase 4 · bloque G: moderación, bloqueos y denuncias
+- Cualquier usuario puede bloquear a otro (se excluyen mutuamente de perfiles, comentarios y búsquedas)
+- Sistema de denuncias de rutas, fotos, usuarios y comentarios; cola de moderación en Admin → Moderación con resolución y notas
+- El dueño de una ruta puede denunciar contenido relacionado; pestaña «Bloqueados» en Perfil
+
+### Otras mejoras (bloques B–G)
+- Asistente Upload Trail: editor de texto enriquecido (Quill) para la descripción de la ruta
+- `repo/postgres.js#getTrack` devuelve `owner_username` y `owner_profile_public`
+- `lista.js`: capa de mapa cambiada a OpenStreetMap
+- Migraciones 023 (follows), 024 (track_comments), 025 (blocks/reports), 026 (ratings/done/notifications)
+
 ### Fase 4 · bloque A: páginas públicas y buscadores
 - Las rutas públicas se pueden ver sin cuenta en `/ruta/{id}-{nombre}`: es la misma ficha de la app (mismas capas de mapa, perfil y pestañas), en modo lectura y con la zona de privacidad aplicada; descargar el GPX pide entrar. Los perfiles (`/u/{usuario}`) y las listas públicas (`/lista/{id}-{nombre}`) también
 - Cada página lleva título, descripción, URL canónica, vista previa para WhatsApp y redes (Open Graph) y datos estructurados; hay `sitemap.xml` y `robots.txt`

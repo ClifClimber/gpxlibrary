@@ -43,7 +43,11 @@ function createPostgresRepo({ connectionString, pool: givenPool } = {}) {
         FROM tracks ORDER BY tracks.imported_at DESC, ${BY_NAME}, id`);
     },
     async getTrack(id) {
-      return first(`SELECT ${selectCols(C.TRACK_COLS)} FROM tracks WHERE id=$1`, [id]);
+      return first(
+        `SELECT ${selectCols(C.TRACK_COLS)},
+          (SELECT username     FROM users WHERE id = tracks.owner_id) AS owner_username,
+          (SELECT profile_public FROM users WHERE id = tracks.owner_id) AS owner_profile_public
+         FROM tracks WHERE id=$1`, [id]);
     },
     async getPoints(id, { clean = false } = {}) {
       const r = await first(`SELECT ST_AsBinary(${clean ? 'geom_clean' : 'geom'}) AS wkb, ${clean ? 'ele_clean' : 'ele'} AS ele FROM tracks WHERE id=$1`, [id]);

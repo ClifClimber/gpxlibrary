@@ -224,7 +224,9 @@ body.panel-resizing { cursor: ew-resize; user-select: none; }
 .ti-owner {
   font-size: 11px; font-weight: 500; color: var(--ink-2);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+  text-decoration: none;
 }
+.ti-owner:hover { color: var(--accent); }
 .track-detail-link {
   width: 22px; height: 22px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;

@@ -12,6 +12,15 @@
   let editingExisting = false;   // step 3 is editing a route the user already had
   let privacy = 'public';
 
+  // ── Quill editor for description ──
+  let descQuill = null;
+  let _pendingDescHtml = null;
+  function getDescHtml() { return descQuill ? (descQuill.root.innerHTML === '<p><br></p>' ? '' : descQuill.root.innerHTML) : (_pendingDescHtml || ''); }
+  function setDescHtml(html) {
+    _pendingDescHtml = html || '';
+    if (descQuill) descQuill.root.innerHTML = _pendingDescHtml;
+  }
+
   // /subir?edit=ID edits a route you already have: straight to the details form (step 3)
   const editParam = parseInt(new URLSearchParams(location.search).get('edit'));
   const EDIT_ID = editParam > 0 ? editParam : null;
@@ -31,6 +40,14 @@
       dot.classList.toggle('done', i < n);
     }
     if (n === 2) fitRoute();
+    if (n === 3 && !descQuill && typeof Quill !== 'undefined') {
+      descQuill = new Quill('#f-desc-editor', {
+        theme: 'snow',
+        placeholder: 'Cuenta cómo es la ruta…',
+        modules: { toolbar: [['bold','italic'],[{list:'ordered'},{list:'bullet'}],['link'],['clean']] },
+      });
+      if (_pendingDescHtml) descQuill.root.innerHTML = _pendingDescHtml;
+    }
   }
 
   // Leaflet needs the visible size of the container to compute the zoom: resize, then frame the route
@@ -210,7 +227,7 @@
       fetch('/api/config/provinces').then(r => r.json()).catch(() => ({})),
     ]);
     $('f-name').value = t.name || parsed?.name || '';
-    $('f-desc').value = t.notes || '';
+    setDescHtml(t.notes || '');
     $('f-planned').checked = !!t.planned;
     // Extra fields (edit mode only)
     $('f-province').value = t.province || '';
@@ -237,7 +254,7 @@
     const wNames = (t.waypoints || parsed?.wpts || []).map(w => w.name).filter(Boolean);
     if (wNames.length) {
       const fill = $('wpt-fill'); fill.hidden = false;
-      fill.onclick = () => { const cur = $('f-desc').value.trim(); $('f-desc').value = (cur ? cur + '\n\n' : '') + 'Pasa por: ' + wNames.slice(0, 12).join(', ') + '.'; fill.hidden = true; };
+      fill.onclick = () => { const cur = getDescHtml().trim(); setDescHtml((cur ? cur + '<p><br></p>' : '') + '<p>Pasa por: ' + wNames.slice(0, 12).join(', ') + '.</p>'); fill.hidden = true; };
     }
     // Existing photos (when editing a route the user already had) and its privacy
     renderPhotos(await fetch(`/api/tracks/${trackId}/photos`).then(r => (r.ok ? r.json() : [])).catch(() => []));
@@ -424,7 +441,7 @@
     try {
       const patch = {
         name: $('f-name').value.trim(),
-        notes: $('f-desc').value.trim(),
+        notes: getDescHtml(),
         activity: $('f-activity').value.trim(),
         sierra: $('f-sierra').value.trim(),
         days_declared: daysDeclared(),

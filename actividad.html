@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Actividad — GPX Library</title>
+<link rel="stylesheet" href="/shared.css">
+<script src="/theme.js"></script>
+<style>
+.act-page { max-width: 680px; margin: 0 auto; padding: 28px 20px 60px; }
+.act-header { margin-bottom: 24px; }
+.act-header h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+.act-header p { color: var(--ink-2); font-size: 14px; margin: 0; }
+.act-feed { display: grid; gap: 10px; }
+.act-item { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; }
+.act-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex-shrink: 0; overflow: hidden; }
+.act-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.act-body { flex: 1; min-width: 0; }
+.act-text { font-size: 14px; line-height: 1.5; }
+.act-text a { color: var(--accent); text-decoration: none; font-weight: 500; }
+.act-text a:hover { text-decoration: underline; }
+.act-time { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.act-empty { text-align: center; padding: 48px 24px; color: var(--muted); }
+.act-empty svg { display: block; margin: 0 auto 16px; opacity: .4; }
+.act-load-more { text-align: center; margin-top: 16px; }
+</style>
+</head>
+<body>
+<nav>
+  <span class="logo">GPX Library</span>
+  <a href="/">Visor</a>
+  <a href="/editor">Catálogo</a>
+  <a href="/compare">Comparar</a>
+  <a href="/admin">Admin</a>
+  <a href="/actividad" class="active">Actividad</a>
+  <a href="/perfil" id="nav-perfil" class="nav-user" aria-label="Mi perfil"></a>
+</nav>
+
+<main class="act-page">
+  <div class="act-header">
+    <h1>Actividad</h1>
+    <p>Lo que hacen las personas que sigues</p>
+  </div>
+  <div id="act-feed" class="act-feed"></div>
+  <div id="act-load-more" class="act-load-more" hidden>
+    <button class="btn btn-outline" id="btn-more">Cargar más</button>
+  </div>
+</main>
+
+<script>
+(async function () {
+  const feed = document.getElementById('act-feed');
+  const moreWrap = document.getElementById('act-load-more');
+  const moreBtn  = document.getElementById('btn-more');
+  let nextCursor = null;
+
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function relTime(ts) {
+    const d = Date.now() - new Date(ts).getTime();
+    if (d < 60000) return 'ahora';
+    if (d < 3600000) return Math.floor(d/60000) + ' min';
+    if (d < 86400000) return Math.floor(d/3600000) + ' h';
+    return Math.floor(d/86400000) + ' días';
+  }
+  function avatarEl(r) {
+    const name = r.actor_display_name || r.actor_username || '?';
+    const init = name[0].toUpperCase();
+    return r.actor_avatar_url
+      ? `<div class="act-avatar"><img src="${esc(r.actor_avatar_url)}" alt=""></div>`
+      : `<div class="act-avatar">${esc(init)}</div>`;
+  }
+  function typeText(r) {
+    const user = `<a href="/u/${esc(r.actor_username)}">${esc(r.actor_display_name || r.actor_username)}</a>`;
+    const track = r.track_id ? `<a href="/track?id=${r.track_id}">${esc(r.track_name || 'una ruta')}</a>` : 'una ruta';
+    switch (r.type) {
+      case 'comment': return `${user} ha comentado en ${track}`;
+      case 'rating':  return `${user} ha valorado ${track}`;
+      case 'done':    return `${user} ha marcado como hecha ${track}`;
+      case 'follow':  return `${user} ha empezado a seguirte`;
+      default:        return `${user} ha hecho algo en ${track}`;
+    }
+  }
+
+  async function loadFeed(cursor) {
+    const url = '/api/feed' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : '');
+    const r = await fetch(url);
+    if (!r.ok) {
+      if (r.status === 401) {
+        feed.innerHTML = '<div class="act-empty"><p>Inicia sesión para ver la actividad.</p><a class="btn" href="/login">Entrar</a></div>';
+        return;
+      }
+      feed.innerHTML = '<div class="act-empty"><p>Error al cargar la actividad.</p></div>';
+      return;
+    }
+    const { rows, nextCursor: nc } = await r.json();
+    nextCursor = nc;
+    if (!rows.length && !cursor) {
+      feed.innerHTML = `<div class="act-empty">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        <p>Aquí aparecerá la actividad de las personas que sigues.<br>Ve a sus perfiles y pulsa «Seguir».</p>
+      </div>`;
+    } else {
+      const html = rows.map(r => `<div class="act-item">
+        ${avatarEl(r)}
+        <div class="act-body">
+          <div class="act-text">${typeText(r)}</div>
+          <div class="act-time">${relTime(r.created_at)}</div>
+        </div>
+      </div>`).join('');
+      if (cursor) feed.insertAdjacentHTML('beforeend', html);
+      else feed.innerHTML = html;
+    }
+    moreWrap.hidden = !nextCursor;
+  }
+
+  moreBtn.addEventListener('click', () => loadFeed(nextCursor));
+  await loadFeed();
+})();
+</script>
+</body>
+</html>

@@ -707,8 +707,8 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.15.0</div>
-          <div style="font-size:11px;color:var(--muted)" id="about-date">29 octubre 2026</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.16.0</div>
+          <div style="font-size:11px;color:var(--muted)" id="about-date">30 octubre 2026</div>
         </div>
       </div>
       <div style="border-top:1px solid var(--line);padding:14px 24px;display:flex;gap:24px;flex-wrap:wrap">
@@ -726,8 +726,25 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.15.0</span>
+            <span class="cl-version">v2.16.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">30 oct 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Seguir y actividad</b>: feed en <code>/actividad</code> con lo que hacen las personas que sigues; paginación por cursor</li>
+            <li><b>Comentarios</b>: cualquier usuario con cuenta puede comentar rutas públicas; editor con contador de caracteres, indicador «editado», el autor y el dueño pueden eliminar; moderación por denuncia</li>
+            <li><b>Valoraciones (estrellas)</b>: widget de 5 estrellas en la ficha; media y recuento sincronizados por trigger; el dueño no puede valorar su propia ruta</li>
+            <li><b>«La he hecho»</b>: cada usuario puede registrar que ha completado una ruta, con fecha</li>
+            <li><b>Moderación y bloqueos</b> (bloque G): tablas <code>blocks</code> y <code>reports</code>; cola de denuncias en Admin → Moderación; los usuarios bloqueados no se ven entre sí</li>
+            <li><b>Perfil público</b> (<code>/u/{usuario}</code>) con rutas, estadísticas y bio; botón «Seguir»</li>
+            <li>Upload Trail: editor de texto enriquecido (Quill) para la descripción</li>
+            <li>Migraciones 023–026 (follows, comments, blocks/reports, ratings/done/notifications)</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.15.0</span>
             <span class="cl-date">29 oct 2026</span>
           </div>
           <ul class="cl-list">

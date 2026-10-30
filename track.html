@@ -1195,6 +1195,17 @@ function buildContent(t, color, icon) {
       </div>
     </div>
     ${details ? `<div class="section"><div class="section-head">Detalles</div><div class="kv-list">${details}</div></div>` : ''}
+    <div class="section" id="rating-section">
+      <div class="section-head" style="padding:10px 14px 10px">Valoración</div>
+      <div id="rating-body" style="padding:4px 14px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:16px">
+        <div id="stars-widget" class="stars-widget" title="Valorar esta ruta">
+          ${[1,2,3,4,5].map(n=>`<button class="star-btn" data-v="${n}" onclick="setRating(${n})" aria-label="${n} estrellas">★</button>`).join('')}
+        </div>
+        <span id="rating-avg-label" style="font-size:13px;color:var(--muted)"></span>
+        <button id="done-btn" class="btn btn-outline btn-sm" onclick="toggleDone()" hidden>La he hecho</button>
+        <span id="done-date-label" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+    </div>
     <div class="section" id="comments-section">
       <div class="section-head" style="padding:10px 14px 10px;display:flex;align-items:center;gap:8px">
         Comentarios
@@ -1202,8 +1213,9 @@ function buildContent(t, color, icon) {
       </div>
       <div id="comments-list"></div>
       <div id="comment-form" hidden style="padding:8px 14px 14px;border-top:1px solid var(--border)">
-        <textarea id="comment-input" class="comment-textarea" placeholder="Escribe un comentario…" rows="3"></textarea>
-        <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <textarea id="comment-input" class="comment-textarea" placeholder="Escribe un comentario…" rows="3" maxlength="2000" oninput="updateCommentCounter()"></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+          <span id="comment-counter" style="font-size:12px;color:var(--muted)">0 / 2000</span>
           <button class="btn btn-sm" onclick="postComment()">Comentar</button>
         </div>
       </div>
@@ -1780,17 +1792,24 @@ function renderComments(list) {
   }
   el.innerHTML = list.map(c => {
     const initials = (c.display_name || c.username || '?')[0].toUpperCase();
-    const canDel = gCurrentUser && (gCurrentUser.id === c.user_id || gCurrentUser.role === 'admin');
+    const isOwnerOfTrack = gCurrentUser && gTrack && gCurrentUser.id === gTrack.owner_id;
+    const canDel = gCurrentUser && (gCurrentUser.id === c.user_id || gCurrentUser.role === 'admin' || isOwnerOfTrack);
+    const canReport = gCurrentUser && gCurrentUser.id !== c.user_id;
+    const editedTag = c.edited_at ? `<span class="comment-edited" title="Editado el ${new Date(c.edited_at).toLocaleString('es-ES')}">editado</span>` : '';
     return `<div class="comment-item" data-id="${c.id}">
       <div class="comment-avatar">${esc(initials)}</div>
       <div class="comment-content">
         <div class="comment-meta">
           <span class="comment-user">${esc(c.display_name || c.username)}</span>
           <span class="comment-date">${relTime(c.created_at)}</span>
+          ${editedTag}
         </div>
         <div class="comment-body">${esc(c.body)}</div>
       </div>
-      ${canDel ? `<button class="comment-del" onclick="deleteComment(${c.id})" title="Eliminar">×</button>` : ''}
+      <div class="comment-actions">
+        ${canReport ? `<button class="comment-report-btn" onclick="openReportModal('comment',${c.id})" title="Denunciar">⚑</button>` : ''}
+        ${canDel ? `<button class="comment-del" onclick="deleteComment(${c.id})" title="Eliminar">×</button>` : ''}
+      </div>
     </div>`;
   }).join('');
 }
@@ -1807,10 +1826,21 @@ async function loadComments() {
     renderComments(comments);
     if (me) {
       document.getElementById('comment-form').hidden = false;
-    } else if (!window.GPX_ANON) {
-      document.getElementById('comment-login-hint').hidden = false;
+      const isOwner = gTrack && me.id === gTrack.owner_id;
+      const doneBtn = document.getElementById('done-btn');
+      if (doneBtn) doneBtn.hidden = false;
+      const starsWidget = document.getElementById('stars-widget');
+      if (starsWidget) starsWidget.style.pointerEvents = isOwner ? 'none' : '';
+      if (starsWidget) starsWidget.style.opacity = isOwner ? '0.4' : '';
+      loadRatingAndDone();
     } else {
-      document.getElementById('comment-login-hint').hidden = false;
+      const starsWidget = document.getElementById('stars-widget');
+      if (starsWidget) starsWidget.style.pointerEvents = 'none';
+      if (!window.GPX_ANON) {
+        document.getElementById('comment-login-hint').hidden = false;
+      } else {
+        document.getElementById('comment-login-hint').hidden = false;
+      }
     }
   } catch {
     const el = document.getElementById('comments-list');
@@ -1856,6 +1886,99 @@ async function deleteComment(cid) {
       document.getElementById('comments-list').innerHTML = '<div style="padding:10px 14px 12px;font-size:13px;color:var(--muted)">Aún no hay comentarios. ¡Sé el primero!</div>';
     }
   } catch { alert('No se pudo eliminar'); }
+}
+
+function updateCommentCounter() {
+  const inp = document.getElementById('comment-input');
+  const ctr = document.getElementById('comment-counter');
+  if (inp && ctr) ctr.textContent = `${inp.value.length} / 2000`;
+}
+
+// ── Valoraciones y «la he hecho» ─────────────────────────────────
+let gMyRating = null;
+let gMyDone   = null;
+
+async function loadRatingAndDone() {
+  if (!trackId || !gCurrentUser) return;
+  try {
+    const [rr, dr] = await Promise.all([
+      fetch(`/api/tracks/${trackId}/rating`).then(r => r.ok ? r.json() : null),
+      fetch(`/api/tracks/${trackId}/done`).then(r => r.ok ? r.json() : null),
+    ]);
+    if (rr) {
+      gMyRating = rr.my_stars;
+      renderStars(rr.my_stars, rr.avg, rr.count);
+    }
+    if (dr) {
+      gMyDone = dr.done_on;
+      renderDoneBtn(dr.done_on);
+    }
+  } catch {}
+}
+
+function renderStars(mine, avg, count) {
+  const btns = document.querySelectorAll('.star-btn');
+  btns.forEach(b => {
+    const v = +b.dataset.v;
+    b.classList.toggle('filled', v <= (mine || 0));
+  });
+  const lbl = document.getElementById('rating-avg-label');
+  if (lbl) {
+    if (count > 0) lbl.textContent = `${(avg||0).toFixed(1)} (${count} ${count === 1 ? 'valoración' : 'valoraciones'})`;
+    else lbl.textContent = 'Sin valoraciones aún';
+  }
+}
+
+function renderDoneBtn(doneOn) {
+  const btn = document.getElementById('done-btn');
+  const lbl = document.getElementById('done-date-label');
+  if (!btn) return;
+  if (doneOn) {
+    btn.textContent = '✓ La he hecho';
+    btn.classList.add('active');
+    if (lbl) lbl.textContent = new Date(doneOn).toLocaleDateString('es-ES', { day:'numeric', month:'short', year:'numeric' });
+  } else {
+    btn.textContent = 'La he hecho';
+    btn.classList.remove('active');
+    if (lbl) lbl.textContent = '';
+  }
+}
+
+async function setRating(stars) {
+  if (!gCurrentUser) return;
+  if (gTrack && gCurrentUser.id === gTrack.owner_id) return;
+  try {
+    const r = await fetch(`/api/tracks/${trackId}/rating`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stars }),
+    });
+    if (!r.ok) { const e = await r.json(); alert(e.error || 'Error'); return; }
+    const data = await r.json();
+    gMyRating = stars;
+    renderStars(stars, data.avg, data.count);
+  } catch { alert('Error al valorar'); }
+}
+
+async function toggleDone() {
+  if (!gCurrentUser) return;
+  try {
+    if (gMyDone) {
+      await fetch(`/api/tracks/${trackId}/done`, { method: 'DELETE' });
+      gMyDone = null;
+      renderDoneBtn(null);
+    } else {
+      const today = new Date().toISOString().slice(0,10);
+      const r = await fetch(`/api/tracks/${trackId}/done`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ done_on: today }),
+      });
+      if (!r.ok) { alert('Error'); return; }
+      gMyDone = today;
+      renderDoneBtn(today);
+    }
+  } catch { alert('Error'); }
 }
 
 // ── Enrich road types via OSM ────────────────────────────────────
