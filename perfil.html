@@ -178,6 +178,7 @@
   .danger-zone { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
   .danger-zone h4 { font-size: 14px; color: var(--danger); margin: 0 0 4px; }
   .danger-zone .pf-hint { margin: 0 0 10px; }
+  .pf-check { display: flex; gap: 8px; align-items: center; font-weight: 500; color: var(--ink); }
 </style>
 </head>
 <body>
@@ -294,6 +295,14 @@
 
     <div class="pf-card">
       <h3>Privacidad</h3>
+      <div class="pf-field">
+        <label class="pf-check"><input type="checkbox" id="chk-web"> Mostrar mis rutas públicas fuera de GPX Library</label>
+        <div class="pf-hint">Cualquiera con el enlace puede verlas sin cuenta, y aparecen en buscadores como Google. Las que tienen enlace a otra web (por ejemplo, Wikiloc) solo se muestran si confirmas que son tuyas al editarlas.</div>
+      </div>
+      <div class="pf-field">
+        <label class="pf-check"><input type="checkbox" id="chk-profile-public"> Perfil público (<span id="profile-url"></span>)</label>
+        <div class="pf-hint">Tu nombre, foto, descripción, estadísticas y rutas públicas en una página propia.</div>
+      </div>
       <div class="pf-field">
         <label for="sel-privacy">Zona de privacidad en el inicio y el final de tus rutas</label>
         <select class="select" id="sel-privacy">

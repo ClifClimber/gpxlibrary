@@ -21,6 +21,7 @@ const crypto = require('crypto');
 const { sendMail } = require('./mail/smtp');
 const { parseSearchParams, runSearch, runMeta } = require('./repo/search');
 const { enableCompression } = require('./http/compress');
+const publicPages = require('./http/public-pages');
 const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
 const { openSql } = require('./repo/sql');
@@ -1176,6 +1177,60 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/restablecer') return serveStatic(res, path.join(ROOT, 'restablecer.html'), req);
   if (pathname === '/privacidad') return serveStatic(res, path.join(ROOT, 'privacidad.html'), req);
 
+  // ── Páginas públicas (sin sesión) e indexables: ruta, perfil, lista, sitemap, robots ──
+  if (method === 'GET' || method === 'HEAD') {
+    const pubRoute = pathname.match(/^\/ruta\/(\d+)(-[^/]*)?$/);
+    const pubUser = pathname.match(/^\/u\/([A-Za-z0-9._-]{2,32})$/);
+    const pubList = pathname.match(/^\/lista\/(\d+)(-[^/]*)?$/);
+    if (pubRoute || pubUser || pubList) {
+      const ctx = { base: baseUrl(req), viewer: req.user };
+      try {
+        const out = pubRoute ? await publicPages.renderRoute(sqlDb(), parseInt(pubRoute[1]), { ...ctx, slug: pubRoute[2] || '' })
+          : pubUser ? await publicPages.renderProfile(sqlDb(), pubUser[1], { ...ctx, pageNo: Math.max(0, parseInt(searchParams.get('p')) || 0) })
+          : await publicPages.renderList(sqlDb(), parseInt(pubList[1]), { ...ctx, slug: pubList[2] || '' });
+        if (out.location) { res.writeHead(301, { Location: out.location }); return res.end(); }
+        // Anonymous pages are the same for everybody (CDN-cacheable); signed-in ones show the user's nav
+        res.writeHead(out.status, { 'Content-Type': 'text/html; charset=utf-8', Vary: 'Cookie',
+          'Cache-Control': req.user ? 'private, no-cache' : 'public, max-age=300' });
+        return res.end(out.html);
+      } catch (e) {
+        console.error('public page:', e.message);
+        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Error');
+      }
+    }
+    if (pathname === '/sitemap.xml') {
+      const xml = await publicPages.renderSitemap(sqlDb(), { base: baseUrl(req) });
+      res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+      return res.end(xml);
+    }
+    if (pathname === '/robots.txt') {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
+      return res.end(publicPages.renderRobots({ base: baseUrl(req) }));
+    }
+    // Images the public pages use, without a session: photos of web-visible routes and activity images
+    if (!req.user) {
+      const pubPhoto = pathname.match(/^\/api\/photos\/(\d+)$/);
+      if (pubPhoto) {
+        const p = await sqlDb().get(
+          `SELECT tp.filename, tp.thumb_filename, tp.mime FROM track_photos tp JOIN tracks t ON t.id = tp.track_id
+           JOIN users u ON u.id = t.owner_id WHERE tp.id = ? AND ${publicPages.WEB_VISIBLE}`, [parseInt(pubPhoto[1])]);
+        if (!p) { res.writeHead(404); return res.end('Not found'); }
+        const useThumb = searchParams.get('size') === 'thumb' && p.thumb_filename;
+        const buf = await photoGet(useThumb ? p.thumb_filename : p.filename);
+        if (!buf) { res.writeHead(404); return res.end('Not found'); }
+        res.writeHead(200, { 'Content-Type': useThumb ? 'image/jpeg' : (p.mime || 'image/jpeg'), 'Cache-Control': 'public, max-age=86400' });
+        return res.end(buf);
+      }
+      const pubActImg = pathname.match(/^\/api\/(activity-images|activity-icons)\/([\w.-]+)$/);
+      if (pubActImg) {
+        const buf = await photoGet((pubActImg[1] === 'activity-images' ? 'activities/' : 'act-icons/') + pubActImg[2]);
+        if (!buf) { res.writeHead(404); return res.end('Not found'); }
+        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+        return res.end(buf);
+      }
+    }
+  }
+
   if (pathname === '/api/auth/login' && method === 'POST') {
     const body = await parseBody(req);
     const db = sqlDb();
@@ -1472,7 +1527,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireAuth(req, res)) return;
     const db = sqlDb();
     const u = await db.get(
-      'SELECT id, username, email, display_name, bio, avatar_key, role, privacy_radius, prefs, to_char(created_at AT TIME ZONE \'UTC\', \'YYYY-MM-DD\') AS created_at FROM users WHERE id = ?',
+      'SELECT id, username, email, display_name, bio, avatar_key, role, privacy_radius, prefs, web_visible, profile_public, to_char(created_at AT TIME ZONE \'UTC\', \'YYYY-MM-DD\') AS created_at FROM users WHERE id = ?',
       [req.user.sub]);
     if (!u) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Usuario no encontrado' })); }
     const avatarUrl = u.avatar_key ? `/api/profile/avatar/${encodeURIComponent(u.avatar_key)}` : null;
@@ -1487,6 +1542,8 @@ const server = http.createServer(async (req, res) => {
     const updates = []; const vals = [];
     if (body.display_name !== undefined) { updates.push('display_name = ?'); vals.push(body.display_name || null); }
     if (body.bio !== undefined)          { updates.push('bio = ?');          vals.push(body.bio || null); }
+    for (const k of ['web_visible', 'profile_public']) if (body[k] !== undefined) { updates.push(`${k} = ?`); vals.push(!!body[k]); }
+    if (body.web_notice_seen === true) updates.push("prefs = prefs || '{\"web_notice_seen\": true}'::jsonb");
     if (body.map_mode !== undefined) {
       if (!MAP_MODES.includes(body.map_mode)) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Modo de mapa no válido' })); }
       updates.push("prefs = prefs || jsonb_build_object('map_mode', ?::text)"); vals.push(body.map_mode);
@@ -1499,6 +1556,7 @@ const server = http.createServer(async (req, res) => {
     if (!updates.length) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Nada que actualizar' })); }
     updates.push('updated_at = NOW()'); vals.push(req.user.sub);
     await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, vals);
+    if (body.web_visible !== undefined || body.profile_public !== undefined) dataChanged();
     if (body.privacy_radius !== undefined) {
       dataChanged();
       jobQueue().enqueue('track-derive', { args: ['--owner', String(req.user.sub)] }).catch(() => {});
@@ -1601,8 +1659,11 @@ const server = http.createServer(async (req, res) => {
 
   const avatarMatch = pathname.match(/^\/api\/profile\/avatar\/(.+)$/);
   if (avatarMatch && method === 'GET') {
-    if (!requireAuth(req, res)) return;
     const key = decodeURIComponent(avatarMatch[1]);
+    // Without a session only the avatars of public profiles (they appear on the public pages)
+    if (!req.user && !(await sqlDb().get('SELECT 1 FROM users WHERE avatar_key = ? AND profile_public AND active', [key]))) {
+      res.writeHead(401, J); return res.end(JSON.stringify({ error: 'No autenticado' }));
+    }
     const buf = await blob.get(key).catch(() => null);
     if (!buf) { res.writeHead(404); return res.end('Not found'); }
     const ext = path.extname(key).toLowerCase();

@@ -44,6 +44,17 @@
       if (!me) { nav.querySelector('#nav-perfil')?.remove(); return; }
       window.gpxMe = me;
       window.gpxSetNavUser(me);
+      if (!(me.prefs && me.prefs.web_notice_seen) && location.pathname !== '/perfil') {
+        const bar = document.createElement('div');
+        bar.className = 'web-notice';
+        bar.innerHTML = '<span><b>Novedad:</b> tus rutas públicas ya se pueden ver en Internet sin cuenta y compartir con un enlace. ' +
+          'Puedes desactivarlo o activar una zona de privacidad en tu perfil.</span>' +
+          '<a class="btn btn-sm" href="/perfil">Ajustes de privacidad</a><button class="btn btn-sm btn-primary" type="button">Entendido</button>';
+        const seen = () => fetch('/api/profile/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ web_notice_seen: true }) }).catch(() => {});
+        bar.querySelector('button').addEventListener('click', () => { seen(); bar.remove(); });
+        bar.querySelector('a').addEventListener('click', seen);
+        nav.after(bar);
+      }
       // Admin is admin-only (the server refuses it too); the catalog is open to everyone
       if (me.role !== 'admin') nav.querySelectorAll('a[href="/admin"], a.admin-only').forEach(a => a.remove());
       // "Upload Trail" chip next to the user (import/draw a single track)

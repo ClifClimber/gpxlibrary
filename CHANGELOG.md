@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+### Fase 4 · bloque A: páginas públicas y buscadores
+- Las rutas públicas se pueden ver sin cuenta en `/ruta/{id}-{nombre}`, con su mapa (recortado por la zona de privacidad), datos, descripción y fotos, y un botón «Compartir». Los perfiles (`/u/{usuario}`) y las listas públicas (`/lista/{id}-{nombre}`) también
+- Cada página lleva título, descripción, URL canónica, vista previa para WhatsApp y redes (Open Graph) y datos estructurados; hay `sitemap.xml` y `robots.txt`
+- Nuevos ajustes en Perfil → Privacidad: «Mostrar mis rutas públicas fuera de GPX Library» (activado) y «Perfil público»; aviso de una sola vez a cada usuario. Política de privacidad actualizada
+- Las rutas con enlace a otra web (p. ej. Wikiloc) no se ven sin cuenta hasta que su dueño marca «Esta ruta es mía» al editarlas; las rutas sin dueño tampoco
+- Botón «Compartir» en la ficha de la ruta, que abre la página pública
+- `privacy-check.js` comprueba también la página pública: 93 comprobaciones
+
 ---
 
 ## v2.15.0 — 2026-10-29

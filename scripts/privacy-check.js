@@ -2,7 +2,8 @@
 'use strict';
 // End-to-end check of the privacy zone against a running server: user A uploads a route and sets a 500 m
 // privacy radius; user B must never get a point within 500 m of the route's real start or end, from any
-// endpoint (search, preview, detail, GPX download, export), and nothing at all once A makes the route private.
+// endpoint (search, preview, detail, GPX download, export, the public page without a session), and nothing at
+// all once A makes the route private. Also checks when the public page may be shown (web_visible, source web).
 // Creates two throwaway accounts and always deletes them (and with them the route).
 //   node scripts/privacy-check.js [--base http://localhost:8081] [--radius 500]
 // Exit code 1 if any check fails.
@@ -163,6 +164,37 @@ async function main(A, B, state) {
   const own = await (await A.req('GET', `/api/tracks/${id}/gpx`)).text();
   check(gpxPoints(own).some(p => minTo(p[0], p[1], spots) < 1), 'el dueño sí recibe su inicio real en el GPX');
 
+  // 4b. without a session: the public page /ruta/{id}-{slug}
+  const anon = (url, opts = {}) => fetch(BASE + url, { redirect: 'manual', ...opts });
+  const setTrack = fields => A.json('PATCH', `/api/tracks/${id}`, { json: fields });
+  await setTrack({ url: null });   // the GPX may carry a source link; with it the page stays hidden (tested below)
+  const r0 = await anon(`/ruta/${id}`);
+  check(r0.status === 301 && /^\/ruta\/\d+-/.test(r0.headers.get('location') || ''), `página pública: /ruta/${id} redirige a la URL con nombre (HTTP ${r0.status})`);
+  const pubUrl = r0.headers.get('location') || `/ruta/${id}`;
+  const pg = await anon(pubUrl);
+  const html = await pg.text();
+  check(pg.status === 200, `página pública sin sesión: HTTP ${pg.status}`);
+  const lineJson = /var line = (\[[\s\S]*?\]);\n/.exec(html);
+  check(!!lineJson, 'página pública: incluye la línea del mapa');
+  if (lineJson) checkPoints('página pública, línea del mapa', JSON.parse(lineJson[1]), spots);
+  const ld = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html);
+  check(!!ld && !/latitude|longitude|"geo"/.test(ld[1]), 'página pública: los datos estructurados no llevan coordenadas');
+  check(/<meta property="og:title"/.test(html) && /<link rel="canonical"/.test(html), 'página pública: metadatos Open Graph y canónica');
+  check((await (await anon('/sitemap.xml')).text()).includes(`/ruta/${id}-`), 'sitemap: incluye la ruta visible en la web');
+  // the owner turns «Mostrar mis rutas fuera de la app» off → hidden without a session
+  await A.json('PATCH', '/api/profile/me', { json: { web_visible: false } });
+  check((await anon(pubUrl)).status === 404, 'web_visible desactivado: la página pública da 404');
+  check(!(await (await anon('/sitemap.xml')).text()).includes(`/ruta/${id}-`), 'web_visible desactivado: fuera del sitemap');
+  await A.json('PATCH', '/api/profile/me', { json: { web_visible: true } });
+  // a source web (e.g. Wikiloc) hides it until the owner confirms it is theirs
+  await setTrack({ url: 'https://www.wikiloc.com/rutas/ejemplo-1' });
+  check((await anon(pubUrl)).status === 404, 'ruta con web de origen sin confirmar: 404 sin sesión');
+  await setTrack({ source_confirmed: true });
+  check((await anon(pubUrl)).status === 200, 'ruta con web de origen confirmada como propia: visible sin sesión');
+  // B with a session also gets the page (and the button to open it in the app)
+  const pgB = await B.req('GET', pubUrl);
+  check(pgB.status === 200 && (await pgB.text()).includes(`/track?id=${id}`), 'página pública con sesión: enlace «Abrir en la app»');
+
   // 5. private: B gets nothing
   const vis = await A.json('PATCH', `/api/profile/tracks/${id}/visibility`, { json: { visibility: 'private' } });
   check(vis.status === 200, 'visibilidad privada: HTTP ' + vis.status);
@@ -182,6 +214,8 @@ async function main(A, B, state) {
   }
   const mine = await A.json('GET', `/api/search?ids=${id}`);
   check(mine.body?.items?.some(i => i.id === id), 'privada: el dueño sigue viéndola');
+  check((await fetch(BASE + `/ruta/${id}`, { redirect: 'manual' })).status === 404, 'privada: la página pública da 404 sin sesión');
+  check(!(await (await fetch(BASE + '/sitemap.xml')).text()).includes(`/ruta/${id}-`), 'privada: fuera del sitemap');
 }
 
 (async () => {

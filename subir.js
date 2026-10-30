@@ -216,6 +216,9 @@
     $('f-province').value = t.province || '';
     $('f-ccaa').value = t.ccaa || '';
     $('f-url').value = t.url || '';
+    $('f-own').checked = !!t.source_confirmed;
+    const syncOwn = () => { const has = !!$('f-url').value.trim(); $('f-own-wrap').hidden = !has; $('f-own-hint').hidden = !has; };
+    $('f-url').addEventListener('input', syncOwn); syncOwn();
     try { tags = Array.isArray(t.tags) ? t.tags : JSON.parse(t.tags || '[]'); } catch { tags = []; }
     renderTags();
     $('dl-provinces').innerHTML = (geo.provinces || []).map(s => `<option value="${esc(s)}">`).join('');
@@ -433,6 +436,7 @@
           province: $('f-province').value.trim() || null,
           ccaa: $('f-ccaa').value.trim() || null,
           url: $('f-url').value.trim() || null,
+          source_confirmed: !!$('f-url').value.trim() && $('f-own').checked,
           tags: JSON.stringify(tags),
         });
       }

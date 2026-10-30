@@ -11,4 +11,5 @@ module.exports = {
   ...require('./gamification'),
   ...require('./privacy'),
   ...require('./derive'),
+  ...require('./slug'),
 };

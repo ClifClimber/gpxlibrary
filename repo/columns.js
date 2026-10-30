@@ -6,7 +6,7 @@ const TRACK_COLS = [
   'distance', 'elevation_gain', 'elevation_loss', 'min_elevation', 'max_elevation',
   'sw_lat', 'sw_lon', 'ne_lat', 'ne_lon', 'center_lat', 'center_lon',
   'raw_count', 'clean_count', 'cleaned',
-  'activity', 'province', 'ccaa', 'sierra', 'notes', 'url',
+  'activity', 'province', 'ccaa', 'sierra', 'notes', 'url', 'source_confirmed',
   'road_types', 'surface_types', 'road_type_seq', 'moving_time', 'stopped_time', 'tags',
   'ibp_bicycle', 'ibp_hiking', 'ibp_running', 'circular', 'waypoints_json', 'owner_id', 'visibility',
   'days_declared', 'difficulty', 'planned',
@@ -22,7 +22,7 @@ const LIST_COLS = [
 ];
 
 // Fields a client may change through PATCH / bulk update.
-const EDITABLE_FIELDS = new Set(['name', 'activity', 'province', 'ccaa', 'sierra', 'notes', 'url', 'tags', 'days_declared', 'difficulty']);
+const EDITABLE_FIELDS = new Set(['name', 'activity', 'province', 'ccaa', 'sierra', 'notes', 'url', 'tags', 'days_declared', 'difficulty', 'source_confirmed']);
 
 const CONFIG_TABLES = {
   config_activities: { order: ['sort_order', 'name'], cols: ['name', 'color', 'keywords', 'sort_order', 'active', 'icon'] },

@@ -46,6 +46,10 @@
               </button>
               <div id="list-dropdown"></div>
             </div>
+            <a class="ph-btn" id="public-btn" title="Página pública de la ruta (se puede compartir)" target="_blank" hidden>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
+              Compartir
+            </a>
             <button class="ph-btn" id="edit-btn" onclick="location.href='/subir?edit=' + gTrack.id" hidden>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Editar
@@ -413,6 +417,13 @@ function render(t) {
   const traceBtn = document.getElementById('trace-btn');
   traceBtn.href = `/trazar?id=${t.id}`; traceBtn.hidden = false;
   if (t.id) document.getElementById('back-link').href = `/?id=${t.id}`;
+  if (t.id && t.visibility === 'public') {
+    const pb = document.getElementById('public-btn');
+    const slug = String(t.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/ñ/g, 'n')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70).replace(/-+$/, '');
+    pb.href = `/ruta/${t.id}${slug ? '-' + slug : ''}`;
+    pb.hidden = false;
+  }
 
   const hasEle = t.points && t.points.some(p => p[2] != null);
   document.getElementById('profile-sheet').classList.toggle('empty', !hasEle);

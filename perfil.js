@@ -73,6 +73,9 @@
     $('inp-email').value      = p.email;
     $('inp-created').value    = p.created_at || '';
     $('sel-map-mode').value = (p.prefs && p.prefs.map_mode) || 'page';
+    $('chk-web').checked = p.web_visible !== false;
+    $('chk-profile-public').checked = p.profile_public !== false;
+    $('profile-url').innerHTML = `<a href="/u/${encodeURIComponent(p.username)}" target="_blank">/u/${esc(p.username)}</a>`;
     const sel = $('sel-privacy'), r = String(p.privacy_radius || 0);
     if (![...sel.options].some(o => o.value === r)) sel.add(new Option(`${r} m`, r));
     sel.value = r;
@@ -90,7 +93,8 @@
   // ── Privacy zone ─────────────────────────────────────────────────
   $('btn-save-privacy').addEventListener('click', async () => {
     try {
-      const r = await api('/api/profile/me', { method: 'PATCH', body: JSON.stringify({ privacy_radius: parseInt($('sel-privacy').value) }) });
+      const r = await api('/api/profile/me', { method: 'PATCH', body: JSON.stringify({ privacy_radius: parseInt($('sel-privacy').value),
+        web_visible: $('chk-web').checked, profile_public: $('chk-profile-public').checked }) });
       if (!r.ok) { const e = await r.json(); setMsg('msg-privacy', e.error || 'Error', false); return; }
       setMsg('msg-privacy', '¡Guardado!', true);
     } catch (err) { if (err.message !== '401') setMsg('msg-privacy', 'Error de red', false); }

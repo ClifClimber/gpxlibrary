@@ -369,3 +369,8 @@ nav .nav-upload.active { background: var(--accent); }
 .ilog-badge.ok   { background:color-mix(in srgb,#22c55e 16%,transparent); color:color-mix(in srgb,#16a34a 72%,var(--ink)); }
 .ilog-badge.err  { background:color-mix(in srgb,#ef4444 16%,transparent); color:color-mix(in srgb,#dc2626 72%,var(--ink)); }
 .ilog-badge.warn { background:color-mix(in srgb,#eab308 18%,transparent); color:color-mix(in srgb,#ca8a04 72%,var(--ink)); }
+
+/* Aviso de una sola vez (theme.js): las rutas públicas se ven en Internet */
+.web-notice { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 16px; font-size: 13px; color: var(--ink);
+  background: var(--accent-soft); border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+.web-notice span { flex: 1; min-width: 240px; }

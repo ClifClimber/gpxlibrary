@@ -83,6 +83,7 @@
 
 /* Edit mode (/subir?edit=ID): straight to the details form, plus the extra fields */
 .edit-only { display: none; }
+.src-own { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); margin-top: 8px; font-weight: 400; }
 body.edit-mode .edit-only { display: block; }
 body.edit-mode .wz-steps { display: none; }
 body.edit-mode a.edit-only { display: inline-flex; }
@@ -245,6 +246,8 @@ body.edit-mode a.edit-only { display: inline-flex; }
         <div class="wz-field">
           <label>Enlace de origen</label>
           <input type="url" class="input" id="f-url" placeholder="https://…">
+          <label class="src-own" id="f-own-wrap" hidden><input type="checkbox" id="f-own"> Esta ruta es mía (la grabé o la tracé yo)</label>
+          <div class="precalc" id="f-own-hint" hidden>Las rutas con enlace a otra web no se ven fuera de GPX Library hasta que confirmes que son tuyas.</div>
         </div>
         <div class="wz-field">
           <label>Etiquetas <span class="precalc">Intro o coma para añadir</span></label>
