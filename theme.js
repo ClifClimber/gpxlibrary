@@ -41,7 +41,17 @@
       nav.appendChild(link);   // always last: right of the theme toggle
     };
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
-      if (!me) { nav.querySelector('#nav-perfil')?.remove(); return; }
+      if (!me) {
+        // Without a session (public pages): the app links would only lead to the login, so offer that instead
+        nav.querySelector('#nav-perfil')?.remove();
+        nav.querySelectorAll('a:not(.logo):not(.nav-keep)').forEach(a => a.remove());
+        if (!nav.querySelector('.nav-login')) {
+          const next = encodeURIComponent(location.pathname + location.search);
+          nav.insertAdjacentHTML('beforeend', '<span style="flex:1"></span>' +
+            `<a class="nav-login nav-keep" href="/login?next=${next}">Entrar</a><a class="nav-upload nav-keep" href="/registro">Crear cuenta</a>`);
+        }
+        return;
+      }
       window.gpxMe = me;
       window.gpxSetNavUser(me);
       if (!(me.prefs && me.prefs.web_notice_seen) && location.pathname !== '/perfil') {

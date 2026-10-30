@@ -54,6 +54,7 @@
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Editar
             </button>
+            <a class="ph-btn primary" id="login-dl" hidden>Entrar para descargar el GPX</a>
             <div id="export-wrap" style="display:none">
               <button class="ph-btn primary" id="btn-export" title="Exportar GPX">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -159,7 +160,7 @@ function fmt(n, dec = 0) {
 
 // ── Tag suggestions ───────────────────────────────────────────────
 let allTagsGlobal = [];
-fetch('/api/tags').then(r => r.json()).then(tags => { allTagsGlobal = tags; }).catch(() => {});
+if (!window.GPX_ANON) fetch('/api/tags').then(r => (r.ok ? r.json() : [])).then(tags => { allTagsGlobal = tags; }).catch(() => {});
 
 function initTagSuggestions() {
   const inp  = document.getElementById('tag-input');
@@ -223,7 +224,7 @@ function initTagSuggestions() {
 
 // ── Load ─────────────────────────────────────────────────────────
 const params  = new URLSearchParams(location.search);
-const trackId = parseInt(params.get('id'));
+const trackId = window.GPX_TRACK_ID || parseInt(params.get('id'));   // /ruta/{id}-… sets GPX_TRACK_ID
 
 if (!trackId) {
   document.getElementById('loading').innerHTML = '<p style="color:#ef4444">Falta el parámetro <code>?id=</code></p>';
@@ -240,7 +241,11 @@ if (!trackId) {
     fetch(`/api/tracks/${trackId}`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
     actsP,
   ])
-    .then(([t]) => { render(t); document.getElementById('export-wrap').style.display = ''; initTagSuggestions(); })
+    .then(([t]) => {
+      render(t);
+      if (window.GPX_ANON) document.getElementById('login-dl').hidden = false;
+      else { document.getElementById('export-wrap').style.display = ''; initTagSuggestions(); }
+    })
     .catch(e => { document.getElementById('loading').innerHTML = `<p style="color:#ef4444">Error: ${esc(e.message)}</p>`; });
 }
 
@@ -411,11 +416,12 @@ function render(t) {
   // Only the owner or an admin may edit (the server enforces it as well)
   fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
     if (!me) return;
-    if (me.role === 'admin' || me.id === t.owner_id) document.getElementById('edit-btn').hidden = false;
+    if (me.role === 'admin' || me.id === t.owner_id) { document.getElementById('edit-btn').hidden = false; document.body.classList.add('can-edit'); }
     document.getElementById('list-wrap').hidden = false;   // any logged-in user can add to their lists
   }).catch(() => {});
   const traceBtn = document.getElementById('trace-btn');
-  traceBtn.href = `/trazar?id=${t.id}`; traceBtn.hidden = false;
+  traceBtn.href = `/trazar?id=${t.id}`; traceBtn.hidden = !!window.GPX_ANON;
+  document.getElementById('login-dl').href = `/login?next=${encodeURIComponent(location.pathname)}`;
   if (t.id) document.getElementById('back-link').href = `/?id=${t.id}`;
   if (t.id && t.visibility === 'public') {
     const pb = document.getElementById('public-btn');
@@ -423,6 +429,14 @@ function render(t) {
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70).replace(/-+$/, '');
     pb.href = `/ruta/${t.id}${slug ? '-' + slug : ''}`;
     pb.hidden = false;
+    if (location.pathname.startsWith('/ruta/')) pb.addEventListener('click', e => {
+      e.preventDefault();
+      const url = location.origin + pb.getAttribute('href');
+      if (navigator.share) { navigator.share({ title: t.name, url }).catch(() => {}); return; }
+      const label = pb.lastChild, prev = label.textContent;
+      navigator.clipboard.writeText(url).then(() => { label.textContent = ' ¡Enlace copiado!'; setTimeout(() => { label.textContent = prev; }, 1800); },
+        () => prompt('Copia el enlace:', url));
+    });
   }
 
   const hasEle = t.points && t.points.some(p => p[2] != null);

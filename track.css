@@ -309,3 +309,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   .stats-strip > div:nth-child(n+3) { border-top: 1px solid var(--border); }
   #weather-details { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Read-only for people who may not edit (and everything personal hidden without a session) */
+body:not(.can-edit) .tag-open-btn, body:not(.can-edit) .tag-del { display: none !important; }
+body.anon #list-wrap, body.anon #trace-btn, body.anon #export-wrap { display: none !important; }

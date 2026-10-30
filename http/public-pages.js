@@ -13,11 +13,6 @@ const WEB_VISIBLE = `t.visibility = 'public' AND u.active AND u.web_visible
   AND (COALESCE(t.url, '') = '' OR t.source_confirmed)
   AND t.geom_view IS NOT NULL AND t.geom_s1 IS NOT NULL AND t.sw_lat IS NOT NULL`;
 
-const GRADES = [
-  ['Muy fácil', '#16a34a'], ['Fácil', '#ca8a04'], ['Moderada', '#ea580c'],
-  ['Dura', '#dc2626'], ['Muy dura', '#9333ea'], ['Extrema', '#334155'],
-];
-
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // JSON inside <script>: no "</script>" breakout, no line separators that end a JS string
 const jsonForScript = v => JSON.stringify(v).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')
@@ -37,7 +32,7 @@ function page({ title, description, canonical, image, base, jsonLd, noindex, vie
   const next = encodeURIComponent(canonical);
   const navRight = viewer
     ? `<a href="/">Visor</a><a href="/perfil" id="nav-perfil" class="nav-user" aria-label="Mi perfil"></a>`
-    : `<a href="/login?next=${next}">Entrar</a><a href="/registro" class="nav-upload">Crear cuenta</a>`;
+    : `<a class="nav-login nav-keep" href="/login?next=${next}">Entrar</a><a href="/registro" class="nav-upload nav-keep">Crear cuenta</a>`;
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -64,20 +59,12 @@ ${head}
   .pub-kicker { font-size: 13px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .pub-kicker a { color: var(--ink-2); }
   .pub-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .pub-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
-  @media (max-width: 860px) { .pub-grid { grid-template-columns: minmax(0, 1fr); } }
-  .pub-map { height: 460px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--soft); }
-  @media (max-width: 860px) { .pub-map { height: 320px; } }
   .pub-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px; }
   .pub-card h2 { font-size: 15px; margin: 0 0 10px; }
   .pub-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
   .pub-stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
   .pub-stat span { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-  .pub-grade { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px;
-               color: var(--g); background: color-mix(in srgb, var(--g) 14%, transparent); border: 1px solid color-mix(in srgb, var(--g) 40%, transparent); }
   .pub-desc { white-space: pre-line; color: var(--ink-2); line-height: 1.6; }
-  .pub-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-  .pub-photos img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 8px; display: block; }
   .pub-owner { display: flex; gap: 10px; align-items: center; color: var(--ink); text-decoration: none; }
   .pub-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: var(--accent); color: #fff;
                 display: inline-flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
@@ -132,99 +119,63 @@ async function activityImages(db) {
 const routeImage = (t, actImg) => (t.cover_photo_id ? `/api/photos/${t.cover_photo_id}?size=thumb` : actImg[t.activity] || null);
 
 // ── Route ───────────────────────────────────────────────────────────
-async function renderRoute(db, id, { base, viewer, slug }) {
+// /ruta/{id}-{slug} serves the same track page as the app (track.html, so it looks the same and keeps the map
+// layers, profile and tabs); the server only adds the metadata for search engines and link previews, a summary
+// for clients without JavaScript, and the route id. Without a session the page is read-only and reads the
+// route from the API with the privacy zone applied.
+// Returns { status, location } (redirect), { status, html } (not found) or { status: 200, meta }.
+async function routeMeta(db, id, { base, viewer, slug }) {
   const t = await db.get(
-    `SELECT t.id, t.name, t.activity, t.sierra, t.province, t.ccaa, t.date, t.distance, t.elevation_gain, t.elevation_loss,
-            t.min_elevation, t.max_elevation, t.moving_time, t.notes, t.circular, t.cover_photo_id, t.url, t.imported_at,
-            u.username, u.display_name, u.avatar_key, u.profile_public, s.grade,
-            ST_AsGeoJSON(t.geom_s1, 5) AS line
-     FROM tracks t JOIN users u ON u.id = t.owner_id LEFT JOIN track_search s ON s.id = t.id
-     WHERE t.id = ? AND ${WEB_VISIBLE}`, [id]);
-  if (!t) return { status: 404, html: notFound({ base, viewer }) };
+    `SELECT t.id, t.name, t.activity, t.sierra, t.province, t.date, t.distance, t.elevation_gain, t.elevation_loss,
+            t.max_elevation, t.moving_time, t.notes, t.circular, t.cover_photo_id, t.owner_id, t.visibility,
+            u.username, u.display_name, u.profile_public, (${WEB_VISIBLE}) AS web
+     FROM tracks t LEFT JOIN users u ON u.id = t.owner_id WHERE t.id = ?`, [id]);
+  // Members also open routes that are only visible inside the app (not indexed); everybody else only web-visible ones
+  const inApp = t && viewer && (t.visibility === 'public' || t.owner_id === viewer.sub || viewer.role === 'admin');
+  if (!t || !(t.web || inApp)) return { status: 404, html: notFound({ base, viewer }) };
   const canonical = trackPath(t);
   if (slug !== canonical.slice(`/ruta/${t.id}`.length)) return { status: 301, location: canonical };
 
-  const [photos, actImg] = await Promise.all([
-    db.all('SELECT id, caption FROM track_photos WHERE track_id = ? ORDER BY position, id', [t.id]),
-    activityImages(db),
-  ]);
-  const owner = t.display_name || t.username;
+  const actImg = await activityImages(db);
+  const owner = t.display_name || t.username || 'GPX Library';
   const where = [t.sierra, t.province].filter(Boolean).join(', ');
-  const grade = t.grade >= 0 ? GRADES[t.grade] : null;
   const description = t.notes ? clip(t.notes, 160)
     : clip(`Ruta de ${(t.activity || 'montaña').toLowerCase()} de ${nf1.format(t.distance || 0)} km y ${nf0.format(t.elevation_gain || 0)} m de desnivel positivo${where ? ` en ${where}` : ''}${t.circular ? ', circular' : ''}. Por ${owner}.`, 160);
   const image = t.cover_photo_id ? `/api/photos/${t.cover_photo_id}` : actImg[t.activity] || null;
-  const line = JSON.parse(t.line).coordinates.map(c => [c[1], c[0]]);
+  const abs = u => (u && u.startsWith('/') ? base + u : u);
   const jsonLd = {
     '@context': 'https://schema.org', '@type': 'TouristTrip', name: t.name, description, url: base + canonical,
-    ...(image ? { image: (image.startsWith('/') ? base : '') + image } : {}),
+    ...(image ? { image: abs(image) } : {}),
     ...(t.activity ? { touristType: t.activity } : {}),
-    author: { '@type': 'Person', name: owner, ...(t.profile_public ? { url: base + userPath(t.username) } : {}) },
+    author: { '@type': 'Person', name: owner, ...(t.profile_public && t.username ? { url: base + userPath(t.username) } : {}) },
     ...(where ? { contentLocation: { '@type': 'Place', name: where } } : {}),
     additionalProperty: [
       { '@type': 'PropertyValue', name: 'Distancia', value: Math.round((t.distance || 0) * 10) / 10, unitText: 'km' },
       { '@type': 'PropertyValue', name: 'Desnivel positivo', value: t.elevation_gain || 0, unitText: 'm' },
     ],
   };
-  const stat = (v, l) => (v ? `<div class="pub-stat"><b>${v}</b><span>${l}</span></div>` : '');
-  const ownerHtml = `${t.avatar_key ? `<img class="pub-avatar" src="${esc(avatarUrl(t.avatar_key))}" alt="">` : `<span class="pub-avatar">${esc(owner.charAt(0).toUpperCase())}</span>`}
-    <span><b>${esc(owner)}</b><br><span class="pub-note">@${esc(t.username)}</span></span>`;
-  const body = `
-  <div class="pub-head">
-    <div>
-      <div class="pub-kicker">${esc(t.activity || 'Ruta')}${where ? ` · ${esc(where)}` : ''}${t.date ? ` · ${esc(String(t.date).slice(0, 10))}` : ''}${grade ? ` <span class="pub-grade" style="--g:${grade[1]}">${grade[0]}</span>` : ''}</div>
-      <h1>${esc(t.name)}</h1>
-      ${t.profile_public ? `<a class="pub-owner" href="${esc(userPath(t.username))}">${ownerHtml}</a>` : `<div class="pub-owner">${ownerHtml}</div>`}
-    </div>
-    <div class="pub-actions">
-      <button class="btn" id="btn-share">Compartir</button>
-      ${viewer ? `<a class="btn btn-primary" href="/track?id=${t.id}">Abrir en la app</a>`
-               : `<a class="btn btn-primary" href="/login?next=${encodeURIComponent('/track?id=' + t.id)}">Entrar para descargar el GPX</a>`}
-    </div>
-  </div>
-  <div class="pub-grid">
-    <div>
-      <div id="pub-map" class="pub-map" role="img" aria-label="Mapa de la ruta ${esc(t.name)}"></div>
-      ${t.notes ? `<div class="pub-card" style="margin-top:14px"><h2>Descripción</h2><div class="pub-desc">${esc(t.notes)}</div></div>` : ''}
-      ${photos.length ? `<div class="pub-card"><h2>Fotos</h2><div class="pub-photos">${photos.map(p =>
-        `<a href="/api/photos/${p.id}" target="_blank" rel="noopener"><img loading="lazy" src="/api/photos/${p.id}?size=thumb" alt="${esc(p.caption || t.name)}"></a>`).join('')}</div></div>` : ''}
-    </div>
-    <aside>
-      <div class="pub-card"><h2>Datos</h2><div class="pub-stats">
-        ${stat(`${nf1.format(t.distance || 0)} km`, 'Distancia')}
-        ${stat(`${nf0.format(t.elevation_gain || 0)} m`, 'Desnivel +')}
-        ${stat(t.elevation_loss != null ? `${nf0.format(t.elevation_loss)} m` : null, 'Desnivel −')}
-        ${stat(t.max_elevation != null ? `${nf0.format(t.max_elevation)} m` : null, 'Altitud máx.')}
-        ${stat(fmtTime(t.moving_time), 'En movimiento')}
-        ${stat(t.circular ? 'Circular' : 'Lineal', 'Tipo')}
-      </div></div>
-      <p class="pub-note">El inicio y el final pueden estar recortados por la zona de privacidad de su autor.
-      ${viewer ? '' : 'Para descargar el GPX, guardar la ruta o comentarla, <a href="/registro">crea una cuenta</a>.'}</p>
-    </aside>
-  </div>`;
-  const scripts = `<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script>
-(function () {
-  var line = ${jsonForScript(line)};
-  var map = L.map('pub-map', { scrollWheelZoom: false });
-  L.layerGroup([
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri, HERE, Garmin, © OpenStreetMap', maxZoom: 16 }),
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 })
-  ]).addTo(map);
-  L.polyline(line, { color: '#111', weight: 6, opacity: 0.75, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(map);
-  var l = L.polyline(line, { color: '#2563eb', weight: 3.5, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(map);
-  map.fitBounds(l.getBounds(), { padding: [24, 24] });
-  document.getElementById('btn-share').addEventListener('click', function () {
-    var url = location.origin + ${jsonForScript(canonical)};
-    var done = function () { var t = document.getElementById('toast'); t.textContent = 'Enlace copiado'; t.classList.add('show'); setTimeout(function () { t.classList.remove('show'); }, 2000); };
-    if (navigator.share) navigator.share({ title: document.title, url: url }).catch(function () {});
-    else if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, function () { prompt('Copia el enlace:', url); });
-    else prompt('Copia el enlace:', url);
-  });
-})();
-</script>`;
-  const head = '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">';
-  return { status: 200, html: page({ title: t.name, description, canonical, image, base, jsonLd, viewer, body, head, scripts }) };
+  const head = `<title>${esc(t.name)} · GPX Library</title>
+  <meta name="description" content="${esc(description)}">
+  <link rel="canonical" href="${esc(base + canonical)}">
+  ${t.web ? '' : '<meta name="robots" content="noindex">'}
+  <meta property="og:site_name" content="GPX Library">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="${esc(t.name)}">
+  <meta property="og:description" content="${esc(description)}">
+  <meta property="og:url" content="${esc(base + canonical)}">
+  ${image ? `<meta property="og:image" content="${esc(abs(image))}">\n  <meta name="twitter:card" content="summary_large_image">` : '<meta name="twitter:card" content="summary">'}
+  <script type="application/ld+json">${jsonForScript(jsonLd)}</script>`;
+  const summary = `<noscript><main class="pub"><h1>${esc(t.name)}</h1>
+    <p>${esc([t.activity, where, `${nf1.format(t.distance || 0)} km`, `${nf0.format(t.elevation_gain || 0)} m de desnivel`, fmtTime(t.moving_time)].filter(Boolean).join(' · '))}</p>
+    ${t.notes ? `<p>${esc(t.notes)}</p>` : ''}<p>Por ${esc(owner)}.</p></main></noscript>`;
+  return { status: 200, meta: { id: t.id, head, summary, anon: !viewer } };
+}
+
+// The track page with the route's metadata, its id and (without a session) the read-only flag
+function injectRoute(trackHtml, meta) {
+  return trackHtml
+    .replace(/<title>[^<]*<\/title>/, meta.head)
+    .replace('<body>', `<body${meta.anon ? ' class="anon"' : ''}>\n<script>window.GPX_TRACK_ID = ${Number(meta.id)};${meta.anon ? ' window.GPX_ANON = true;' : ''}</script>\n${meta.summary}`);
 }
 
 // ── Profile ─────────────────────────────────────────────────────────
@@ -345,4 +296,4 @@ Sitemap: ${base}/sitemap.xml
 `;
 }
 
-module.exports = { WEB_VISIBLE, renderRoute, renderProfile, renderList, renderSitemap, renderRobots, trackPath, listPath, userPath, jsonForScript, esc };
+module.exports = { WEB_VISIBLE, routeMeta, injectRoute, renderProfile, renderList, renderSitemap, renderRobots, trackPath, listPath, userPath, jsonForScript, esc };

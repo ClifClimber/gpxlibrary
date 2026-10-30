@@ -105,6 +105,9 @@ const forgetAttempts = key => _attempts.delete(key);
 // mixed = those plus a dot at the start of the other routes in view, all = every route in view
 const MAP_MODES = ['page', 'mixed', 'all'];
 
+// Viewer for requests without a session: never the owner nor an admin, so privacy zones always apply
+const ANON_VIEWER = Object.freeze({ sub: 0, role: 'anonymous' });
+
 // ── Zonas de privacidad ────────────────────────────────────────────
 // Radius (m) that hides the start/end of `ownerId`'s routes from `viewer`; 0 for the owner and admins.
 async function privacyRadiusFor(ownerId, viewer) {
@@ -1185,10 +1188,12 @@ const server = http.createServer(async (req, res) => {
     if (pubRoute || pubUser || pubList) {
       const ctx = { base: baseUrl(req), viewer: req.user };
       try {
-        const out = pubRoute ? await publicPages.renderRoute(sqlDb(), parseInt(pubRoute[1]), { ...ctx, slug: pubRoute[2] || '' })
+        const out = pubRoute ? await publicPages.routeMeta(sqlDb(), parseInt(pubRoute[1]), { ...ctx, slug: pubRoute[2] || '' })
           : pubUser ? await publicPages.renderProfile(sqlDb(), pubUser[1], { ...ctx, pageNo: Math.max(0, parseInt(searchParams.get('p')) || 0) })
           : await publicPages.renderList(sqlDb(), parseInt(pubList[1]), { ...ctx, slug: pubList[2] || '' });
         if (out.location) { res.writeHead(301, { Location: out.location }); return res.end(); }
+        // A route is the app's own track page plus its metadata (same look, map layers and tabs)
+        if (out.meta) out.html = publicPages.injectRoute(fs.readFileSync(path.join(ROOT, 'track.html'), 'utf8'), out.meta);
         // Anonymous pages are the same for everybody (CDN-cacheable); signed-in ones show the user's nav
         res.writeHead(out.status, { 'Content-Type': 'text/html; charset=utf-8', Vary: 'Cookie',
           'Cache-Control': req.user ? 'private, no-cache' : 'public, max-age=300' });
@@ -1207,8 +1212,25 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
       return res.end(publicPages.renderRobots({ base: baseUrl(req) }));
     }
-    // Images the public pages use, without a session: photos of web-visible routes and activity images
+    if (!req.user && pathname === '/track' && /^\d+$/.test(searchParams.get('id') || '')) {
+      res.writeHead(301, { Location: `/ruta/${searchParams.get('id')}` }); return res.end();
+    }
+    // What the public pages read without a session: web-visible routes (privacy zone applied), their photos,
+    // the activity settings and images
     if (!req.user) {
+      const anonTrack = pathname.match(/^\/api\/tracks\/(\d+)(\/photos)?$/);
+      if (anonTrack) {
+        const tid = parseInt(anonTrack[1]);
+        const ok = await sqlDb().get(`SELECT 1 FROM tracks t JOIN users u ON u.id = t.owner_id WHERE t.id = ? AND ${publicPages.WEB_VISIBLE}`, [tid]);
+        if (!ok) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
+        if (!anonTrack[2]) return apiGetTrackById(res, tid, searchParams.get('full') === '1', ANON_VIEWER);
+        const cover = (await sqlDb().get('SELECT cover_photo_id FROM tracks WHERE id = ?', [tid])).cover_photo_id;
+        const rows = await sqlDb().all('SELECT id, caption, mime, position FROM track_photos WHERE track_id = ? ORDER BY position, id', [tid]);
+        res.writeHead(200, { ...J, 'Cache-Control': 'public, max-age=300' });
+        return res.end(JSON.stringify(rows.map(p => ({ id: p.id, caption: p.caption, mime: p.mime, position: p.position,
+          url: `/api/photos/${p.id}`, thumb: `/api/photos/${p.id}?size=thumb`, is_cover: p.id === cover }))));
+      }
+      if (pathname === '/api/config/activities') return apiConfigList(res, 'config_activities');
       const pubPhoto = pathname.match(/^\/api\/photos\/(\d+)$/);
       if (pubPhoto) {
         const p = await sqlDb().get(

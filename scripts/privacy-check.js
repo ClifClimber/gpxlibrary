@@ -174,9 +174,21 @@ async function main(A, B, state) {
   const pg = await anon(pubUrl);
   const html = await pg.text();
   check(pg.status === 200, `página pública sin sesión: HTTP ${pg.status}`);
-  const lineJson = /var line = (\[[\s\S]*?\]);\n/.exec(html);
-  check(!!lineJson, 'página pública: incluye la línea del mapa');
-  if (lineJson) checkPoints('página pública, línea del mapa', JSON.parse(lineJson[1]), spots);
+  check(html.includes(`window.GPX_TRACK_ID = ${id};`) && html.includes('window.GPX_ANON = true'), 'página pública: es la ficha de la app, en modo lectura');
+  // What that page reads without a session: the route (privacy zone applied) and its photos
+  for (const q of ['', '?full=1']) {
+    const r = await anon(`/api/tracks/${id}${q}`);
+    const body = await r.json().catch(() => null);
+    check(r.status === 200 && body?.points?.length > 0, `sin sesión, /api/tracks/${id}${q}: HTTP ${r.status}`);
+    if (body?.points) {
+      checkPoints(`sin sesión, detalle${q} puntos`, body.points, spots);
+      checkPoints(`sin sesión, detalle${q} waypoints`, (body.waypoints || []).map(w => [w.lat, w.lon]), spots);
+      checkPoints(`sin sesión, detalle${q} bounds`, corners(body.bounds), spots);
+    }
+  }
+  check((await anon(`/api/tracks/${id}/photos`)).status === 200, 'sin sesión: las fotos de la ruta se pueden leer');
+  check((await anon(`/api/tracks/${id}/gpx`)).status !== 200, 'sin sesión: el GPX no se descarga');
+  check((await anon(`/api/search?ids=${id}`)).status === 401, 'sin sesión: la búsqueda sigue cerrada');
   const ld = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html);
   check(!!ld && !/latitude|longitude|"geo"/.test(ld[1]), 'página pública: los datos estructurados no llevan coordenadas');
   check(/<meta property="og:title"/.test(html) && /<link rel="canonical"/.test(html), 'página pública: metadatos Open Graph y canónica');
@@ -193,7 +205,8 @@ async function main(A, B, state) {
   check((await anon(pubUrl)).status === 200, 'ruta con web de origen confirmada como propia: visible sin sesión');
   // B with a session also gets the page (and the button to open it in the app)
   const pgB = await B.req('GET', pubUrl);
-  check(pgB.status === 200 && (await pgB.text()).includes(`/track?id=${id}`), 'página pública con sesión: enlace «Abrir en la app»');
+  check(pgB.status === 200 && !(await pgB.text()).includes('window.GPX_ANON = true'), 'página pública con sesión: la ficha completa, no en modo lectura');
+  check((await anon(`/track?id=${id}`)).headers.get('location') === `/ruta/${id}`, 'sin sesión, /track?id= redirige a la página pública');
 
   // 5. private: B gets nothing
   const vis = await A.json('PATCH', `/api/profile/tracks/${id}/visibility`, { json: { visibility: 'private' } });
@@ -215,6 +228,7 @@ async function main(A, B, state) {
   const mine = await A.json('GET', `/api/search?ids=${id}`);
   check(mine.body?.items?.some(i => i.id === id), 'privada: el dueño sigue viéndola');
   check((await fetch(BASE + `/ruta/${id}`, { redirect: 'manual' })).status === 404, 'privada: la página pública da 404 sin sesión');
+  check((await fetch(BASE + `/api/tracks/${id}`)).status === 404, 'privada: /api/tracks sin sesión da 404');
   check(!(await (await fetch(BASE + '/sitemap.xml')).text()).includes(`/ruta/${id}-`), 'privada: fuera del sitemap');
 }
 
