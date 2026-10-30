@@ -672,8 +672,8 @@ tr.inactive td { opacity: .4; }
           <button class="btn btn-ghost btn-sm" id="btn-jobs-refresh">↻</button>
         </div>
       </div>
-      <div class="card-body">
-        <p class="section-desc" style="margin-top:0">Importaciones, OSM, IBP, limpieza y el resto de operaciones largas se ponen en cola y las ejecuta un worker, una tras otra. Siguen aunque cierres la página; aquí puedes ver su salida, cancelarlas o repetirlas.</p>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <p class="section-desc" style="margin:0 0 12px;padding:16px 16px 0">Importaciones, OSM, IBP, limpieza y el resto de operaciones largas se ponen en cola y las ejecuta un worker, una tras otra. Siguen aunque cierres la página; aquí puedes ver su salida, cancelarlas o repetirlas.</p>
         <div id="jobs-list"><div class="section-desc">Cargando…</div></div>
       </div>
     </div>
@@ -1895,28 +1895,29 @@ async function loadJobs() {
     document.getElementById('jobs-worker').textContent = d.worker === 'embedded' ? 'Worker integrado en el servidor' : 'Worker externo';
     if (!d.jobs.length) { box.innerHTML = '<div class="section-desc">Todavía no hay trabajos.</div>'; return; }
     box.innerHTML = `<table class="table" style="font-size:13px"><thead><tr>
-      <th>#</th><th>Trabajo</th><th>Usuario</th><th>Estado</th><th>Creado</th><th class="num">Duración</th><th>Última línea</th><th></th></tr></thead><tbody>
+      <th style="width:36px">#</th><th>Trabajo</th><th style="width:90px">Usuario</th><th style="width:80px">Estado</th><th style="width:110px">Creado</th><th class="num" style="width:70px">Dur.</th><th style="width:80px;text-align:right"></th></tr></thead><tbody>
       ${d.jobs.map(j => {
         const [txt, cls] = JOB_STATUS[j.status] || [j.status, ''];
         const active = ['queued', 'running'].includes(j.status);
-        const retry = j.attempts > 1 ? ` <span style="color:var(--muted)">· intento ${j.attempts}/${j.maxAttempts}</span>` : '';
+        const retry = j.attempts > 1 ? ` <span style="color:var(--muted)">· ${j.attempts}/${j.maxAttempts}</span>` : '';
         const last = j.error && j.status !== 'done' ? j.error : (j.lastLine || '');
         const owner = j.payload && j.payload.user ? '@' + esc(j.payload.user.username) : '<span style="color:var(--ink-3)">sistema</span>';
+        const ICO_VIEW   = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+        const ICO_CANCEL = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        const ICO_RETRY  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>';
         return `<tr data-id="${j.id}">
           <td style="color:var(--muted)">${j.id}</td>
-          <td>${esc(j.label)}${retry}</td>
-          <td style="white-space:nowrap">${owner}</td>
+          <td><span style="font-weight:500">${esc(j.label)}</span>${retry}${last ? `<br><span style="font-size:11px;color:var(--muted);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:320px" title="${esc(last)}">${esc(last)}</span>` : ''}</td>
+          <td style="white-space:nowrap;font-size:12px">${owner}</td>
           <td><span class="badge ${cls}">${txt}</span></td>
-          <td style="white-space:nowrap">${fmtWhen(j.createdAt)}</td>
-          <td class="num" style="white-space:nowrap">${fmtDuration(j)}</td>
-          <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)" title="${esc(last)}">${esc(last)}</td>
-          <td style="white-space:nowrap;text-align:right;display:flex;gap:4px;justify-content:flex-end">
-            <button class="btn btn-ghost btn-sm" data-act="view" title="Ver salida del trabajo">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-              Ver log
-            </button>
-            ${active ? `<button class="btn btn-sm" style="background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent)" data-act="cancel">Cancelar</button>` : ''}
-            ${['failed', 'cancelled', 'done'].includes(j.status) ? '<button class="btn btn-ghost btn-sm" data-act="retry">Repetir</button>' : ''}
+          <td style="white-space:nowrap;font-size:12px">${fmtWhen(j.createdAt)}</td>
+          <td class="num" style="white-space:nowrap;font-size:12px">${fmtDuration(j)}</td>
+          <td style="white-space:nowrap;text-align:right">
+            <div style="display:flex;gap:2px;justify-content:flex-end">
+              <button class="icon-btn" data-act="view" title="Ver log">${ICO_VIEW}</button>
+              ${active ? `<button class="icon-btn" data-act="cancel" title="Cancelar" style="color:var(--danger)">${ICO_CANCEL}</button>` : ''}
+              ${['failed', 'cancelled', 'done'].includes(j.status) ? `<button class="icon-btn" data-act="retry" title="Repetir">${ICO_RETRY}</button>` : ''}
+            </div>
           </td></tr>`;
       }).join('')}</tbody></table>`;
   } catch (e) {
