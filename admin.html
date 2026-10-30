@@ -42,6 +42,18 @@
 .log-line { white-space: pre-wrap; word-break: break-all; }
 .log-line.err { color: #f87171; } .log-line.ok { color: #4ade80; } .log-line.warn { color: #fbbf24; }
 
+/* Panel flotante de job (lateral derecho) */
+#job-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); z-index: 2100;
+  background: var(--surface); border-left: 1px solid var(--line); box-shadow: -6px 0 32px rgba(0,0,0,.18);
+  display: flex; flex-direction: column; transform: translateX(100%); transition: transform .22s cubic-bezier(.4,0,.2,1); }
+#job-panel.open { transform: translateX(0); }
+#job-panel-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+#job-panel-title { flex: 1; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#job-panel-status { font-size: 11px; flex-shrink: 0; }
+#job-panel-cancel { flex-shrink: 0; }
+#job-panel-body { flex: 1; overflow-y: auto; padding: 10px 14px; font-size: 12px; font-family: ui-monospace, monospace; line-height: 1.6; background: var(--bg); }
+#job-panel-foot { flex-shrink: 0; padding: 10px 16px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; }
+
 .op-item .btn-ghost, .maint-item .btn-ghost, .backup-row .btn-ghost { background: var(--surface); }
 .op-item .btn-ghost:hover, .maint-item .btn-ghost:hover, .backup-row .btn-ghost:hover { background: var(--line); }
 .stats-table { margin-top: 16px; }
@@ -1465,6 +1477,29 @@ tr.inactive td { opacity: .4; }
 
 </main>
 
+<!-- Panel flotante lateral para ver/cancelar un job -->
+<div id="job-panel">
+  <div id="job-panel-head">
+    <div id="job-panel-title">Trabajo</div>
+    <span id="job-panel-status"></span>
+    <button id="job-panel-cancel" class="btn btn-sm" style="background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent)" hidden>Cancelar</button>
+    <button class="icon-btn" id="job-panel-close" title="Cerrar panel">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div id="job-panel-body"></div>
+  <div id="job-panel-osm-offer" hidden style="padding:10px 14px;background:var(--accent-soft);border-top:1px solid var(--accent)">
+    <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:6px">¿Enriquecer tipos de camino OSM?</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm" id="btn-panel-enrich-road">Enriquecer ahora</button>
+      <button class="btn btn-outline btn-sm" id="btn-panel-enrich-skip">Ahora no</button>
+    </div>
+  </div>
+  <div id="job-panel-foot">
+    <button class="btn btn-primary btn-sm" id="job-panel-catalog" hidden>Ver en Catálogo →</button>
+    <button class="btn btn-outline btn-sm" id="job-panel-close-btn">Cerrar</button>
+  </div>
+</div>
 
 <div id="log-modal" hidden>
   <div class="modal lm-box">
@@ -1871,9 +1906,12 @@ async function loadJobs() {
           <td style="white-space:nowrap">${fmtWhen(j.createdAt)}</td>
           <td class="num" style="white-space:nowrap">${fmtDuration(j)}</td>
           <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)" title="${esc(last)}">${esc(last)}</td>
-          <td style="white-space:nowrap;text-align:right">
-            <button class="btn btn-ghost btn-sm" data-act="view">Ver</button>
-            ${active ? '<button class="btn btn-ghost btn-sm" data-act="cancel">Cancelar</button>' : ''}
+          <td style="white-space:nowrap;text-align:right;display:flex;gap:4px;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" data-act="view" title="Ver salida del trabajo">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+              Ver log
+            </button>
+            ${active ? `<button class="btn btn-sm" style="background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent)" data-act="cancel">Cancelar</button>` : ''}
             ${['failed', 'cancelled', 'done'].includes(j.status) ? '<button class="btn btn-ghost btn-sm" data-act="retry">Repetir</button>' : ''}
           </td></tr>`;
       }).join('')}</tbody></table>`;
@@ -1881,12 +1919,134 @@ async function loadJobs() {
     box.innerHTML = `<div class="section-desc">No se pudieron leer los trabajos: ${esc(e.message)}</div>`;
   }
 }
+// ── Panel flotante de job ─────────────────────────────────────────
+(function () {
+  const panel      = document.getElementById('job-panel');
+  const panelTitle = document.getElementById('job-panel-title');
+  const panelStatus= document.getElementById('job-panel-status');
+  const panelBody  = document.getElementById('job-panel-body');
+  const panelCancel= document.getElementById('job-panel-cancel');
+  const panelOsm   = document.getElementById('job-panel-osm-offer');
+  const panelCat   = document.getElementById('job-panel-catalog');
+  let panelJobId = null, panelPollTimer = null;
+
+  function closePanel() {
+    panel.classList.remove('open');
+    clearInterval(panelPollTimer); panelPollTimer = null;
+    panelJobId = null;
+    panelCancel.hidden = true;
+    panelOsm.hidden = true;
+    panelCat.hidden = true;
+  }
+  document.getElementById('job-panel-close').addEventListener('click', closePanel);
+  document.getElementById('job-panel-close-btn').addEventListener('click', closePanel);
+  panelCat.addEventListener('click', () => { location.href = '/editor?last-import=1'; });
+
+  function addLine(text, cls) {
+    const d = document.createElement('div');
+    d.className = 'log-line' + (cls ? ' ' + cls : '');
+    d.textContent = text;
+    panelBody.appendChild(d);
+    panelBody.scrollTop = panelBody.scrollHeight;
+  }
+
+  function updateCancelBtn(status) {
+    panelCancel.hidden = !['queued', 'running'].includes(status);
+  }
+
+  async function pollStatus() {
+    if (!panelJobId) return;
+    try {
+      const j = await fetch(`/api/jobs/${panelJobId}`).then(r => r.ok ? r.json() : null);
+      if (!j) return;
+      const [txt, cls] = JOB_STATUS[j.status] || [j.status, ''];
+      panelStatus.innerHTML = `<span class="badge ${cls}">${txt}</span>`;
+      updateCancelBtn(j.status);
+      if (['done', 'failed', 'cancelled'].includes(j.status)) {
+        clearInterval(panelPollTimer); panelPollTimer = null;
+        loadJobs();
+      }
+    } catch {}
+  }
+
+  async function openJobPanel(id) {
+    closePanel();
+    panelJobId = id;
+    panelTitle.textContent = `Trabajo #${id}`;
+    panelStatus.innerHTML = '';
+    panelBody.innerHTML = '';
+    panel.classList.add('open');
+
+    // Stream the log
+    const r = await fetch(`/api/jobs/${id}/stream`).catch(e => { addLine('Error: ' + e.message, 'err'); return null; });
+    if (!r) return;
+
+    // Poll status every 2s while panel is open
+    panelPollTimer = setInterval(pollStatus, 2000);
+    pollStatus();
+
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    async function pump() {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) { loadJobs(); return; }
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split('\n\n'); buf = parts.pop();
+        for (const part of parts) {
+          const line = part.replace(/^data:\s*/, '');
+          if (!line) continue;
+          try {
+            const ev = JSON.parse(line);
+            if (ev.type === 'log' || ev.type === 'progress') addLine(ev.text);
+            if (ev.type === 'error') addLine(ev.text, 'err');
+            if (ev.type === 'warn')  addLine(ev.text, 'warn');
+            if (ev.type === 'done') {
+              addLine(ev.code === 0 ? '✓ Completado' : `✗ Código ${ev.code}`, ev.code === 0 ? 'ok' : 'err');
+              updateCancelBtn('done');
+              clearInterval(panelPollTimer); panelPollTimer = null;
+              // Show OSM offer if it was an import
+              if (ev.code === 0) {
+                const osmOffer = document.getElementById('log-osm-offer');
+                if (osmOffer && !osmOffer.hidden) { panelOsm.hidden = false; }
+                panelCat.hidden = false;
+              }
+              loadJobs();
+            }
+          } catch {}
+        }
+      }
+    }
+    pump().catch(e => addLine('Conexión cerrada: ' + e.message, 'err'));
+  }
+
+  panelCancel.addEventListener('click', async () => {
+    if (!panelJobId || !confirm(`¿Cancelar el trabajo #${panelJobId}?`)) return;
+    panelCancel.disabled = true;
+    const r = await fetch(`/api/jobs/${panelJobId}/cancel`, { method: 'POST' });
+    panelCancel.disabled = false;
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'No se pudo cancelar'); }
+    loadJobs();
+  });
+
+  document.getElementById('btn-panel-enrich-road').addEventListener('click', () => {
+    panelOsm.hidden = true;
+    const ids = document.getElementById('log-osm-offer').dataset.ids;
+    if (ids) streamScript(`/api/db/enrich-road-types?ids=${ids}`, 'Enriquecer tipos OSM', null, null, 'POST').finally(loadJobs);
+  });
+  document.getElementById('btn-panel-enrich-skip').addEventListener('click', () => { panelOsm.hidden = true; });
+
+  // Expose for use in the jobs-list click handler
+  window._openJobPanel = openJobPanel;
+})();
+
 document.getElementById('jobs-list').addEventListener('click', async e => {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
   const id = btn.closest('tr').dataset.id, act = btn.dataset.act;
   if (act === 'view') {
-    streamScript(`/api/jobs/${id}/stream`, `Trabajo #${id}`, null, null, 'GET').finally(loadJobs);
+    window._openJobPanel(id);
     return;
   }
   if (act === 'cancel' && !confirm(`¿Cancelar el trabajo #${id}?`)) return;
@@ -1894,7 +2054,7 @@ document.getElementById('jobs-list').addEventListener('click', async e => {
   const r = await fetch(`/api/jobs/${id}/${act}`, { method: 'POST' });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) alert(d.error || 'No se pudo');
-  if (act === 'retry' && d.job) streamScript(`/api/jobs/${d.job.id}/stream`, `Trabajo #${d.job.id}`, null, null, 'GET').finally(loadJobs);
+  if (act === 'retry' && d.job) window._openJobPanel(d.job.id);
   loadJobs();
 });
 document.getElementById('btn-jobs-refresh').addEventListener('click', loadJobs);
