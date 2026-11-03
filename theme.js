@@ -83,8 +83,10 @@
         if (location.pathname === '/subir') up.classList.add('active');
         up.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Upload Trail</span>';
         const uicon = nav.querySelector('#nav-perfil');
-        nav.insertBefore(up, uicon || null);   // just before the user icon
+        nav.insertBefore(up, uicon || null);
       }
+      // Notification bell
+      _initNotifBell(nav);
     }).catch(() => {});
 
     const btn = document.createElement('button');
@@ -107,4 +109,100 @@
     paint();
     nav.appendChild(btn);
   });
+
+  function _initNotifBell(nav) {
+    if (nav.querySelector('#nav-notif')) return;
+
+    // Bell button
+    const bell = document.createElement('button');
+    bell.id = 'nav-notif';
+    bell.type = 'button';
+    bell.setAttribute('aria-label', 'Notificaciones');
+    bell.style.cssText = 'position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;color:var(--ink-2);display:flex;align-items:center;border-radius:var(--radius)';
+    bell.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+
+    // Badge
+    const badge = document.createElement('span');
+    badge.id = 'nav-notif-badge';
+    badge.style.cssText = 'position:absolute;top:2px;right:2px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;line-height:1;padding:1px 4px;border-radius:8px;display:none;min-width:16px;text-align:center';
+    bell.appendChild(badge);
+
+    // Panel
+    const panel = document.createElement('div');
+    panel.id = 'nav-notif-panel';
+    panel.style.cssText = 'position:fixed;top:48px;right:8px;width:320px;max-height:420px;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);z-index:1200;display:none;font-size:13px';
+    document.body.appendChild(panel);
+
+    const ICONS = { comment: '💬', rating: '⭐', done: '✓', follow: '👤' };
+    const TEXTS = {
+      comment: (r) => `<b>${r.actor_display_name || r.actor_username}</b> comentó en <b>${r.track_name || 'tu ruta'}</b>`,
+      rating:  (r) => `<b>${r.actor_display_name || r.actor_username}</b> valoró <b>${r.track_name || 'tu ruta'}</b>`,
+      done:    (r) => `<b>${r.actor_display_name || r.actor_username}</b> hizo <b>${r.track_name || 'tu ruta'}</b>`,
+      follow:  (r) => `<b>${r.actor_display_name || r.actor_username}</b> ha empezado a seguirte`,
+    };
+    function relTime(ts) {
+      const d = Date.now() - new Date(ts).getTime();
+      if (d < 60000) return 'ahora';
+      if (d < 3600000) return Math.floor(d / 60000) + ' min';
+      if (d < 86400000) return Math.floor(d / 3600000) + ' h';
+      return Math.floor(d / 86400000) + ' d';
+    }
+    function notifUrl(r) {
+      if (r.track_id) return `/track?id=${r.track_id}`;
+      if (r.type === 'follow' && r.actor_username) return `/u/${r.actor_username}`;
+      return '#';
+    }
+    function renderPanel(rows) {
+      if (!rows.length) {
+        panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Sin notificaciones</div>';
+        return;
+      }
+      panel.innerHTML = rows.map(r => `
+        <a href="${notifUrl(r)}" style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;text-decoration:none;color:var(--ink);border-bottom:1px solid var(--line);background:${r.read_at ? 'transparent' : 'color-mix(in srgb,var(--accent) 6%,transparent)'}">
+          <span style="font-size:16px;flex-shrink:0;margin-top:1px">${ICONS[r.type] || '•'}</span>
+          <span style="flex:1;min-width:0">
+            <span style="display:block;line-height:1.4">${(TEXTS[r.type] || (() => r.type))(r)}</span>
+            <span style="font-size:11px;color:var(--muted)">${relTime(r.created_at)}</span>
+          </span>
+        </a>`).join('');
+    }
+
+    let pollTimer;
+    async function fetchNotifs(renderIfOpen) {
+      try {
+        const d = await fetch('/api/notifications').then(r => r.ok ? r.json() : null);
+        if (!d) return;
+        badge.textContent = d.unread > 9 ? '9+' : d.unread;
+        badge.style.display = d.unread ? 'block' : 'none';
+        if (renderIfOpen && panel.style.display !== 'none') renderPanel(d.rows);
+        return d;
+      } catch {}
+    }
+
+    async function openPanel() {
+      const d = await fetchNotifs(false);
+      if (d) renderPanel(d.rows);
+      panel.style.display = 'block';
+      badge.style.display = 'none';
+      badge.textContent = '0';
+      fetch('/api/notifications/read', { method: 'POST' }).catch(() => {});
+    }
+    function closePanel() { panel.style.display = 'none'; }
+
+    bell.addEventListener('click', e => {
+      e.stopPropagation();
+      panel.style.display === 'none' ? openPanel() : closePanel();
+    });
+    document.addEventListener('click', e => {
+      if (!panel.contains(e.target) && e.target !== bell) closePanel();
+    });
+    panel.addEventListener('click', () => closePanel());
+
+    const uicon = nav.querySelector('#nav-perfil');
+    nav.insertBefore(bell, uicon || null);
+
+    fetchNotifs(false);
+    pollTimer = setInterval(() => fetchNotifs(true), 60000);
+    window.addEventListener('beforeunload', () => clearInterval(pollTimer));
+  }
 })();

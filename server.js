@@ -209,6 +209,8 @@ const USER_API = [
   ['PUT',    /^\/api\/tracks\/\d+\/done$/],
   ['DELETE', /^\/api\/tracks\/\d+\/done$/],
   ['GET',    /^\/api\/tracks\/\d+\/done$/],
+  ['GET',    /^\/api\/notifications$/],
+  ['POST',   /^\/api\/notifications\/read$/],
   ['GET',    /^\/api\/feed$/],
 ];
 function userMayAccess(pathname, method) {
@@ -1827,7 +1829,8 @@ const server = http.createServer(async (req, res) => {
     const target = await db.get('SELECT id FROM users WHERE id = ? AND active', [targetId]);
     if (!target) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'Usuario no encontrado' })); }
     if (method === 'POST') {
-      await db.run('INSERT INTO follows (follower_id, followee_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [req.user.sub, targetId]);
+      const followInsert = await db.run('INSERT INTO follows (follower_id, followee_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [req.user.sub, targetId]);
+      if (followInsert.changes) db.run('INSERT INTO notifications(user_id,type,actor_id) VALUES(?,?,?)', [targetId, 'follow', req.user.sub]).catch(() => {});
       res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, following: true }));
     }
     if (method === 'DELETE') {
@@ -2971,7 +2974,9 @@ const server = http.createServer(async (req, res) => {
       const t = await sqlDb().get('SELECT owner_id FROM tracks WHERE id = ?', [tid]);
       if (!t) { res.writeHead(404, J); return res.end(JSON.stringify({ error: 'No encontrado' })); }
       if (t.owner_id === req.user.sub) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'No puedes valorar tus propias rutas' })); }
+      const isNew = !(await sqlDb().get('SELECT 1 FROM track_ratings WHERE track_id=? AND user_id=?', [tid, req.user.sub]));
       await sqlDb().run('INSERT INTO track_ratings(track_id,user_id,stars) VALUES(?,?,?) ON CONFLICT(track_id,user_id) DO UPDATE SET stars=EXCLUDED.stars', [tid, req.user.sub, stars]);
+      if (isNew && t.owner_id) sqlDb().run('INSERT INTO notifications(user_id,type,actor_id,track_id) VALUES(?,?,?,?)', [t.owner_id, 'rating', req.user.sub, tid]).catch(() => {});
       const agg = await sqlDb().get('SELECT rating_avg, rating_count FROM track_search WHERE id = ?', [tid]);
       res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, avg: agg?.rating_avg, count: agg?.rating_count || 0, mine: stars }));
     }
@@ -2993,13 +2998,42 @@ const server = http.createServer(async (req, res) => {
     if (method === 'PUT') {
       const body = await parseBody(req);
       const doneOn = body.done_on || null;
+      const wasNew = !(await sqlDb().get('SELECT 1 FROM track_done WHERE track_id=? AND user_id=?', [tid, req.user.sub]));
       await sqlDb().run('INSERT INTO track_done(track_id,user_id,done_on) VALUES(?,?,?) ON CONFLICT(track_id,user_id) DO UPDATE SET done_on=EXCLUDED.done_on', [tid, req.user.sub, doneOn]);
+      if (wasNew) {
+        const own = await sqlDb().get('SELECT owner_id FROM tracks WHERE id=?', [tid]);
+        if (own?.owner_id && own.owner_id !== req.user.sub) sqlDb().run('INSERT INTO notifications(user_id,type,actor_id,track_id) VALUES(?,?,?,?)', [own.owner_id, 'done', req.user.sub, tid]).catch(() => {});
+      }
       res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, done: true }));
     }
     if (method === 'DELETE') {
       await sqlDb().run('DELETE FROM track_done WHERE track_id=? AND user_id=?', [tid, req.user.sub]);
       res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, done: false }));
     }
+  }
+
+  // ── Notificaciones ────────────────────────────────────────────────
+  if (pathname === '/api/notifications') {
+    if (!req.user) { res.writeHead(401, J); return res.end(JSON.stringify({ error: 'Requiere sesión' })); }
+    if (method === 'GET') {
+      const rows = await sqlDb().all(
+        `SELECT n.id, n.type, n.created_at, n.read_at, n.track_id, n.comment_id,
+                u.username AS actor_username, u.display_name AS actor_display_name, u.avatar_url AS actor_avatar_url,
+                t.name AS track_name
+         FROM notifications n
+         LEFT JOIN users u ON u.id = n.actor_id
+         LEFT JOIN tracks t ON t.id = n.track_id
+         WHERE n.user_id = ?
+         ORDER BY n.created_at DESC LIMIT 40`, [req.user.sub]);
+      const unread = rows.filter(r => !r.read_at).length;
+      res.writeHead(200, J); return res.end(JSON.stringify({ unread, rows }));
+    }
+  }
+  if (pathname === '/api/notifications/read' && method === 'POST') {
+    if (!req.user) { res.writeHead(401, J); return res.end(JSON.stringify({ error: 'Requiere sesión' })); }
+    const ndb = sqlDb();
+    await ndb.run(`UPDATE notifications SET read_at = ${ndb.NOW} WHERE user_id = ? AND read_at IS NULL`, [req.user.sub]);
+    res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
   }
 
   // ── Feed de actividad ──────────────────────────────────────────────
