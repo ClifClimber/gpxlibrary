@@ -4,6 +4,34 @@
 
 ---
 
+## v2.17.0 — 2026-11-03
+
+Fase 4 bloque F (notificaciones), con lo que la fase 4 queda cerrada, y nuevo diseño en todas las páginas de contenido.
+
+### Fase 4 · bloque F: notificaciones
+- Campana en la barra (`theme.js`) con contador de no leídas y panel desplegable: comentarios, valoraciones, «la he hecho» y nuevos seguidores, con tiempo relativo
+- `GET /api/notifications` (40 más recientes) y `POST /api/notifications/read`; se actualiza cada 60 s y se marcan como leídas al abrir el panel
+- Se genera una notificación al comentar, valorar por primera vez, marcar como hecha por primera vez o empezar a seguir
+
+### Nuevo diseño
+- Componentes compartidos en `shared.css`: `.hero` (portada, avatar y cifras), `.pill-tabs`, `.page-hero`, `.ico-head`, `input.switch`, `.empty-state`, `.bar-chart`, `body.auth`; token `--cover` para las portadas (más oscuro en modo oscuro)
+- `/perfil`: portada, cifras (rutas, km, desnivel, seguidores), pestañas fijas con iconos y enlace directo (`/perfil#logros`), ajustes en dos columnas con interruptores
+- `/u/{usuario}`: mismo diseño que el perfil propio, rutas en tarjetas con foto; las pestañas ya no heredan el estilo de la barra de navegación
+- Admin: menú lateral agrupado con iconos, título de la sección y estado de la BD en mosaicos
+- Actividad, Varios días, Lista y Upload Trail con cabecera de icono; login, registro y restablecer con panel de marca
+- `docs/page-template.html` actualizado con los nuevos componentes
+
+### Trabajos
+- Admin → Trabajos: panel lateral con log completo y botón para cancelar; tabla compacta con iconos de ver, cancelar y repetir
+- Worker con 3 trabajos en paralelo; corregidas las líneas de log duplicadas al reintentar
+
+### Correcciones
+- Valoración y «la he hecho» se conservan al volver a la ruta (`rr.mine` y `GET /api/tracks/:id/done`, que faltaba) y muestran cuántas personas la han hecho
+- La consulta de notificaciones leía la columna inexistente `avatar_url`
+- `package-lock.json` alineado con la versión
+
+---
+
 ## v2.16.0 — 2026-10-30
 
 Fase 4 bloques B, C, D, E y G: función social completa (seguir, comentarios, valoraciones, feed de actividad y moderación).
