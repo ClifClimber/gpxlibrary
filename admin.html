@@ -768,7 +768,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.17.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.18.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">3 noviembre 2026</div>
         </div>
       </div>
@@ -787,8 +787,21 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.17.0</span>
+            <span class="cl-version">v2.18.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">3 nov 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Puntos de autor</b>: los dueños ganan puntos por sus rutas públicas: por publicarlas y completarlas (descripción, puntos de paso, fotos, portada, etiquetas) y por lo que hacen otros con ellas (estrellas, «la he hecho», comentarios) y por sus seguidores</li>
+            <li>Perfil → Puntos: total, desglose por contenido y comunidad, puntos por ruta y cómo se ganan; el total también en la cabecera del perfil</li>
+            <li>Perfil público: solo el total de puntos</li>
+            <li>Admin → Gamificación: pesos y topes de los puntos editables (o desactivarlos)</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.17.0</span>
             <span class="cl-date">3 nov 2026</span>
           </div>
           <ul class="cl-list">
@@ -1290,6 +1303,15 @@ tr.inactive td { opacity: .4; }
           <div><label class="field-label">Base de nivel</label><input class="input" type="number" step="1" min="1" id="gm-xp-base"></div>
         </div>
         <p class="section-desc" style="margin:0">XP = km × XP/km + desnivel ÷ metros/XP + niveles de insignia × XP/nivel. El nivel <i>n</i> se alcanza con base × (n−1)² XP.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>Puntos de autor</h2></div>
+      <div class="card-body gm-form">
+        <label class="field-label" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="gm-pt-enabled"> Dar puntos a los dueños por sus rutas públicas</label>
+        <div class="gm-row gm-row4" id="gm-pt-fields"></div>
+        <p class="section-desc" style="margin:0">Cuentan las rutas públicas no planeadas. Valoraciones, «la he hecho» y comentarios solo de otros usuarios (comentarios visibles, una vez por persona). El usuario ve el desglose en Perfil → Puntos; el perfil público enseña solo el total.</p>
       </div>
     </div>
 
@@ -3224,6 +3246,13 @@ loadActivities();
   const fmt = n => Number(n || 0).toLocaleString('es');
   let gCfg = null, loaded = false;
   let loadPromise = null;
+  const GM_POINT_FIELDS = [
+    ['publish', 'Por ruta pública'], ['description', 'Por descripción'], ['descMinChars', 'Caracteres mínimos descripción'],
+    ['waypoint', 'Por punto de paso'], ['waypointMax', 'Máx. puntos de paso por ruta'], ['photo', 'Por foto'],
+    ['photoMax', 'Máx. fotos por ruta'], ['cover', 'Por portada'], ['tags', 'Por tener etiquetas'],
+    ['star', 'Por estrella recibida'], ['done', 'Por «la he hecho» de otro'], ['comment', 'Por persona que comenta'],
+    ['follower', 'Por seguidor'],
+  ];
 
   async function load() {
     loaded = true;
@@ -3261,6 +3290,10 @@ loadActivities();
     $('gm-an-gainkm').value = an.maxGainPerKm;
     $('gm-an-kmday').value = an.maxKmPerDay;
     $('gm-an-gainday').value = an.maxGainPerDay;
+    const pt = cfg.points || {};
+    $('gm-pt-enabled').checked = pt.enabled !== false;
+    $('gm-pt-fields').innerHTML = GM_POINT_FIELDS.map(([k, lbl]) =>
+      `<div><label class="field-label">${esc(lbl)}</label><input class="input" type="number" step="1" min="0" data-pt="${k}" value="${pt[k] ?? ''}"></div>`).join('');
     $('gm-xp-km').value = cfg.xp.perKm;
     $('gm-xp-gain').value = cfg.xp.gainPerXp;
     $('gm-xp-tier').value = cfg.xp.perTier;
@@ -3276,7 +3309,10 @@ loadActivities();
 
   // Form → config object (the server merges and validates it again)
   function read() {
+    const points = { enabled: $('gm-pt-enabled').checked };
+    document.querySelectorAll('#gm-pt-fields [data-pt]').forEach(i => { points[i.dataset.pt] = +i.value; });
     return {
+      points,
       xp: { perKm: +$('gm-xp-km').value, gainPerXp: +$('gm-xp-gain').value, perTier: +$('gm-xp-tier').value, levelBase: +$('gm-xp-base').value },
       anomaly: { enabled: $('gm-an-enabled').checked, maxSpeedKmh: +$('gm-an-speed').value, maxGainPerKm: +$('gm-an-gainkm').value,
                  maxKmPerDay: +$('gm-an-kmday').value, maxGainPerDay: +$('gm-an-gainday').value },

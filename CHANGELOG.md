@@ -4,6 +4,17 @@
 
 ---
 
+## v2.18.0 — 2026-11-03
+
+### Puntos de autor
+- Los dueños ganan puntos por cada ruta pública (no planeada): por publicarla (+3), descripción de 80+ caracteres (+5), puntos de paso (+1, máx. 10), fotos (+3, máx. 5), portada (+2) y etiquetas (+2)
+- Y por lo que hacen otros usuarios: cada estrella de una valoración (+2), cada «la he hecho» (+5), cada persona que comenta (+2, comentarios visibles) y cada seguidor (+5)
+- Perfil → Puntos: total, desglose por concepto (contenido y comunidad), puntos por ruta y cómo se ganan; cifra en la cabecera del perfil
+- Perfil público `/u/`: solo el total
+- Pesos y topes editables en Admin → Gamificación → Puntos de autor; `GET /api/profile/points`
+
+---
+
 ## v2.17.0 — 2026-11-03
 
 Fase 4 bloque F (notificaciones), con lo que la fase 4 queda cerrada, y nuevo diseño en todas las páginas de contenido.

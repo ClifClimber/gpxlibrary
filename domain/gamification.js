@@ -32,6 +32,23 @@ const DEFAULT_CONFIG = {
       { id: 'foot', name: 'A pie (resto)', kmh: 4.5, climbMh: 500, activities: [] },   // default group
     ],
   },
+  // Author points: what the owner earns for each public route (its content and what other users do with it)
+  points: {
+    enabled: true,
+    publish: 3,           // per public (non-planned) route: low, so bulk uploads don't outweigh quality and community
+    description: 5,       // the route has a real description…
+    descMinChars: 80,     // …of at least this many characters (HTML stripped)
+    waypoint: 1,          // per waypoint…
+    waypointMax: 10,      // …counting at most this many per route
+    photo: 3,             // per photo…
+    photoMax: 5,          // …counting at most this many per route
+    cover: 2,             // a cover photo is chosen
+    tags: 2,              // it has tags (the automatic «revisar» doesn't count)
+    star: 2,              // per star of each rating from other users (5★ = 10)
+    done: 5,              // per other user who marked it «la he hecho»
+    comment: 2,           // per other user who commented on it (visible comments, once per person)
+    follower: 5,          // per follower of the owner
+  },
   // Routes with physically impossible data (GPS or elevation errors) don't count at all
   anomaly: {
     enabled: true,
@@ -68,6 +85,9 @@ function mergeConfig(stored) {
   for (const k of ['enabled', 'excludeFromRecords', 'excludeFromTotals']) if (typeof md[k] === 'boolean') cfg.multiDay[k] = md[k];
   for (const k of ['overnightGapHours', 'maxGapHours', 'minDayKm', 'maxContinuousHours', 'maxDayHours', 'maxMovingHours']) cfg.multiDay[k] = num(md[k], cfg.multiDay[k]);
   if (typeof md.keywords === 'string') cfg.multiDay.keywords = md.keywords;
+  const pt = stored.points || {};
+  if (typeof pt.enabled === 'boolean') cfg.points.enabled = pt.enabled;
+  for (const k of POINT_KEYS) cfg.points[k] = num(pt[k], cfg.points[k]);
   const an = stored.anomaly || {};
   if (typeof an.enabled === 'boolean') cfg.anomaly.enabled = an.enabled;
   for (const k of ['maxSpeedKmh', 'maxGainPerKm', 'maxKmPerDay', 'maxGainPerDay']) cfg.anomaly[k] = num(an[k], cfg.anomaly[k]);
@@ -89,6 +109,8 @@ function mergeConfig(stored) {
   return cfg;
 }
 
+const POINT_KEYS = Object.keys(DEFAULT_CONFIG.points).filter(k => k !== 'enabled');
+
 const LEGACY_ICONS = { routes: '🥾', km: '📏', gain: '⛰️', max_km: '🏁', max_gain: '🧗', multiday: '🏕️',
   provinces: '🗺️', activities: '🎽', circular: '🔄', years: '📅', photos: '📷', lists: '📚' };
 
@@ -107,6 +129,7 @@ function validateConfig(cfg) {
   const an = cfg.anomaly;
   if (!['maxSpeedKmh', 'maxGainPerKm', 'maxKmPerDay', 'maxGainPerDay'].every(k => an[k] > 0)) throw new Error('Los límites de datos anómalos deben ser > 0');
   try { new RegExp(cfg.multiDay.keywords, 'i'); } catch (e) { throw new Error('Palabras clave: expresión no válida (' + e.message + ')'); }
+  if (!POINT_KEYS.every(k => cfg.points[k] >= 0)) throw new Error('Los puntos de autor no pueden ser negativos');
   return cfg;
 }
 
@@ -244,4 +267,69 @@ function computeAchievements(tracks, extra, cfg) {
   };
 }
 
-module.exports = { DEFAULT_CONFIG, TIER_NAMES, mergeConfig, validateConfig, multiDayInfo, anomalyReason, computeAchievements };
+// Author points, in display order: category id → label and unit of its count
+const POINT_CATEGORIES = [
+  { id: 'publish',     label: 'Rutas publicadas',        unit: 'rutas',      group: 'content' },
+  { id: 'description', label: 'Descripciones',           unit: 'rutas',      group: 'content' },
+  { id: 'waypoints',   label: 'Puntos de paso',          unit: 'puntos',     group: 'content' },
+  { id: 'photos',      label: 'Fotos',                   unit: 'fotos',      group: 'content' },
+  { id: 'cover',       label: 'Portadas',                unit: 'rutas',      group: 'content' },
+  { id: 'tags',        label: 'Etiquetas',               unit: 'rutas',      group: 'content' },
+  { id: 'ratings',     label: 'Valoraciones recibidas',  unit: 'estrellas',  group: 'community' },
+  { id: 'done',        label: '«La he hecho» de otros',  unit: 'personas',   group: 'community' },
+  { id: 'comments',    label: 'Comentarios de otros',    unit: 'personas',   group: 'community' },
+  { id: 'followers',   label: 'Seguidores',              unit: 'seguidores', group: 'community' },
+];
+
+const textLength = html => String(html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim().length;
+function countJsonArray(v, keep = () => true) {
+  if (Array.isArray(v)) return v.filter(keep).length;
+  if (!v) return 0;
+  try { const a = JSON.parse(v); return Array.isArray(a) ? a.filter(keep).length : 0; } catch { return 0; }
+}
+
+/**
+ * Points an author earns from their public routes.
+ * routes: public, non-planned routes of the owner with { id, name, notes, waypoints_json, tags, cover_photo_id,
+ *         photos, stars, done, commenters } (stars/done/commenters only from other users).
+ * extra: { followers }.
+ * Returns { enabled, total, categories: [{ id, label, unit, group, count, points }], routes: [{ id, name, points, parts }] }.
+ */
+function computeAuthorPoints(routes, extra, cfg) {
+  const p = cfg.points;
+  const cats = Object.fromEntries(POINT_CATEGORIES.map(c => [c.id, { ...c, count: 0, points: 0 }]));
+  if (!p.enabled) return { enabled: false, total: 0, categories: Object.values(cats), routes: [] };
+  const add = (parts, id, count, points) => { cats[id].count += count; cats[id].points += points; if (points) parts[id] = points; };
+  const out = (routes || []).map(r => {
+    const parts = {};
+    add(parts, 'publish', 1, p.publish);
+    const hasDesc = textLength(r.notes) >= p.descMinChars;
+    add(parts, 'description', hasDesc ? 1 : 0, hasDesc ? p.description : 0);
+    const wpts = Math.min(countJsonArray(r.waypoints_json), p.waypointMax);
+    add(parts, 'waypoints', wpts, wpts * p.waypoint);
+    const photos = Math.min(Number(r.photos) || 0, p.photoMax);
+    add(parts, 'photos', photos, photos * p.photo);
+    const cover = r.cover_photo_id ? 1 : 0;
+    add(parts, 'cover', cover, cover * p.cover);
+    const tagged = countJsonArray(r.tags, t => String(t).toLowerCase() !== 'revisar') ? 1 : 0;
+    add(parts, 'tags', tagged, tagged * p.tags);
+    const stars = Number(r.stars) || 0, done = Number(r.done) || 0, comm = Number(r.commenters) || 0;
+    add(parts, 'ratings', stars, stars * p.star);
+    add(parts, 'done', done, done * p.done);
+    add(parts, 'comments', comm, comm * p.comment);
+    const points = Object.values(parts).reduce((s, v) => s + v, 0);
+    return { id: r.id, name: r.name, points, parts };
+  });
+  const followers = Number(extra?.followers) || 0;
+  cats.followers.count = followers; cats.followers.points = followers * p.follower;
+  const categories = Object.values(cats).map(c => ({ ...c, points: Math.round(c.points) }));
+  return {
+    enabled: true,
+    total: categories.reduce((s, c) => s + c.points, 0),
+    categories,
+    routes: out.sort((a, b) => b.points - a.points || a.id - b.id),
+  };
+}
+
+module.exports = { DEFAULT_CONFIG, TIER_NAMES, POINT_CATEGORIES, mergeConfig, validateConfig, multiDayInfo, anomalyReason,
+  computeAchievements, computeAuthorPoints };

@@ -43,6 +43,7 @@
       if (btn.dataset.tab === 'planeadas' && !gPlaneadasLoaded) loadPlaneadas();
       if (btn.dataset.tab === 'stats' && !gStatsLoaded) loadStats();
       if (btn.dataset.tab === 'logros' && !gLogrosLoaded) loadLogros();
+      if (btn.dataset.tab === 'puntos') loadPuntos();
       if (btn.dataset.tab === 'siguiendo' && !gSiguiendoLoaded) loadSiguiendo();
       if (btn.dataset.tab === 'bloqueados' && !gBloqueadosLoaded) loadBloqueados();
     });
@@ -670,9 +671,82 @@
     } catch {}
   }
 
+  // ── Puntos de autor ──────────────────────────────────────────────
+  let gPoints = null, gPtShowAll = false;
+  const PT_ROUTES_SHOWN = 15;
+  async function fetchPoints() {
+    const r = await api('/api/profile/points');
+    gPoints = r.ok ? await r.json() : null;
+    if (gPoints) {
+      $('hs-points').textContent = gPoints.enabled ? fmtN(gPoints.total) : '—';
+      $('hs-points-link').hidden = !gPoints.enabled;
+    }
+    return gPoints;
+  }
+  // Reloaded on every visit: ratings, comments and photos change while the page is open
+  async function loadPuntos() {
+    let d;
+    try { d = await fetchPoints(); } catch { return; }
+    if (!d) return;
+    const tab = $('tab-puntos');
+    [...tab.children].forEach(el => { el.hidden = el.id === 'pt-off' ? d.enabled : !d.enabled; });
+    if (!d.enabled) return;
+    $('pt-total').textContent = fmtN(d.total);
+    const max = Math.max(1, ...d.categories.map(c => c.points));
+    const rows = group => {
+      const cats = d.categories.filter(c => c.group === group);
+      $(group === 'content' ? 'pt-content-total' : 'pt-community-total').textContent = fmtN(cats.reduce((s, c) => s + c.points, 0));
+      return cats.map(c => `<div class="pt-row${c.points ? '' : ' zero'}">
+        <span class="pt-row-lbl">${esc(c.label)}<span class="pt-row-cnt">${fmtN(c.count)} ${esc(c.unit)}</span></span>
+        <span class="pt-row-pts">${fmtN(c.points)}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${c.points ? Math.max(2, Math.round(c.points / max * 100)) : 0}%"></div></div>
+      </div>`).join('');
+    };
+    $('pt-content').innerHTML = rows('content');
+    $('pt-community').innerHTML = rows('community');
+    renderPointRoutes();
+    const R = d.rules, n = v => fmtN(v);
+    $('pt-rules').innerHTML = [
+      ['Publicar una ruta pública', R.publish],
+      [`Descripción de ${n(R.descMinChars)}+ caracteres`, R.description],
+      [`Cada punto de paso (máx. ${n(R.waypointMax)} por ruta)`, R.waypoint],
+      [`Cada foto (máx. ${n(R.photoMax)} por ruta)`, R.photo],
+      ['Elegir foto de portada', R.cover],
+      ['Ponerle etiquetas', R.tags],
+      ['Cada estrella que te dan', R.star],
+      ['Cada persona que la ha hecho', R.done],
+      ['Cada persona que comenta', R.comment],
+      ['Cada seguidor', R.follower],
+    ].filter(([, v]) => v > 0).map(([l, v]) => `<div class="pt-rule"><span>${esc(l)}</span><b>+${n(v)}</b></div>`).join('');
+  }
+  const PART_LABEL = { publish: 'Publicada', description: 'Descripción', waypoints: 'Puntos de paso', photos: 'Fotos',
+    cover: 'Portada', tags: 'Etiquetas', ratings: 'Estrellas', done: 'La han hecho', comments: 'Comentarios' };
+  const COMMUNITY_PARTS = new Set(['ratings', 'done', 'comments']);
+  function renderPointRoutes() {
+    const all = gPoints.routes;
+    $('pt-routes-empty').hidden = !!all.length;
+    const shown = gPtShowAll ? all : all.slice(0, PT_ROUTES_SHOWN);
+    $('pt-routes').innerHTML = shown.map(r => `<tr>
+      <td><div class="rt-name"><a href="/track?id=${r.id}" target="_blank">${esc(r.name || '(sin nombre)')}</a></div></td>
+      <td><div class="pt-chips">${Object.entries(r.parts).map(([k, v]) =>
+        `<span class="pt-chip${COMMUNITY_PARTS.has(k) ? ' c' : ''}">${esc(PART_LABEL[k] || k)} +${fmtN(v)}</span>`).join('')}</div></td>
+      <td class="pt-pts">${fmtN(r.points)}</td>
+    </tr>`).join('');
+    $('pt-more').hidden = all.length <= PT_ROUTES_SHOWN;
+    $('pt-more-btn').textContent = gPtShowAll ? 'Ver menos' : `Ver las ${fmtN(all.length)} rutas`;
+  }
+  $('pt-more-btn').addEventListener('click', () => { gPtShowAll = !gPtShowAll; renderPointRoutes(); });
+  $('hs-points-link').addEventListener('click', e => {
+    e.preventDefault();
+    const b = document.querySelector('.tab-btn[data-tab="puntos"]');
+    b.click();
+    b.closest('.pill-tabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
   // ── Init ─────────────────────────────────────────────────────────
   await loadProfile();
   loadHeroStats();
+  fetchPoints().catch(() => {});
   const startTab = location.hash.slice(1);
   const startBtn = startTab && document.querySelector(`.tab-btn[data-tab="${CSS.escape(startTab)}"]`);
   if (startBtn) startBtn.click();

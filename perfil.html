@@ -151,6 +151,31 @@
 .ach-prog { font-size: 11.5px; color: var(--muted); }
 .pf-note { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.6; }
 
+/* ── Puntos de autor ─────────────────────────────────────────── */
+.hs-link { color: inherit; text-decoration: none; transition: background .12s; }
+.hs-link:hover { background: var(--hover-bg); }
+.pt-card { display: flex; align-items: center; gap: 20px; color: #fff; padding: 22px 24px; margin-bottom: 16px; border-radius: var(--radius); box-shadow: var(--shadow); }
+.pt-total-ico { width: 64px; height: 64px; border-radius: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.2); }
+.pt-total { font-size: 15px; font-weight: 600; }
+.pt-total span { font-size: 34px; font-weight: 800; letter-spacing: -.03em; margin-right: 4px; font-variant-numeric: tabular-nums; }
+.pt-sub { font-size: 12.5px; opacity: .9; margin-top: 2px; }
+.pt-group-total { font-size: 18px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.pt-rows { display: flex; flex-direction: column; gap: 10px; }
+.pt-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; }
+.pt-row-lbl { font-size: 13px; font-weight: 500; }
+.pt-row-cnt { font-size: 11.5px; color: var(--muted); margin-left: 4px; font-weight: 400; }
+.pt-row-pts { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pt-row .bar-track { grid-column: 1 / -1; height: 6px; }
+.pt-row.zero .pt-row-lbl, .pt-row.zero .pt-row-pts { color: var(--ink-3); }
+.pt-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.pt-chip { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--ink-2); white-space: nowrap; }
+.pt-chip.c { background: var(--accent-soft); color: var(--accent); }
+.pt-pts { text-align: right; font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pt-more { text-align: center; padding: 10px; border-top: 1px solid var(--line); }
+.pt-rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.pt-rule { display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: var(--radius-md); background: var(--soft); font-size: 12.5px; }
+.pt-rule b { color: var(--accent); white-space: nowrap; }
+
 /* ── Siguiendo / Bloqueados ───────────────────────────────────── */
 .sg-list { display: flex; flex-direction: column; gap: 2px; }
 .sg-item { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: var(--radius-md); text-decoration: none; color: var(--ink); transition: background .12s; }
@@ -222,6 +247,8 @@
         <div><div class="hs-val" id="hs-gain">—</div><div class="hs-lbl">Desnivel +</div></div></div>
       <div class="hs"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
         <div><div class="hs-val" id="hs-followers">—</div><div class="hs-lbl">Seguidores</div></div></div>
+      <a class="hs hs-link" href="#puntos" id="hs-points-link"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+        <div><div class="hs-val" id="hs-points">—</div><div class="hs-lbl">Puntos de autor</div></div></a>
     </div>
   </section>
 
@@ -232,6 +259,7 @@
     <button class="tab-btn pill-tab" data-tab="listas"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Mis listas</button>
     <button class="tab-btn pill-tab" data-tab="planeadas"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planeadas</button>
     <button class="tab-btn pill-tab" data-tab="stats"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Estadísticas</button>
+    <button class="tab-btn pill-tab" data-tab="puntos"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Puntos</button>
     <button class="tab-btn pill-tab" data-tab="logros"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.48 12.89 17 22l-5-3-5 3 1.52-9.11"/></svg>Logros</button>
     <button class="tab-btn pill-tab" data-tab="siguiendo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Comunidad</button>
     <button class="tab-btn pill-tab" data-tab="bloqueados"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>Bloqueados</button>
@@ -458,6 +486,46 @@
         <div class="bar-chart" id="chart-year"></div>
       </div>
     </div>
+  </div>
+
+  <!-- ── Tab: Puntos de autor ── -->
+  <div class="tab-panel" id="tab-puntos">
+    <div class="pt-card cover-bg">
+      <div class="pt-total-ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+      <div style="flex:1;min-width:0">
+        <div class="pt-total"><span id="pt-total">—</span> puntos de autor</div>
+        <div class="pt-sub" id="pt-sub">Lo que ganas publicando rutas completas y con lo que hacen otros con ellas. En tu perfil público solo se ve el total.</div>
+      </div>
+    </div>
+    <div class="pf-grid">
+      <div class="pf-card">
+        <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><div><h3>Contenido de tus rutas</h3><p>Por publicar rutas públicas y completarlas</p></div><div class="pf-head-extra"><b class="pt-group-total" id="pt-content-total">—</b></div></div>
+        <div class="pt-rows" id="pt-content"></div>
+      </div>
+      <div class="pf-card">
+        <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><div><h3>Comunidad</h3><p>Lo que hacen otros usuarios con tus rutas</p></div><div class="pf-head-extra"><b class="pt-group-total" id="pt-community-total">—</b></div></div>
+        <div class="pt-rows" id="pt-community"></div>
+      </div>
+    </div>
+    <div class="pf-card flush" style="margin-top:16px">
+      <div class="pf-card-head" style="padding-bottom:14px;margin-bottom:0">
+        <span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg></span>
+        <div><h3>Puntos por ruta</h3><p>Tus rutas públicas, de la que más suma a la que menos</p></div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="routes-table">
+          <thead><tr><th>Ruta</th><th>De dónde salen</th><th style="text-align:right">Puntos</th></tr></thead>
+          <tbody id="pt-routes"></tbody>
+        </table>
+      </div>
+      <div id="pt-routes-empty" class="empty-state" hidden>Todavía no tienes rutas públicas. <a href="/subir">Sube una</a> o hazla pública en «Mis rutas».</div>
+      <div class="pt-more" id="pt-more" hidden><button class="btn btn-ghost btn-sm" id="pt-more-btn">Ver todas</button></div>
+    </div>
+    <div class="pf-card" style="margin-top:16px">
+      <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg></span><div><h3>Cómo se ganan</h3><p>Solo cuentan las rutas públicas y no planeadas; valoraciones, «la he hecho» y comentarios, solo de otros usuarios</p></div></div>
+      <div class="pt-rules" id="pt-rules"></div>
+    </div>
+    <div id="pt-off" class="empty-state pf-card" hidden>Los puntos de autor están desactivados.</div>
   </div>
 
   <!-- ── Tab: Logros ── -->

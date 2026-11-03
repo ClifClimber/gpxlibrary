@@ -7,6 +7,7 @@
 // públicas fuera de la aplicación» on, whose source web (tracks.url) is empty or confirmed as their own, and that
 // the privacy zone doesn't hide entirely. Geometry is always the privacy-trimmed geom_s1, never the original.
 const { slugify } = require('../domain/slug');
+const { authorPoints } = require('../repo/points');
 
 // SQL condition on tracks t JOIN users u (the owner)
 const WEB_VISIBLE = `t.visibility = 'public' AND u.active AND u.web_visible
@@ -196,7 +197,7 @@ async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
             to_char(created_at, 'YYYY-MM') AS since FROM users WHERE lower(username) = lower(?) AND active`, [username]);
   if (!u || (!u.profile_public && !viewer)) return { status: 404, html: notFound({ base, viewer, what: 'Este perfil' }) };
   const canonical = userPath(u.username);
-  const [totals, routes, lists, actImg, followCounts, statsByActivity, statsByYear] = await Promise.all([
+  const [totals, routes, lists, actImg, followCounts, statsByActivity, statsByYear, points] = await Promise.all([
     db.get(`SELECT CAST(COUNT(*) AS INTEGER) AS n, COALESCE(SUM(t.distance),0) AS km, COALESCE(SUM(t.elevation_gain),0) AS gain,
                    CAST(SUM(CASE WHEN t.circular=1 THEN 1 ELSE 0 END) AS INTEGER) AS circular
             FROM tracks t JOIN users u ON u.id=t.owner_id WHERE t.owner_id=? AND ${WEB_VISIBLE}`, [u.id]),
@@ -220,6 +221,7 @@ async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
             FROM tracks t JOIN users u ON u.id=t.owner_id
             WHERE t.owner_id=? AND t.date IS NOT NULL AND length(t.date)>=4 AND ${WEB_VISIBLE}
             GROUP BY year ORDER BY year DESC`, [u.id]),
+    authorPoints(db, u.id).catch(() => null),
   ]);
 
   const name = u.display_name || u.username;
@@ -317,6 +319,7 @@ async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
     </div>
   </div>
   <div class="hero-stats">
+    ${points && points.enabled ? heroStat('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>', nf0.format(points.total), 'Puntos de autor') : ''}
     ${heroStat('<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>', nf0.format(totals.n), 'Rutas')}
     ${heroStat('<path d="M3 12h4l3-8 4 16 3-8h4"/>', nf0.format(totals.km), 'Kilómetros')}
     ${heroStat('<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>', `${nf0.format(totals.gain)} m`, 'Desnivel +')}

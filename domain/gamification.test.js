@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { DEFAULT_CONFIG, mergeConfig, validateConfig, multiDayInfo, computeAchievements } = require('./gamification');
+const { DEFAULT_CONFIG, mergeConfig, validateConfig, multiDayInfo, computeAchievements, computeAuthorPoints } = require('./gamification');
 
 const cfg = mergeConfig(null);
 const T = (o) => ({ name: 'Ruta', activity: 'Senderismo', distance: 10, elevation_gain: 500, moving_time: null,
@@ -162,4 +162,29 @@ test('anomalies: a real steep path and a long multi-day trip are kept', () => {
     T({ id: 2, activity: 'Ciclismo de carretera', distance: 666, elevation_gain: 1565, moving_time: 18 * 3600 }),
   ], {}, cfg);
   assert.equal(r.excludedRoutes.length, 0);
+});
+
+test('author points: content and what other users do with the route', () => {
+  const r = computeAuthorPoints([
+    { id: 1, name: 'Completa', notes: '<p>' + 'Subida por el arroyo hasta la laguna, vuelta por la cuerda con vistas. '.repeat(2) + '</p>',
+      waypoints_json: JSON.stringify(Array(14).fill({ lat: 1, lon: 1 })), tags: '["agua","revisar"]', cover_photo_id: 7,
+      photos: 8, stars: 9, done: 2, commenters: 3 },
+    { id: 2, name: 'Mínima', notes: '<p>Corta</p>', waypoints_json: null, tags: '["revisar"]', cover_photo_id: null,
+      photos: 0, stars: 0, done: 0, commenters: 0 },
+  ], { followers: 4 }, cfg);
+  const pts = Object.fromEntries(r.categories.map(c => [c.id, c.points]));
+  assert.deepEqual(pts, { publish: 6, description: 5, waypoints: 10, photos: 15, cover: 2, tags: 2,
+    ratings: 18, done: 10, comments: 6, followers: 20 });
+  assert.equal(r.total, 94);
+  assert.equal(r.routes[0].id, 1);
+  assert.equal(r.routes[0].points, 71);   // 94 − 20 followers − 3 of the minimal route
+  assert.deepEqual(r.routes[1].parts, { publish: 3 });
+});
+
+test('author points: weights come from the config and can be switched off', () => {
+  const c = mergeConfig({ points: { star: 5, publish: 0 } });
+  const r = computeAuthorPoints([{ id: 1, name: 'R', stars: 4 }], {}, c);
+  assert.equal(r.total, 20);
+  assert.equal(computeAuthorPoints([{ id: 1, name: 'R', stars: 4 }], { followers: 9 }, mergeConfig({ points: { enabled: false } })).total, 0);
+  assert.throws(() => validateConfig(mergeConfig({ points: { photo: -1 } })), /negativos/);
 });

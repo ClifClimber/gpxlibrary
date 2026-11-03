@@ -25,6 +25,7 @@ const publicPages = require('./http/public-pages');
 const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
 const { openSql } = require('./repo/sql');
+const { authorPoints } = require('./repo/points');
 const { createToken, setCookie, clearCookie, authMiddleware, requireAuth, requireAdmin, hashPassword, checkPassword } = require('./auth');
 // Engine-neutral SQL on the active engine (shares the repository's Postgres pool; never closed here).
 const sqlDb = () => openSql({ pool: repo.pool });
@@ -1774,6 +1775,13 @@ const server = http.createServer(async (req, res) => {
     if (!requireAuth(req, res)) return;
     res.writeHead(200, J);
     return res.end(JSON.stringify(await userAchievements(req.user.sub, await gamificationConfig())));
+  }
+  // Puntos de autor con su desglose (el perfil público solo enseña el total)
+  if (pathname === '/api/profile/points' && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const cfg = await gamificationConfig();
+    res.writeHead(200, J);
+    return res.end(JSON.stringify({ ...await authorPoints(sqlDb(), req.user.sub, cfg), rules: cfg.points }));
   }
 
   if (pathname === '/api/profile/stats' && method === 'GET') {
