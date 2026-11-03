@@ -768,8 +768,8 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.16.0</div>
-          <div style="font-size:11px;color:var(--muted)" id="about-date">30 octubre 2026</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.17.0</div>
+          <div style="font-size:11px;color:var(--muted)" id="about-date">3 noviembre 2026</div>
         </div>
       </div>
       <div style="border-top:1px solid var(--line);padding:14px 24px;display:flex;gap:24px;flex-wrap:wrap">
@@ -787,8 +787,24 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.16.0</span>
+            <span class="cl-version">v2.17.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">3 nov 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Notificaciones</b> (bloque F, cierra la fase 4): campana en la barra con contador de no leídas y panel con comentarios, valoraciones, «la he hecho» y nuevos seguidores; se marcan como leídas al abrirlo</li>
+            <li><b>Nuevo diseño</b> en todas las páginas de contenido: perfil con portada, cifras y pestañas fijas; perfil público con el mismo diseño y rutas en tarjetas con foto; Actividad, Varios días, Lista y Upload Trail con cabecera de icono; login, registro y restablecer con panel de marca</li>
+            <li><b>Admin</b>: menú lateral agrupado (Datos, Comunidad, Clasificación, Sistema) con iconos y estado de la BD en mosaicos</li>
+            <li><b>Trabajos</b>: panel lateral con el log completo y botón para cancelar; tabla compacta con iconos de ver, cancelar y repetir</li>
+            <li>Cola: 3 trabajos en paralelo por worker y corrección de líneas de log duplicadas al reintentar</li>
+            <li>Valoraciones y «la he hecho» se conservan al volver a la ruta y muestran el número de personas</li>
+            <li>Componentes del nuevo estilo en <code>shared.css</code> (<code>.hero</code>, <code>.pill-tabs</code>, <code>.page-hero</code>, <code>input.switch</code>…)</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.16.0</span>
             <span class="cl-date">30 oct 2026</span>
           </div>
           <ul class="cl-list">
