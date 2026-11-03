@@ -3018,7 +3018,7 @@ const server = http.createServer(async (req, res) => {
     if (method === 'GET') {
       const rows = await sqlDb().all(
         `SELECT n.id, n.type, n.created_at, n.read_at, n.track_id, n.comment_id,
-                u.username AS actor_username, u.display_name AS actor_display_name, u.avatar_url AS actor_avatar_url,
+                u.username AS actor_username, u.display_name AS actor_display_name, u.avatar_key AS actor_avatar_key,
                 t.name AS track_name
          FROM notifications n
          LEFT JOIN users u ON u.id = n.actor_id
@@ -3026,6 +3026,7 @@ const server = http.createServer(async (req, res) => {
          WHERE n.user_id = ?
          ORDER BY n.created_at DESC LIMIT 40`, [req.user.sub]);
       const unread = rows.filter(r => !r.read_at).length;
+      rows.forEach(r => { r.actor_avatar_url = r.actor_avatar_key ? `/api/profile/avatar/${encodeURIComponent(r.actor_avatar_key)}` : null; delete r.actor_avatar_key; });
       res.writeHead(200, J); return res.end(JSON.stringify({ unread, rows }));
     }
   }
