@@ -36,6 +36,8 @@
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       $('tab-' + btn.dataset.tab).classList.add('active');
+      btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      history.replaceState(null, '', location.pathname + location.search + (btn.dataset.tab === 'perfil' ? '' : '#' + btn.dataset.tab));
       if (btn.dataset.tab === 'rutas' && !gRutasLoaded) loadRutas();
       if (btn.dataset.tab === 'listas' && !gListasLoaded) loadListas();
       if (btn.dataset.tab === 'planeadas' && !gPlaneadasLoaded) loadPlaneadas();
@@ -59,10 +61,14 @@
   function renderHeader(p) {
     const dn = p.display_name || p.username;
     $('ph-displayname').textContent = dn;
-    $('ph-username').textContent = '@' + p.username + (p.role === 'admin' ? ' · Admin' : '');
+    $('ph-username').textContent = '@' + p.username;
+    $('ph-role').hidden = p.role !== 'admin';
+    const pub = $('btn-public-profile');
+    pub.href = '/u/' + encodeURIComponent(p.username);
+    pub.hidden = p.profile_public === false;
     if (p.bio) { $('ph-bio').textContent = p.bio; $('ph-bio').hidden = false; }
     if (p.avatar_url) {
-      $('avatar-placeholder').outerHTML = `<img id="avatar-img" class="avatar-img" src="${esc(p.avatar_url)}" alt="Avatar">`;
+      $('avatar-placeholder').outerHTML = `<img id="avatar-img" src="${esc(p.avatar_url)}" alt="Avatar">`;
     }
     // Keep the nav icon in sync after avatar/name changes
     if (window.gpxSetNavUser) window.gpxSetNavUser(p);
@@ -73,7 +79,8 @@
     $('inp-bio').value        = p.bio || '';
     $('inp-username').value   = p.username;
     $('inp-email').value      = p.email;
-    $('inp-created').value    = p.created_at || '';
+    const since = p.created_at ? new Date(p.created_at) : null;
+    $('inp-created').value    = since && !isNaN(since) ? since.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : (p.created_at || '');
     $('sel-map-mode').value = (p.prefs && p.prefs.map_mode) || 'page';
     $('chk-web').checked = p.web_visible !== false;
     $('chk-profile-public').checked = p.profile_public !== false;
@@ -99,6 +106,7 @@
         web_visible: $('chk-web').checked, profile_public: $('chk-profile-public').checked }) });
       if (!r.ok) { const e = await r.json(); setMsg('msg-privacy', e.error || 'Error', false); return; }
       setMsg('msg-privacy', '¡Guardado!', true);
+      $('btn-public-profile').hidden = !$('chk-profile-public').checked;
     } catch (err) { if (err.message !== '401') setMsg('msg-privacy', 'Error de red', false); }
   });
 
@@ -139,7 +147,7 @@
         // Update avatar display
         const existing = document.getElementById('avatar-img') || document.getElementById('avatar-placeholder');
         const img = document.createElement('img');
-        img.id = 'avatar-img'; img.className = 'avatar-img';
+        img.id = 'avatar-img';
         img.src = data.avatar_url + '?t=' + Date.now(); img.alt = 'Avatar';
         existing.replaceWith(img);
         // Refresh nav avatar
@@ -197,23 +205,23 @@
   let gRutasLoaded = false;
   let gRutas = [];
 
+  const ICO_GLOBE = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>';
+  const ICO_LOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  const visBadge = (id, isPub) => `<button class="rt-badge ${isPub ? 'pub' : 'priv'}" data-vis="${isPub ? 'public' : 'private'}" data-id="${id}" title="Clic para cambiar">${isPub ? ICO_GLOBE + 'Pública' : ICO_LOCK + 'Privada'}</button>`;
+  const kmCell = t => t.distance != null ? t.distance.toFixed(1) + ' km' : '—';
+  const gainCell = t => t.elevation_gain != null ? Math.round(t.elevation_gain).toLocaleString('es') + ' m' : '—';
+
   function routeRow(t) {
-    const isPub = t.visibility === 'public';
-    const km = t.distance != null ? t.distance.toFixed(1) : '—';
-    const gain = t.elevation_gain != null ? Math.round(t.elevation_gain) : '—';
+    const meta = [t.sierra, t.date].filter(Boolean).map(esc).join(' · ');
     return `<tr data-id="${t.id}">
       <td>
         <div class="rt-name"><a href="/track?id=${t.id}" target="_blank">${esc(t.name || '(sin nombre)')}</a></div>
-        <div class="rt-meta">${esc(t.sierra || '')}${t.sierra && t.date ? ' · ' : ''}${t.date || ''}</div>
+        ${meta ? `<div class="rt-meta">${meta}</div>` : ''}
       </td>
-      <td style="color:var(--ink-2)">${esc(t.activity || '—')}</td>
-      <td style="text-align:right;color:var(--ink-2)">${km}</td>
-      <td style="text-align:right;color:var(--ink-2)">${gain}</td>
-      <td>
-        <button class="rt-badge ${isPub ? 'pub' : 'priv'}" data-vis="${isPub ? 'public' : 'private'}" data-id="${t.id}" title="Clic para cambiar">
-          ${isPub ? '🌐 Pública' : '🔒 Privada'}
-        </button>
-      </td>
+      <td class="hide-sm" style="color:var(--ink-2)">${esc(t.activity || '—')}</td>
+      <td class="num-cell">${kmCell(t)}</td>
+      <td class="num-cell">${gainCell(t)}</td>
+      <td>${visBadge(t.id, t.visibility === 'public')}</td>
     </tr>`;
   }
 
@@ -250,8 +258,7 @@
       const t = gRutas.find(x => x.id === id);
       if (t) { t.visibility = next; }
       const tr = document.querySelector(`tr[data-id="${id}"]`);
-      if (tr) { const isPub = next === 'public'; tr.querySelector('.rt-badge').outerHTML =
-        `<button class="rt-badge ${isPub ? 'pub' : 'priv'}" data-vis="${next}" data-id="${id}" title="Clic para cambiar">${isPub ? '🌐 Pública' : '🔒 Privada'}</button>`; }
+      if (tr) tr.querySelector('.rt-badge').outerHTML = visBadge(id, next === 'public');
     } catch {}
   });
 
@@ -502,17 +509,13 @@
       const tbody = $('planeadas-tbody');
       if (!planned.length) { tbody.innerHTML = ''; $('planeadas-empty').hidden = false; return; }
       $('planeadas-empty').hidden = true;
-      tbody.innerHTML = planned.map(t => {
-        const km = t.distance != null ? t.distance.toFixed(1) : '—';
-        const gain = t.elevation_gain != null ? Math.round(t.elevation_gain) : '—';
-        return `<tr data-id="${t.id}">
+      tbody.innerHTML = planned.map(t => `<tr data-id="${t.id}">
           <td><div class="rt-name"><a href="/track?id=${t.id}" target="_blank">${esc(t.name || '(sin nombre)')}</a></div></td>
-          <td style="color:var(--ink-2)">${esc(t.activity || '—')}</td>
-          <td style="text-align:right;color:var(--ink-2)">${km}</td>
-          <td style="text-align:right;color:var(--ink-2)">${gain}</td>
-          <td><button class="btn btn-sm btn-outline" data-unplan="${t.id}">Marcar realizada</button></td>
-        </tr>`;
-      }).join('');
+          <td class="hide-sm" style="color:var(--ink-2)">${esc(t.activity || '—')}</td>
+          <td class="num-cell">${kmCell(t)}</td>
+          <td class="num-cell">${gainCell(t)}</td>
+          <td style="text-align:right"><button class="btn btn-sm btn-accent" data-unplan="${t.id}">✓ Marcar realizada</button></td>
+        </tr>`).join('');
     } catch {}
   }
 
@@ -619,8 +622,8 @@
     try {
       const r = await api('/api/profile/follows'); if (!r.ok) return;
       const d = await r.json();
-      $('sg-following').innerHTML = d.following.length ? d.following.map(userCard).join('') : '<p style="color:var(--muted);font-size:14px">Todavía no sigues a nadie.</p>';
-      $('sg-followers').innerHTML = d.followers.length ? d.followers.map(userCard).join('') : '<p style="color:var(--muted);font-size:14px">Todavía no tienes seguidores.</p>';
+      $('sg-following').innerHTML = d.following.length ? d.following.map(userCard).join('') : '<div class="empty-state" style="padding:18px 0">Todavía no sigues a nadie.</div>';
+      $('sg-followers').innerHTML = d.followers.length ? d.followers.map(userCard).join('') : '<div class="empty-state" style="padding:18px 0">Todavía no tienes seguidores.</div>';
     } catch {}
   }
 
@@ -631,7 +634,7 @@
     try {
       const r = await api('/api/profile/blocks'); if (!r.ok) return;
       const list = await r.json();
-      if (!list.length) { el.innerHTML = '<p style="color:var(--muted);font-size:14px">No tienes ningún usuario bloqueado.</p>'; return; }
+      if (!list.length) { el.innerHTML = '<div class="empty-state" style="padding:18px 0">No tienes ningún usuario bloqueado.</div>'; return; }
       el.innerHTML = list.map(u => `<div class="sg-item" style="justify-content:space-between">
         <div style="display:flex;align-items:center;gap:10px">
           <span class="pf-avatar-sm">${esc((u.display_name || u.username).charAt(0).toUpperCase())}</span>
@@ -645,12 +648,33 @@
     btn.disabled = true;
     try {
       const r = await fetch('/api/users/' + uid + '/block', { method: 'DELETE', headers: {'Content-Type':'application/json'} });
-      if (r.ok) { btn.closest('.sg-item').remove(); if (!$('bl-list').children.length) $('bl-list').innerHTML = '<p style="color:var(--muted);font-size:14px">No tienes ningún usuario bloqueado.</p>'; }
+      if (r.ok) { btn.closest('.sg-item').remove(); if (!$('bl-list').children.length) $('bl-list').innerHTML = '<div class="empty-state" style="padding:18px 0">No tienes ningún usuario bloqueado.</div>'; }
     } catch {}
     btn.disabled = false;
   };
 
+  // ── Cifras de la cabecera ────────────────────────────────────────
+  async function loadHeroStats() {
+    try {
+      const [s, f] = await Promise.all([
+        api('/api/profile/stats').then(r => r.ok ? r.json() : null),
+        api('/api/profile/follows').then(r => r.ok ? r.json() : null),
+      ]);
+      const t = s && s.totals;
+      if (t) {
+        $('hs-routes').textContent = fmtN(t.total_tracks);
+        $('hs-km').textContent = t.total_km == null ? '—' : Number(t.total_km).toLocaleString('es', { maximumFractionDigits: 0 });
+        $('hs-gain').textContent = fmtGainN(t.total_gain);
+      }
+      if (f) $('hs-followers').textContent = fmtN(f.followers.length);
+    } catch {}
+  }
+
   // ── Init ─────────────────────────────────────────────────────────
   await loadProfile();
+  loadHeroStats();
+  const startTab = location.hash.slice(1);
+  const startBtn = startTab && document.querySelector(`.tab-btn[data-tab="${CSS.escape(startTab)}"]`);
+  if (startBtn) startBtn.click();
 
 })();

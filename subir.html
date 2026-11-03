@@ -11,7 +11,7 @@
 <style>
 .wz { max-width: 820px; margin: 0 auto; padding: 22px 20px 60px; }
 /* Stepper */
-.wz-steps { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+.wz-steps { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; padding: 8px 16px; background: var(--surface); border-radius: 999px; box-shadow: var(--shadow); }
 .wz-step-dot { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); font-weight: 500; }
 .wz-step-dot .n { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--soft); color: var(--muted); font-size: 12px; font-weight: 700; }
 .wz-step-dot.active { color: var(--ink); }
@@ -27,9 +27,9 @@
 
 /* Step 1 source cards */
 .src-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.src-card { border: 2px dashed var(--line); border-radius: var(--radius-md); padding: 26px 18px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
-.src-card:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
-.src-card svg { color: var(--accent); margin-bottom: 10px; }
+.src-card { border: 2px dashed var(--line); border-radius: var(--radius); padding: 30px 18px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s, transform .15s; }
+.src-card:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); transform: translateY(-2px); }
+.src-card > svg { color: var(--accent); margin-bottom: 12px; padding: 13px; width: 56px; height: 56px; border-radius: 16px; background: var(--accent-soft); }
 .src-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
 .src-card p { font-size: 12px; color: var(--muted); line-height: 1.5; }
 #gpx-file { display: none; }
@@ -91,7 +91,7 @@
 .edit-only { display: none; }
 .src-own { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); margin-top: 8px; font-weight: 400; }
 body.edit-mode .edit-only { display: block; }
-body.edit-mode .wz-steps { display: none; }
+body.edit-mode .wz-steps, body.edit-mode .not-edit { display: none; }
 body.edit-mode a.edit-only { display: inline-flex; }
 .tag-edit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .tag-edit input { flex: 1; min-width: 120px; border: none; outline: none; background: transparent; color: var(--ink); font: inherit; font-size: 13px; padding: 3px 2px; }
@@ -116,6 +116,11 @@ body.edit-mode a.edit-only { display: inline-flex; }
 </nav>
 
 <main class="wz">
+  <div class="page-hero" style="margin-bottom:16px">
+    <span class="page-hero-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+    <div class="not-edit"><h1>Upload Trail</h1><div class="page-sub">Sube un GPX o dibuja una ruta nueva</div></div>
+    <div class="edit-only"><h1>Editar ruta</h1><div class="page-sub">Datos, privacidad y fotos de la ruta</div></div>
+  </div>
   <div class="wz-steps">
     <div class="wz-step-dot active" data-dot="1"><span class="n">1</span> Origen</div>
     <div class="wz-step-sep"></div>

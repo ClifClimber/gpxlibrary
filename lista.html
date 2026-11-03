@@ -9,26 +9,35 @@
   <script src="/theme.js"></script>
   <style>
     .lista-page { max-width: 1180px; margin: 0 auto; padding: 24px 20px 60px; }
-    .lista-head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; }
+    .lista-head { position: relative; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 18px;
+      padding: 22px 24px; border-radius: var(--radius); box-shadow: var(--shadow); color: #fff; overflow: hidden; }
+    .lista-head .page-hero-ico { background: rgba(255,255,255,.2); box-shadow: none; }
     .lista-head h1 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
-    .lista-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; color: var(--ink-2); font-size: 13px; margin-top: 6px; }
-    .lista-desc { color: var(--ink-2); font-size: 14px; margin: 8px 0 0; max-width: 70ch; }
-    .lista-grid { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 18px; align-items: start; }
+    .lista-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 13px; margin-top: 4px; opacity: .92; }
+    .lista-meta .badge { background: rgba(255,255,255,.2); color: #fff; }
+    .lista-meta a { color: #fff; }
+    .lista-desc { font-size: 14px; margin: 8px 0 0; max-width: 70ch; opacity: .92; }
+    .lista-head .page-actions .btn { background: rgba(255,255,255,.95); color: #0f172a; }
+    .lista-head .page-actions .btn:hover { background: #fff; }
+    .lista-grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 18px; align-items: start; }
     @media (max-width: 900px) { .lista-grid { grid-template-columns: minmax(0, 1fr); } }
-    #lmap { height: 560px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--soft); }
+    #lmap { height: 600px; border-radius: var(--radius); box-shadow: var(--shadow); background: var(--soft); }
     @media (max-width: 900px) { #lmap { height: 360px; } }
-    .lt-list { display: flex; flex-direction: column; gap: 8px; }
-    .lt-item { display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line);
-               border-radius: 12px; cursor: pointer; transition: background .1s, box-shadow .1s; }
-    .lt-item:hover, .lt-item.hl { background: var(--soft); box-shadow: inset 3px 0 0 var(--c, var(--accent)); }
-    .lt-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: var(--c, var(--accent)); }
+    .lt-panel { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px; max-height: 600px; overflow-y: auto; }
+    .lt-panel-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 8px 10px 6px; }
+    .lt-list { display: flex; flex-direction: column; gap: 2px; }
+    .lt-item { display: flex; gap: 12px; align-items: center; padding: 11px 12px; border-radius: var(--radius-md); cursor: pointer; transition: background .1s, box-shadow .1s; }
+    .lt-item:hover, .lt-item.hl { background: var(--hover-bg); box-shadow: inset 3px 0 0 var(--c, var(--accent)); }
+    .lt-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; background: var(--c, var(--accent)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c, var(--accent)) 20%, transparent); }
     .lt-main { flex: 1; min-width: 0; }
     .lt-name { font-weight: 600; font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .lt-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
     .lt-rm { opacity: 0; }
     .lt-item:hover .lt-rm { opacity: 1; }
-    .lista-empty, .lista-error { padding: 48px 20px; text-align: center; color: var(--ink-2); }
+    .lista-empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+    .lista-error { padding: 56px 20px; text-align: center; color: var(--ink-2); background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); max-width: 520px; margin: 40px auto; }
     .lista-error h2 { font-size: 18px; margin: 0 0 6px; color: var(--ink); }
+    @media (max-width: 600px) { .lista-head { padding: 18px; } .lista-head h1 { font-size: 22px; } }
   </style>
 </head>
 <body>
@@ -45,20 +54,22 @@
 <main class="lista-page">
   <div id="lista-error" class="lista-error" hidden></div>
   <div id="lista-body" hidden>
-    <div class="lista-head">
-      <div>
+    <div class="lista-head cover-bg">
+      <span class="page-hero-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+      <div style="flex:1;min-width:220px">
         <h1 id="l-name"></h1>
         <div class="lista-meta" id="l-meta"></div>
         <p class="lista-desc" id="l-desc" hidden></p>
       </div>
       <div class="page-actions">
-        <button class="btn btn-outline" id="btn-copy">Copiar enlace</button>
-        <a class="btn btn-outline" id="btn-edit" href="/perfil#listas" hidden>Gestionar en mi perfil</a>
+        <button class="btn" id="btn-copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Copiar enlace</button>
+        <a class="btn" id="btn-edit" href="/perfil#listas" hidden>Gestionar en mi perfil</a>
       </div>
     </div>
     <div class="lista-grid">
       <div id="lmap"></div>
-      <div>
+      <div class="lt-panel">
+        <div class="lt-panel-title">Rutas de la lista</div>
         <div class="lt-list" id="lt-list"></div>
       </div>
     </div>

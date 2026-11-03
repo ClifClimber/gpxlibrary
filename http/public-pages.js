@@ -59,7 +59,7 @@ ${head}
   .pub-kicker { font-size: 13px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .pub-kicker a { color: var(--ink-2); }
   .pub-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .pub-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px; }
+  .pub-card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 14px; }
   .pub-card h2 { font-size: 15px; margin: 0 0 10px; }
   .pub-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
   .pub-stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
@@ -70,16 +70,16 @@ ${head}
                 display: inline-flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
   .pub-avatar.lg { width: 84px; height: 84px; font-size: 32px; }
   .pub-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
-  .pub-item { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; color: var(--ink); text-decoration: none; }
-  .pub-item:hover { box-shadow: var(--shadow); }
-  .pub-item-img { height: 130px; background: var(--soft) center/cover no-repeat; }
+  .pub-item { display: block; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; color: var(--ink); text-decoration: none; transition: transform .15s; }
+  .pub-item:hover { transform: translateY(-2px); }
+  .pub-item-img { height: 150px; background: var(--soft) center/cover no-repeat; }
   .pub-item-body { padding: 10px 12px 12px; }
   .pub-item-name { font-weight: 600; font-size: 14px; line-height: 1.35; }
   .pub-item-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .pub-note { font-size: 13px; color: var(--muted); }
   .pub-note a { color: var(--accent); }
   .pub-pages { display: flex; gap: 8px; justify-content: center; margin-top: 18px; }
-  .pub-empty { text-align: center; padding: 60px 20px; color: var(--ink-2); }
+  .pub-empty { text-align: center; padding: 60px 20px; color: var(--ink-2); background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); max-width: 560px; margin: 32px auto; }
 </style>
 </head>
 <body>
@@ -229,14 +229,16 @@ async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
   const viewerIsOwner = viewer && viewer.sub === u.id;
 
   const avatarEl = u.avatar_key
-    ? `<img class="up-avatar-img" src="${esc(avatarUrl(u.avatar_key))}" alt="${esc(name)}">`
-    : `<span class="up-avatar-img up-avatar-init">${esc(name.charAt(0).toUpperCase())}</span>`;
+    ? `<img src="${esc(avatarUrl(u.avatar_key))}" alt="${esc(name)}">`
+    : `<span class="hero-avatar-init">${esc(name.charAt(0).toUpperCase())}</span>`;
 
   // Follow button (JS fills in state for logged-in non-owners; static "Entrar" for anonymous)
-  const followBtnSidebar = viewerIsOwner ? ''
+  const followBtn = viewerIsOwner ? `<a class="btn btn-outline" href="/perfil">Editar mi perfil</a>`
     : viewer
-      ? `<button class="btn up-follow-btn" id="follow-btn" data-uid="${u.id}">Seguir</button>`
-      : `<a class="btn up-follow-btn" href="/login?next=${encodeURIComponent(canonical)}">Seguir</a>`;
+      ? `<button class="btn btn-accent up-follow-btn" id="follow-btn" data-uid="${u.id}">Seguir</button>`
+      : `<a class="btn btn-accent up-follow-btn" href="/login?next=${encodeURIComponent(canonical)}">Seguir</a>`;
+  const svg = (p, s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const heroStat = (ico, val, lbl) => `<div class="hs"><span class="hs-ico">${svg(ico)}</span><div><div class="hs-val">${val}</div><div class="hs-lbl">${lbl}</div></div></div>`;
 
   // Bar chart helper (same style as perfil.js)
   const barChart = (data, labelFn, valFn, hintFn) => {
@@ -254,8 +256,8 @@ async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
   const fmtKm = n => n == null ? '—' : Number(n).toLocaleString('es', { maximumFractionDigits: 0 }) + ' km';
 
   // Tabs: anchor-based, JS switches active class
-  const tabRoutes  = `Rutas<span class="up-tab-count">${totals.n}</span>`;
-  const tabLists   = lists.length ? `Listas<span class="up-tab-count">${lists.length}</span>` : null;
+  const tabRoutes  = `Rutas<span class="pill-count">${totals.n}</span>`;
+  const tabLists   = lists.length ? `Listas<span class="pill-count">${lists.length}</span>` : null;
 
   // Route cards (feed style)
   const trailCards = routes.map(t => {
@@ -268,24 +270,22 @@ async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
       diff ? `<span class="up-trail-diff ${diff.cls}">${diff.label}</span>` : '',
     ].filter(Boolean).join('');
     const where = [t.sierra, t.province].filter(Boolean).join(' · ');
-    return `<div class="up-trail-card">
-      <div class="up-trail-head">
+    return `<a class="up-trail-card" href="${esc(trackPath(t))}">
+      <div class="up-trail-photo" ${img ? `style="background-image:url('${esc(img)}')"` : ''}>
         <span class="up-trail-act">${esc(t.activity || 'Ruta')}</span>
-        ${where ? `<span class="up-trail-where">${esc(where)}</span>` : ''}
       </div>
-      <a class="up-trail-name" href="${esc(trackPath(t))}">${esc(t.name)}</a>
-      <div class="up-trail-stats">${stats}</div>
-      ${img ? `<a href="${esc(trackPath(t))}" class="up-trail-photo" style="background-image:url('${esc(img)}')"></a>` : ''}
-      <div class="up-trail-foot">
-        ${t.date ? `<span class="up-trail-date">${new Date(t.date + 'T00:00:00').toLocaleDateString('es-ES', { year:'numeric', month:'short', day:'numeric' })}</span>` : ''}
-        <a class="up-trail-link" href="${esc(trackPath(t))}">Ver ruta →</a>
+      <div class="up-trail-body">
+        <div class="up-trail-name">${esc(t.name)}</div>
+        ${where ? `<div class="up-trail-where">${esc(where)}</div>` : ''}
+        <div class="up-trail-stats">${stats}</div>
+        ${t.date ? `<div class="up-trail-date">${new Date(t.date + 'T00:00:00').toLocaleDateString('es-ES', { year:'numeric', month:'short', day:'numeric' })}</div>` : ''}
       </div>
-    </div>`;
+    </a>`;
   }).join('');
 
   const listCards = lists.map(l =>
     `<a class="up-list-card" href="${esc(listPath(l))}">
-      <span class="up-list-icon">☰</span>
+      <span class="up-list-icon">${svg('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>', 16)}</span>
       <div>
         <div class="up-list-name">${esc(l.name)}</div>
         <div class="up-list-sub">${l.n} ruta${l.n === 1 ? '' : 's'}</div>
@@ -296,68 +296,62 @@ async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
   const pager = pages > 1 ? `<div class="pub-pages">${pageNo > 0 ? `<a class="btn" href="${esc(canonical)}?p=${pageNo - 1}">← Anteriores</a>` : ''}${pageNo < pages - 1 ? `<a class="btn" href="${esc(canonical)}?p=${pageNo + 1}">Siguientes →</a>` : ''}</div>` : '';
 
   const body = `
-<div class="up-layout">
-  <!-- Sidebar -->
-  <aside class="up-sidebar">
-    <div class="up-avatar-wrap">${avatarEl}</div>
-    ${followBtnSidebar}
-    ${u.display_name ? `<div class="up-sidebar-dname">${esc(u.display_name)}</div>` : ''}
-    <div class="up-sidebar-uname">@${esc(u.username)}</div>
-    ${u.bio ? `<p class="up-sidebar-bio">${esc(u.bio)}</p>` : ''}
-    <div class="up-follow-counts">
-      <div class="up-follow-stat"><b>${nf0.format(followCounts.followers)}</b><span>Seguidores</span></div>
-      <div class="up-follow-stat"><b>${nf0.format(followCounts.following)}</b><span>Siguiendo</span></div>
+<section class="hero">
+  <div class="hero-cover cover-bg"></div>
+  <div class="hero-body">
+    <div class="hero-avatar">${avatarEl}</div>
+    <div class="hero-id">
+      <h1 class="hero-name">${esc(name)}</h1>
+      <div class="hero-sub">@${esc(u.username)}${sinceFormatted ? ` · Miembro desde ${esc(sinceFormatted)}` : ''}</div>
+      ${u.bio ? `<p class="hero-bio">${esc(u.bio)}</p>` : ''}
     </div>
-    <hr class="up-divider">
-    <div class="up-sidebar-stats">
-      <div class="up-sstat"><b>${nf0.format(totals.n)}</b> rutas</div>
-      <div class="up-sstat"><b>${nf0.format(totals.km)} km</b> totales</div>
-      <div class="up-sstat"><b>${nf0.format(totals.gain)} m+</b> desnivel</div>
-    </div>
-    ${sinceFormatted ? `<div class="up-since">Miembro desde ${esc(sinceFormatted)}</div>` : ''}
-    ${viewer && !viewerIsOwner ? `<div class="up-extra-actions">
-      <button class="btn btn-outline btn-sm up-block-btn" id="block-btn" data-uid="${u.id}">Bloquear</button>
-      <button class="btn btn-outline btn-sm up-report-btn" id="report-user-btn" data-uid="${u.id}" onclick="openUserReport(${u.id})">Denunciar</button>
-    </div>` : ''}
-  </aside>
-
-  <!-- Main -->
-  <div class="up-main">
-    <div class="up-main-head">
-      <h1 class="up-main-title">${esc(name)}</h1>
-      <button class="btn btn-sm up-share-btn" id="up-share-btn" title="Compartir perfil">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+    <div class="hero-actions">
+      ${followBtn}
+      <button class="btn btn-outline" id="up-share-btn" title="Copiar el enlace del perfil">
+        ${svg('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>', 14)}
         Compartir
       </button>
+      ${viewer && !viewerIsOwner ? `
+      <button class="btn btn-ghost up-block-btn" id="block-btn" data-uid="${u.id}">Bloquear</button>
+      <button class="btn btn-ghost up-report-btn" id="report-user-btn" data-uid="${u.id}" onclick="openUserReport(${u.id})">Denunciar</button>` : ''}
     </div>
+  </div>
+  <div class="hero-stats">
+    ${heroStat('<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>', nf0.format(totals.n), 'Rutas')}
+    ${heroStat('<path d="M3 12h4l3-8 4 16 3-8h4"/>', nf0.format(totals.km), 'Kilómetros')}
+    ${heroStat('<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>', `${nf0.format(totals.gain)} m`, 'Desnivel +')}
+    ${heroStat('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>', nf0.format(followCounts.followers), 'Seguidores')}
+    ${heroStat('<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/>', nf0.format(followCounts.following), 'Siguiendo')}
+  </div>
+</section>
 
-    <nav class="up-tabs" id="up-tabs">
-      <button class="up-tab active" data-section="up-sec-rutas">${tabRoutes}</button>
-      ${tabLists ? `<button class="up-tab" data-section="up-sec-listas">${tabLists}</button>` : ''}
-      <button class="up-tab" data-section="up-sec-stats">Estadísticas</button>
-    </nav>
+<div class="pill-tabs" id="up-tabs" role="tablist">
+  <button class="pill-tab up-tab active" data-section="up-sec-rutas">${tabRoutes}</button>
+  ${tabLists ? `<button class="pill-tab up-tab" data-section="up-sec-listas">${tabLists}</button>` : ''}
+  <button class="pill-tab up-tab" data-section="up-sec-stats">Estadísticas</button>
+</div>
 
-    <div id="up-sec-rutas" class="up-section">
-      ${trailCards || `<p class="pub-note" style="padding:24px 0">${u.web_visible ? 'Todavía no hay rutas públicas.' : 'Las rutas de este usuario solo se ven dentro de GPX Library.'}</p>`}
-      ${pager}
-    </div>
+<div id="up-sec-rutas" class="up-section">
+  ${trailCards ? `<div class="up-trail-grid">${trailCards}</div>` : `<div class="empty-state up-panel">${u.web_visible ? 'Todavía no hay rutas públicas.' : 'Las rutas de este usuario solo se ven dentro de GPX Library.'}</div>`}
+  ${pager}
+</div>
 
-    ${tabLists ? `<div id="up-sec-listas" class="up-section" hidden>
-      <div class="up-list-grid">${listCards}</div>
-    </div>` : ''}
+${tabLists ? `<div id="up-sec-listas" class="up-section" hidden>
+  <div class="up-list-grid">${listCards}</div>
+</div>` : ''}
 
-    <div id="up-sec-stats" class="up-section" hidden>
-      <div class="up-stats-boxes">
-        <div class="up-stat-box"><div class="up-stat-val">${nf0.format(totals.n)}</div><div class="up-stat-lbl">Rutas públicas</div></div>
-        <div class="up-stat-box"><div class="up-stat-val">${fmtKm(totals.km)}</div><div class="up-stat-lbl">Kilómetros</div></div>
-        <div class="up-stat-box"><div class="up-stat-val">${nf0.format(totals.gain)} m</div><div class="up-stat-lbl">Desnivel acumulado</div></div>
-        <div class="up-stat-box"><div class="up-stat-val">${nf0.format(totals.circular)}</div><div class="up-stat-lbl">Rutas circulares</div></div>
-      </div>
-      ${statsByActivity.length ? `<h3 class="up-chart-title">Por actividad</h3>
-      <div class="up-chart">${barChart(statsByActivity, d => d.activity, d => Number(d.km), d => `${fmtKm(d.km)} · ${d.count} rutas`)}</div>` : ''}
-      ${statsByYear.length ? `<h3 class="up-chart-title">Por año</h3>
-      <div class="up-chart">${barChart(statsByYear, d => String(d.year), d => Number(d.km), d => `${fmtKm(d.km)} · ${d.count} rutas`)}</div>` : ''}
-    </div>
+<div id="up-sec-stats" class="up-section" hidden>
+  <div class="up-stats-boxes">
+    <div class="up-stat-box"><div class="up-stat-val">${nf0.format(totals.n)}</div><div class="up-stat-lbl">Rutas públicas</div></div>
+    <div class="up-stat-box"><div class="up-stat-val">${fmtKm(totals.km)}</div><div class="up-stat-lbl">Kilómetros</div></div>
+    <div class="up-stat-box"><div class="up-stat-val">${nf0.format(totals.gain)} m</div><div class="up-stat-lbl">Desnivel acumulado</div></div>
+    <div class="up-stat-box"><div class="up-stat-val">${nf0.format(totals.circular)}</div><div class="up-stat-lbl">Rutas circulares</div></div>
+  </div>
+  <div class="up-charts">
+    ${statsByActivity.length ? `<div class="up-panel"><h3 class="up-chart-title">Por actividad</h3>
+    <div class="bar-chart">${barChart(statsByActivity, d => d.activity, d => Number(d.km), d => `${fmtKm(d.km)} · ${d.count} rutas`)}</div></div>` : ''}
+    ${statsByYear.length ? `<div class="up-panel"><h3 class="up-chart-title">Por año</h3>
+    <div class="bar-chart">${barChart(statsByYear, d => String(d.year), d => Number(d.km), d => `${fmtKm(d.km)} · ${d.count} rutas`)}</div></div>` : ''}
   </div>
 </div>
 
@@ -432,109 +426,56 @@ document.getElementById('up-share-btn')?.addEventListener('click', async () => {
 </script>`;
 
   const head = `<style>
-/* ── User profile layout ───────────────────────────── */
-.pub { max-width: 1100px; padding-top: 28px; }
-.up-layout { display: grid; grid-template-columns: 240px 1fr; gap: 32px; align-items: start; }
-@media (max-width: 720px) { .up-layout { grid-template-columns: 1fr; } }
+/* ── Perfil público: hero, pestañas, barras y estado vacío en shared.css ── */
+.pub { max-width: 1080px; padding-top: 22px; }
+.hero-name { margin: 0; }
+.hero-bio { margin-bottom: 0; }
+.up-follow-btn.active { background: var(--soft); color: var(--ink); }
+.up-block-btn.active { color: var(--danger); }
+.up-panel { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; }
 
-/* Sidebar */
-.up-sidebar { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 0 0 20px; overflow: hidden; position: sticky; top: 72px; }
-.up-avatar-wrap { width: 100%; aspect-ratio: 1; overflow: hidden; background: var(--soft); }
-.up-avatar-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.up-avatar-init { display: flex; align-items: center; justify-content: center; font-size: 56px; font-weight: 700; color: #fff; background: var(--accent); }
-.up-follow-btn { margin: 14px 16px 0; width: calc(100% - 32px); font-size: 14px; font-weight: 600; background: var(--accent); color: #fff; border: none; }
-.up-follow-btn:hover { opacity: .88; }
-.up-follow-btn.active { background: var(--soft); color: var(--ink-2); }
-.up-sidebar-dname { margin: 14px 16px 0; font-weight: 600; font-size: 16px; }
-.up-sidebar-uname { margin: 4px 16px 0; font-size: 13px; color: var(--muted); }
-.up-sidebar-bio { margin: 10px 16px 0; font-size: 13px; color: var(--ink-2); line-height: 1.55; }
-.up-follow-counts { display: flex; gap: 0; margin: 14px 0 0; padding: 0 16px; }
-.up-follow-stat { flex: 1; text-align: center; }
-.up-follow-stat b { display: block; font-size: 18px; font-weight: 700; }
-.up-follow-stat span { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-.up-divider { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
-.up-sidebar-stats { padding: 0 16px; display: flex; flex-direction: column; gap: 5px; }
-.up-sstat { font-size: 13px; color: var(--ink-2); }
-.up-sstat b { color: var(--ink); font-weight: 600; }
-.up-since { margin: 12px 16px 0; font-size: 12px; color: var(--muted); }
-.up-msg-btn { margin: 14px 16px 0; width: calc(100% - 32px); font-size: 13px; text-align: center; }
-.up-extra-actions { display: flex; gap: 6px; margin: 10px 16px 0; }
-.up-extra-actions .btn { flex: 1; font-size: 12px; }
-.up-block-btn.active { color: var(--danger); border-color: var(--danger); }
-
-/* Main header */
-.up-main-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-.up-main-title { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
-.up-share-btn { display: flex; align-items: center; gap: 6px; }
-
-/* Tabs */
-.up-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--line); margin-bottom: 20px; }
-.up-tab { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; padding: 8px 16px; font-size: 14px; font-weight: 500; color: var(--ink-2); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: color .15s; }
-.up-tab:hover { color: var(--ink); }
-.up-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.up-tab-count { background: var(--soft); border-radius: 20px; padding: 1px 7px; font-size: 11px; font-weight: 600; color: var(--muted); }
-.up-tab.active .up-tab-count { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
-
-/* Trail cards */
-.up-trail-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
-.up-trail-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px 0; }
-.up-trail-act { font-size: 12px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .06em; }
+/* Rutas */
+.up-trail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 14px; }
+.up-trail-card { display: flex; flex-direction: column; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+  overflow: hidden; color: var(--ink); text-decoration: none; transition: transform .15s, box-shadow .15s; }
+.up-trail-card:hover { transform: translateY(-2px); box-shadow: var(--shadow), 0 10px 26px rgba(15,23,42,.10); }
+.up-trail-photo { position: relative; height: 170px; background: var(--soft) center/cover no-repeat; }
+.up-trail-act { position: absolute; left: 12px; top: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.up-trail-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.up-trail-name { font-size: 16px; font-weight: 700; line-height: 1.3; letter-spacing: -.01em; }
+.up-trail-card:hover .up-trail-name { color: var(--accent); }
 .up-trail-where { font-size: 12px; color: var(--muted); }
-.up-trail-name { display: block; font-size: 18px; font-weight: 700; line-height: 1.3; color: var(--ink); text-decoration: none; padding: 6px 16px 8px; }
-.up-trail-name:hover { color: var(--accent); }
-.up-trail-stats { display: flex; align-items: center; gap: 12px; padding: 0 16px 10px; flex-wrap: wrap; }
-.up-trail-stat { font-size: 14px; color: var(--ink-2); }
+.up-trail-stats { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.up-trail-stat { font-size: 13px; color: var(--ink-2); }
 .up-trail-stat b { color: var(--ink); }
-.up-trail-diff { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
-.diff-easy   { background: #d1fae5; color: #065f46; }
-.diff-mod    { background: #fef9c3; color: #713f12; }
-.diff-hard   { background: #ffedd5; color: #9a3412; }
-.diff-vhard  { background: #fee2e2; color: #7f1d1d; }
-.diff-xtreme { background: #1a1a1a; color: #fff; }
-@media (prefers-color-scheme: dark) {
-  .diff-easy   { background: #064e3b; color: #6ee7b7; }
-  .diff-mod    { background: #422006; color: #fde68a; }
-  .diff-hard   { background: #431407; color: #fdba74; }
-  .diff-vhard  { background: #450a0a; color: #fca5a5; }
-  .diff-xtreme { background: #333; color: #fff; }
-}
-:root[data-theme="dark"] .diff-easy   { background: #064e3b; color: #6ee7b7; }
-:root[data-theme="dark"] .diff-mod    { background: #422006; color: #fde68a; }
-:root[data-theme="dark"] .diff-hard   { background: #431407; color: #fdba74; }
-:root[data-theme="dark"] .diff-vhard  { background: #450a0a; color: #fca5a5; }
-:root[data-theme="dark"] .diff-xtreme { background: #333; color: #fff; }
-:root[data-theme="light"] .diff-easy   { background: #d1fae5; color: #065f46; }
-:root[data-theme="light"] .diff-mod    { background: #fef9c3; color: #713f12; }
-:root[data-theme="light"] .diff-hard   { background: #ffedd5; color: #9a3412; }
-:root[data-theme="light"] .diff-vhard  { background: #fee2e2; color: #7f1d1d; }
-:root[data-theme="light"] .diff-xtreme { background: #1a1a1a; color: #fff; }
-.up-trail-photo { display: block; width: 100%; height: 220px; background: var(--soft) center/cover no-repeat; }
-.up-trail-foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; }
-.up-trail-date { font-size: 12px; color: var(--muted); }
-.up-trail-link { font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
-.up-trail-link:hover { text-decoration: underline; }
+.up-trail-date { font-size: 12px; color: var(--muted); margin-top: auto; padding-top: 8px; }
+.up-trail-diff { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+.diff-easy   { background: color-mix(in srgb, #22c55e 18%, transparent); color: color-mix(in srgb, #15803d 80%, var(--ink)); }
+.diff-mod    { background: color-mix(in srgb, #eab308 20%, transparent); color: color-mix(in srgb, #a16207 80%, var(--ink)); }
+.diff-hard   { background: color-mix(in srgb, #f97316 18%, transparent); color: color-mix(in srgb, #c2410c 80%, var(--ink)); }
+.diff-vhard  { background: color-mix(in srgb, #ef4444 18%, transparent); color: color-mix(in srgb, #b91c1c 80%, var(--ink)); }
+.diff-xtreme { background: var(--solid); color: var(--on-solid); }
 
-/* Lists tab */
-.up-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-.up-list-card { display: flex; align-items: flex-start; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; color: var(--ink); text-decoration: none; transition: box-shadow .15s; }
-.up-list-card:hover { box-shadow: var(--shadow); }
-.up-list-icon { font-size: 20px; opacity: .4; flex-shrink: 0; margin-top: 2px; }
+/* Listas */
+.up-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.up-list-card { display: flex; align-items: flex-start; gap: 12px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 16px; color: var(--ink); text-decoration: none; transition: transform .15s; }
+.up-list-card:hover { transform: translateY(-2px); }
+.up-list-icon { width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent); }
 .up-list-name { font-weight: 600; font-size: 14px; line-height: 1.3; }
 .up-list-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
 .up-list-desc { font-size: 12px; color: var(--ink-2); margin-top: 4px; line-height: 1.4; }
 
-/* Stats tab */
-.up-stats-boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 28px; }
-.up-stat-box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
-.up-stat-val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.up-stat-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 3px; }
-.up-chart-title { font-size: 14px; font-weight: 600; color: var(--ink-2); margin: 20px 0 10px; text-transform: uppercase; letter-spacing: .04em; }
-.up-chart { display: flex; flex-direction: column; gap: 6px; }
-.bar-row { display: flex; align-items: center; gap: 8px; }
-.bar-label { width: 110px; font-size: 12px; color: var(--ink-2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
-.bar-track { flex: 1; height: 14px; background: var(--soft); border-radius: 4px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 4px; background: var(--accent); }
-.bar-val { width: 68px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+/* Estadísticas */
+.up-stats-boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.up-stat-box { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; position: relative; overflow: hidden; }
+.up-stat-box::after { content: ''; position: absolute; right: -18px; top: -18px; width: 70px; height: 70px; border-radius: 50%; background: var(--accent-soft); opacity: .7; }
+.up-stat-val { font-size: 24px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; position: relative; z-index: 1; }
+.up-stat-lbl { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 500; position: relative; z-index: 1; }
+.up-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; }
+.up-chart-title { font-size: 15px; font-weight: 600; margin: 0 0 14px; }
 </style>`;
 
   return {

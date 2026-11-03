@@ -7,21 +7,22 @@
 <link rel="stylesheet" href="/shared.css">
 <script src="/theme.js"></script>
 <style>
-.act-page { max-width: 680px; margin: 0 auto; padding: 28px 20px 60px; }
-.act-header { margin-bottom: 24px; }
-.act-header h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
-.act-header p { color: var(--ink-2); font-size: 14px; margin: 0; }
-.act-feed { display: grid; gap: 10px; }
-.act-item { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; }
-.act-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex-shrink: 0; overflow: hidden; }
+.act-page { max-width: 720px; margin: 0 auto; padding: 24px 20px 60px; }
+.act-header { margin-bottom: 20px; }
+.act-feed { display: flex; flex-direction: column; gap: 10px; }
+.act-item { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 18px; display: flex; gap: 14px; align-items: center; }
+.act-av { position: relative; flex-shrink: 0; }
+.act-avatar { width: 42px; height: 42px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; overflow: hidden; }
 .act-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.act-type { position: absolute; right: -4px; bottom: -4px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  color: #fff; box-shadow: 0 0 0 2px var(--surface); }
+.act-type.comment { background: #3b82f6; } .act-type.rating { background: #f59e0b; } .act-type.done { background: #16a34a; } .act-type.follow { background: var(--accent); }
 .act-body { flex: 1; min-width: 0; }
 .act-text { font-size: 14px; line-height: 1.5; }
-.act-text a { color: var(--accent); text-decoration: none; font-weight: 500; }
-.act-text a:hover { text-decoration: underline; }
-.act-time { font-size: 12px; color: var(--muted); margin-top: 3px; }
-.act-empty { text-align: center; padding: 48px 24px; color: var(--muted); }
-.act-empty svg { display: block; margin: 0 auto 16px; opacity: .4; }
+.act-text a { color: var(--ink); text-decoration: none; font-weight: 600; }
+.act-text a:hover { color: var(--accent); }
+.act-time { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.act-empty { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); }
 .act-load-more { text-align: center; margin-top: 16px; }
 </style>
 </head>
@@ -36,9 +37,12 @@
 </nav>
 
 <main class="act-page">
-  <div class="act-header">
-    <h1>Actividad</h1>
-    <p>Lo que hacen las personas que sigues</p>
+  <div class="act-header page-hero">
+    <span class="page-hero-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+    <div>
+      <h1>Actividad</h1>
+      <div class="page-sub">Lo que hacen las personas que sigues</div>
+    </div>
   </div>
   <div id="act-feed" class="act-feed"></div>
   <div id="act-load-more" class="act-load-more" hidden>
@@ -61,12 +65,21 @@
     if (d < 86400000) return Math.floor(d/3600000) + ' h';
     return Math.floor(d/86400000) + ' días';
   }
+  const TYPE_ICO = {
+    comment: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    rating:  '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    done:    '<polyline points="20 6 9 17 4 12"/>',
+    follow:  '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/>',
+  };
   function avatarEl(r) {
     const name = r.actor_display_name || r.actor_username || '?';
     const init = name[0].toUpperCase();
-    return r.actor_avatar_url
+    const av = r.actor_avatar_url
       ? `<div class="act-avatar"><img src="${esc(r.actor_avatar_url)}" alt=""></div>`
       : `<div class="act-avatar">${esc(init)}</div>`;
+    const ico = TYPE_ICO[r.type]
+      ? `<span class="act-type ${r.type}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${TYPE_ICO[r.type]}</svg></span>` : '';
+    return `<div class="act-av">${av}${ico}</div>`;
   }
   function typeText(r) {
     const user = `<a href="/u/${esc(r.actor_username)}">${esc(r.actor_display_name || r.actor_username)}</a>`;
@@ -85,18 +98,19 @@
     const r = await fetch(url);
     if (!r.ok) {
       if (r.status === 401) {
-        feed.innerHTML = '<div class="act-empty"><p>Inicia sesión para ver la actividad.</p><a class="btn" href="/login">Entrar</a></div>';
+        feed.innerHTML = '<div class="act-empty empty-state"><p>Inicia sesión para ver la actividad.</p><br><a class="btn btn-primary" href="/login">Entrar</a></div>';
         return;
       }
-      feed.innerHTML = '<div class="act-empty"><p>Error al cargar la actividad.</p></div>';
+      feed.innerHTML = '<div class="act-empty empty-state"><p>Error al cargar la actividad.</p></div>';
       return;
     }
     const { rows, nextCursor: nc } = await r.json();
     nextCursor = nc;
     if (!rows.length && !cursor) {
-      feed.innerHTML = `<div class="act-empty">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      feed.innerHTML = `<div class="act-empty empty-state" style="padding:56px 24px">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <p>Aquí aparecerá la actividad de las personas que sigues.<br>Ve a sus perfiles y pulsa «Seguir».</p>
+        <br><a class="btn" href="/">Explorar rutas en el visor</a>
       </div>`;
     } else {
       const html = rows.map(r => `<div class="act-item">

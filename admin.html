@@ -9,7 +9,43 @@
 <script src="/icons.js"></script>
 <style>
 /* Admin — maquetación propia. Tokens y componentes en shared.css */
-.page { max-width: 980px; }
+.adm-page { max-width: 1280px; margin: 0 auto; padding: 22px 20px 56px; }
+.adm-shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 22px; align-items: start; }
+.adm-side { position: sticky; top: calc(var(--nav-h) + 16px); background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 14px 10px 12px; max-height: calc(100vh - var(--nav-h) - 32px); overflow-y: auto; }
+.adm-side-title { display: flex; align-items: center; gap: 10px; padding: 2px 8px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.adm-side-title b { display: block; font-size: 14px; letter-spacing: -.01em; }
+.adm-side-title span { display: block; font-size: 11px; color: var(--muted); }
+.adm-side-ico { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: var(--accent); color: #fff; }
+.adm-nav { display: flex; flex-direction: column; gap: 2px; }
+.adm-group { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); padding: 12px 10px 5px; }
+.adm-nav .seg-tab { width: 100%; justify-content: flex-start; gap: 10px; height: 36px; padding: 0 10px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.adm-nav .seg-tab svg { flex-shrink: 0; color: var(--ink-3); transition: color .12s; }
+.adm-nav .seg-tab:hover { background: var(--soft); color: var(--ink); }
+.adm-nav .seg-tab:hover svg { color: var(--ink-2); }
+.adm-nav .seg-tab.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.adm-nav .seg-tab.active svg { color: var(--accent); }
+.adm-main { min-width: 0; }
+.adm-head { margin: 4px 0 16px; }
+.adm-main .card-head h2 { font-size: 15px; letter-spacing: -.01em; }
+@media (max-width: 900px) {
+  .adm-shell { grid-template-columns: 1fr; gap: 14px; }
+  .adm-side { position: sticky; top: var(--nav-h); z-index: 30; padding: 6px; max-height: none; overflow: visible; border-radius: 999px; }
+  .adm-side-title, .adm-group { display: none; }
+  .adm-nav { flex-direction: row; overflow-x: auto; scrollbar-width: none; }
+  .adm-nav::-webkit-scrollbar { display: none; }
+  .adm-nav .seg-tab { width: auto; flex: 0 0 auto; border-radius: 999px; padding: 0 13px; }
+}
+
+/* Estado de la BD: mosaicos */
+#stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 700px) { #stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+#stats-grid .srow { display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 2px; padding: 12px 14px !important;
+  border: none; background: var(--soft); border-radius: var(--radius-md); }
+#stats-grid .slbl { flex: none; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+#stats-grid .sval { font-size: 18px; font-weight: 700; letter-spacing: -.01em; white-space: normal; }
 .backups-list { display: flex; flex-direction: column; gap: 6px; }
 .backup-row { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; background: var(--soft); border-radius: var(--radius-md); }
 .backup-row .bname { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -225,27 +261,37 @@ tr.inactive td { opacity: .4; }
   <a href="/perfil" id="nav-perfil" class="nav-user" title="Mi perfil"></a>
 </nav>
 
-<main class="page">
+<main class="adm-page">
+<div class="adm-shell">
 
-  <div class="page-head">
-    <div>
-      <h1 class="page-title">Administración</h1>
-      <div class="page-sub">Base de datos, clasificación de tracks, mantenimiento y copias de seguridad</div>
+  <aside class="adm-side">
+    <div class="adm-side-title">
+      <span class="adm-side-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+      <div><b>Administración</b><span>GPX Library</span></div>
     </div>
-  </div>
+    <div class="adm-nav" id="admin-tabs">
+      <div class="adm-group">Datos</div>
+      <button class="seg-tab active" data-tab="bd" data-sub="Almacén S3, estado de la base de datos, mantenimiento y copias de seguridad"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>Base de datos</button>
+      <button class="seg-tab" data-tab="tracks" data-sub="Importar, limpiar, enriquecer y exportar rutas"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>Gestión de Tracks</button>
+      <button class="seg-tab" data-tab="jobs" data-sub="Trabajos en segundo plano: ver, cancelar y repetir"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Trabajos</button>
+      <button class="seg-tab" data-tab="logs" data-sub="Registro de la aplicación de los últimos 30 días"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>Logs</button>
+      <div class="adm-group">Comunidad</div>
+      <button class="seg-tab" data-tab="users" data-sub="Cuentas, roles, registro y correo saliente"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Usuarios</button>
+      <button class="seg-tab" data-tab="moderation" data-sub="Denuncias de rutas, fotos, comentarios y perfiles"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>Moderación</button>
+      <div class="adm-group">Clasificación</div>
+      <button class="seg-tab" data-tab="activities" data-sub="Tipos de actividad, colores, iconos e imágenes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M17 21l-3-6-3 1-3 5M6 12l3-3 4 1 3 4"/></svg>Actividades</button>
+      <button class="seg-tab" data-tab="params" data-sub="Umbrales de subidas e integraciones externas"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>Parámetros</button>
+      <button class="seg-tab" data-tab="gami" data-sub="Insignias, niveles y límites de datos imposibles"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.48 12.89 17 22l-5-3-5 3 1.52-9.11"/></svg>Gamificación</button>
+      <button class="seg-tab" data-tab="multidia" data-sub="Detección de rutas de varios días"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Varios días</button>
+      <div class="adm-group">Sistema</div>
+      <button class="seg-tab" data-tab="about" data-sub="Versión y novedades"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Acerca de</button>
+    </div>
+  </aside>
 
-  <div class="seg-tabs" id="admin-tabs" style="margin-bottom:16px">
-    <button class="seg-tab active" data-tab="bd">Base de datos</button>
-    <button class="seg-tab" data-tab="users">Usuarios</button>
-    <button class="seg-tab" data-tab="tracks">Gestión de Tracks</button>
-    <button class="seg-tab" data-tab="activities">Actividades</button>
-    <button class="seg-tab" data-tab="params">Parámetros</button>
-    <button class="seg-tab" data-tab="gami">Gamificación</button>
-    <button class="seg-tab" data-tab="multidia">Varios días</button>
-    <button class="seg-tab" data-tab="moderation">Moderación</button>
-    <button class="seg-tab" data-tab="jobs">Trabajos</button>
-    <button class="seg-tab" data-tab="logs">Logs</button>
-    <button class="seg-tab" data-tab="about">Acerca de</button>
+  <section class="adm-main">
+  <div class="adm-head">
+    <h1 class="page-title" id="adm-title">Base de datos</h1>
+    <div class="page-sub" id="adm-sub">Almacén S3, estado de la base de datos, mantenimiento y copias de seguridad</div>
   </div>
 
   <!-- ── Tab: Base de datos ── -->
@@ -265,7 +311,7 @@ tr.inactive td { opacity: .4; }
         <button class="btn btn-ghost btn-sm" id="btn-refresh-stats">↻ Actualizar</button>
       </div>
       <div class="card-body">
-        <div id="stats-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:0;font-size:13px">
+        <div id="stats-grid">
           <div class="srow"><span class="slbl">Tracks</span><span class="sval" id="s-tracks">—</span></div>
           <div class="srow"><span class="slbl">Archivos GPX</span><span class="sval" id="s-gpx">—</span></div>
           <div class="srow"><span class="slbl">Limpiados</span><span class="sval" id="s-cleaned">—</span></div>
@@ -1478,6 +1524,8 @@ tr.inactive td { opacity: .4; }
     </div>
   </div>
 
+  </section>
+</div>
 </main>
 
 <!-- Panel flotante lateral para ver/cancelar un job -->
@@ -1864,6 +1912,8 @@ document.querySelectorAll('#admin-tabs .seg-tab').forEach(btn => {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    document.getElementById('adm-title').textContent = btn.textContent.trim();
+    document.getElementById('adm-sub').textContent = btn.dataset.sub || '';
     history.replaceState(null, '', location.pathname + location.search + '#' + btn.dataset.tab);
   });
 });
