@@ -196,6 +196,7 @@
     .sierra-chip { font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; display:block; }
     .owner-chip { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:500; white-space:nowrap; }
     .owner-ini { width:20px; height:20px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; background:var(--accent-soft); color:var(--accent); }
+    img.owner-ini { object-fit:cover; }
     .owner-lock { font-size:10px; }
     .owner-none { font-size:11px; font-weight:600; color:var(--warn); }
     .tags-chip { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:999px; font-size:10px; background:color-mix(in srgb,#3b82f6 14%,transparent); color:#2563eb; border:1px solid color-mix(in srgb,#3b82f6 40%,transparent); }
@@ -1263,7 +1264,9 @@ function renderTable() {
       </td>
       <td>${actBadge}</td>
       <td class="col-owner">${t.owner_username
-        ? `<span class="owner-chip" title="${t.visibility === 'private' ? 'Privada' : 'Pública'}"><span class="owner-ini">${escHtml(t.owner_username.charAt(0).toUpperCase())}</span>${escHtml(t.owner_username)}${t.visibility === 'private' ? ' <span class="owner-lock">🔒</span>' : ''}</span>`
+        ? `<span class="owner-chip" title="${t.visibility === 'private' ? 'Privada' : 'Pública'}">${t.owner_avatar_key
+            ? `<img class="owner-ini" src="/api/profile/avatar/${encodeURIComponent(t.owner_avatar_key)}" alt="" loading="lazy">`
+            : `<span class="owner-ini">${escHtml(t.owner_username.charAt(0).toUpperCase())}</span>`}${escHtml(t.owner_username)}${t.visibility === 'private' ? ' <span class="owner-lock">🔒</span>' : ''}</span>`
         : '<span class="owner-none">Sin dueño</span>'}</td>
       <td style="text-align:center">${(t.road_types && t.road_types !== '{}') ? '<span style="color:#16a34a;font-size:14px;font-weight:700" title="Tiene datos OSM">✓</span>' : ''}</td>
       <td style="font-size:11px;color:var(--muted)">${escHtml(t.ccaa||'—')}</td>
@@ -1649,7 +1652,7 @@ document.getElementById('btn-bulk-edit').addEventListener('click', openBulkPanel
     const name = owner === '' ? null : $('owner-modal-user').selectedOptions[0].textContent.match(/@([^)]+)\)/)[1];
     allTracks.forEach(t => {
       if (!selected.has(t.id)) return;
-      t.owner_id = body.owner_id; t.owner_username = name; t.owner = name || 'Sin dueño';
+      t.owner_id = body.owner_id; t.owner_username = name; t.owner = name || 'Sin dueño'; t.owner_avatar_key = null;
       if (body.visibility) t.visibility = body.visibility;
     });
     close();

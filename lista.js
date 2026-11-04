@@ -38,6 +38,7 @@
 
   document.title = `${list.name} — GPX Library`;
   $('l-name').textContent = list.name;
+  if (window.gpxIcon) $('l-icon').innerHTML = gpxIcon(list.icon || 'bookmark', { size: 22 });
   const km = tracks.reduce((s, t) => s + (Number(t.distance) || 0), 0);
   const gain = tracks.reduce((s, t) => s + (Number(t.elevation_gain) || 0), 0);
   const roleTxt = { owner: 'Tuya', editor: 'Puedes editar', viewer: 'Solo lectura' }[list.role] || '';

@@ -25,7 +25,7 @@ const publicPages = require('./http/public-pages');
 const { getRepo, createRepo } = require('./repo');
 const { EDITABLE_FIELDS } = require('./repo/columns');
 const { openSql } = require('./repo/sql');
-const { authorPoints } = require('./repo/points');
+const { authorPoints, routePoints } = require('./repo/points');
 const { createToken, setCookie, clearCookie, authMiddleware, requireAuth, requireAdmin, hashPassword, checkPassword } = require('./auth');
 // Engine-neutral SQL on the active engine (shares the repository's Postgres pool; never closed here).
 const sqlDb = () => openSql({ pool: repo.pool });
@@ -63,7 +63,7 @@ const MIME = {
 
 // ── Archivos estáticos ─────────────────────────────────────────────
 // Public: the pages and styles at the root, the browser scripts listed here and assets/.
-const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js']);
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js', 'lists-picker.js']);
 function isPublicFile(rel) {
   if (rel.split('/').some(s => s.startsWith('.'))) return false;
   if (rel.startsWith('assets/')) return true;
@@ -456,6 +456,9 @@ async function apiGetTrackById(res, id, full = false, viewer = null) {
       if (track.bounds) { [[track.sw_lat, track.sw_lon], [track.ne_lat, track.ne_lon]] = track.bounds; }
     }
     delete track.waypoints_json;
+    track.owner_avatar = track.owner_avatar_key ? `/api/profile/avatar/${encodeURIComponent(track.owner_avatar_key)}` : null;
+    delete track.owner_avatar_key;
+    track.author_points = await routePoints(sqlDb(), track.id, await gamificationConfig()).catch(() => null);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(track));
   } catch (e) {
@@ -757,6 +760,9 @@ async function userAchievements(uid, cfg) {
   const lists  = (await db.get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM user_lists WHERE owner_id = ?', [uid])).n;
   return computeAchievements(await userCompletedTracks(uid), { photos, lists }, cfg);
 }
+
+// Icon of a list: a key of icons.js (letters, digits and dashes) or null for the default
+const listIcon = v => (typeof v === 'string' && /^[a-z0-9-]{1,40}$/.test(v) ? v : null);
 
 // Access level of a user to a list: 'owner' | 'editor' | 'viewer' | null (+ exists flag).
 async function listAccess(listId, userId, isAdmin = false) {
@@ -1903,12 +1909,15 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/lists' && method === 'GET') {
     if (!requireAuth(req, res)) return;
     const db = sqlDb();
+    // ?track=N also says which lists already contain that route (the «Guardar en lista» modal)
+    const trackId = parseInt(searchParams.get('track')) || 0;
     const lists = await db.all(
-      `SELECT l.id, l.name, l.description, l.visibility,
+      `SELECT l.id, l.name, l.description, l.visibility, l.icon,
               to_char(l.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS created_at,
               CAST((SELECT COUNT(*) FROM user_list_tracks lt WHERE lt.list_id = l.id) AS INTEGER) AS track_count,
-              CAST((SELECT COUNT(*) FROM user_list_shares s WHERE s.list_id = l.id) AS INTEGER) AS share_count
-       FROM user_lists l WHERE l.owner_id = ? ORDER BY l.created_at DESC`, [req.user.sub]);
+              CAST((SELECT COUNT(*) FROM user_list_shares s WHERE s.list_id = l.id) AS INTEGER) AS share_count,
+              EXISTS (SELECT 1 FROM user_list_tracks lt WHERE lt.list_id = l.id AND lt.track_id = ?) AS has
+       FROM user_lists l WHERE l.owner_id = ? ORDER BY l.created_at DESC`, [trackId, req.user.sub]);
     res.writeHead(200, J); return res.end(JSON.stringify(lists));
   }
 
@@ -1917,7 +1926,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireAuth(req, res)) return;
     const db = sqlDb();
     const lists = await db.all(
-      `SELECT l.id, l.name, l.description, l.visibility,
+      `SELECT l.id, l.name, l.description, l.visibility, l.icon,
               u.username AS owner_username,
               COALESCE(s.can_edit, false) AS can_edit,
               (s.user_id IS NOT NULL) AS shared_with_me,
@@ -1936,8 +1945,8 @@ const server = http.createServer(async (req, res) => {
     if (!body.name) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'El nombre es obligatorio' })); }
     const db = sqlDb();
     const row = await db.get(
-      'INSERT INTO user_lists (owner_id, name, description) VALUES (?, ?, ?) RETURNING id, name, description, visibility',
-      [req.user.sub, body.name, body.description || null]);
+      'INSERT INTO user_lists (owner_id, name, description, icon) VALUES (?, ?, ?, ?) RETURNING id, name, description, visibility, icon',
+      [req.user.sub, body.name, body.description || null, listIcon(body.icon)]);
     res.writeHead(201, J); return res.end(JSON.stringify({ ...row, track_count: 0, share_count: 0 }));
   }
 
@@ -1948,7 +1957,7 @@ const server = http.createServer(async (req, res) => {
     const acc = await listAccess(lid, req.user.sub, req.user.role === 'admin');
     if (!acc.role) { res.writeHead(acc.exists ? 403 : 404, J); return res.end(JSON.stringify({ error: acc.exists ? 'Esta lista es privada' : 'Lista no encontrada' })); }
     const l = await sqlDb().get(
-      `SELECT l.id, l.name, l.description, l.visibility, l.owner_id, u.username AS owner_username, u.display_name AS owner_name
+      `SELECT l.id, l.name, l.description, l.visibility, l.icon, l.owner_id, u.username AS owner_username, u.display_name AS owner_name
        FROM user_lists l JOIN users u ON u.id = l.owner_id WHERE l.id = ?`, [lid]);
     res.writeHead(200, J); return res.end(JSON.stringify({ ...l, role: acc.role }));
   }
@@ -1965,6 +1974,7 @@ const server = http.createServer(async (req, res) => {
     if (body.name !== undefined)        { updates.push('name = ?');        vals.push(body.name); }
     if (body.description !== undefined) { updates.push('description = ?'); vals.push(body.description || null); }
     if (body.visibility === 'public' || body.visibility === 'private') { updates.push('visibility = ?'); vals.push(body.visibility); }
+    if (body.icon !== undefined) { updates.push('icon = ?'); vals.push(listIcon(body.icon)); }
     if (!updates.length) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Nada que actualizar' })); }
     vals.push(lid);
     await db.run(`UPDATE user_lists SET ${updates.join(', ')} WHERE id = ?`, vals);

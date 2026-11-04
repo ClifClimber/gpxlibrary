@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/shared.css">
   <script src="/theme.js"></script>
   <script src="/icons.js"></script>
+  <script src="/lists-picker.js"></script>
   <link rel="stylesheet" href="/track.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.snow.css">
 </head>
@@ -40,11 +41,10 @@
             <a class="ph-btn ph-icon" id="trace-btn" title="Editar trazado (crea una copia)" hidden>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="5" cy="18" r="2.5"/><circle cx="12" cy="7" r="2.5"/><circle cx="19" cy="14" r="2.5"/><path d="M6.6 16 10.6 9M14 8.5l3.6 4"/></svg>
             </a>
-            <div id="list-wrap" style="position:relative" hidden>
-              <button class="ph-btn ph-icon" id="btn-add-list" title="Añadir a una de tus listas">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h13M3 12h9M3 18h9"/><path d="M17 15v6M14 18h6"/></svg>
+            <div id="list-wrap" hidden>
+              <button class="ph-btn ph-icon" id="btn-add-list" title="Guardar en lista">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
               </button>
-              <div id="list-dropdown"></div>
             </div>
             <a class="ph-btn ph-icon" id="public-btn" title="Compartir / Página pública" target="_blank" hidden>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
@@ -70,7 +70,7 @@
         </div>
         <h1 id="track-title">Cargando…</h1>
         <div id="track-sub"></div>
-        <div id="track-owner" hidden style="font-size:.82em;color:var(--ink-2);margin-top:2px"></div>
+        <div id="track-owner" hidden style="font-size:.82em;color:var(--ink-2);margin-top:6px;display:flex;align-items:center;gap:7px"></div>
       </div>
       <div id="content">
         <div id="loading"><div class="spin"></div>Cargando…</div>
@@ -89,23 +89,6 @@
         <button id="sel-clear">Quitar selección</button>
       </div>
     </section>
-  </div>
-</div>
-
-<!-- Description edit modal -->
-<div id="desc-modal" class="desc-modal-overlay" hidden>
-  <div class="desc-modal-box">
-    <div class="desc-modal-head">
-      <span>Editar descripción</span>
-      <button class="desc-modal-close" onclick="cancelDescription()" title="Cerrar">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-    <div id="desc-modal-editor"></div>
-    <div class="desc-modal-foot">
-      <button class="btn btn-outline btn-sm" onclick="cancelDescription()">Cancelar</button>
-      <button class="btn btn-sm" id="desc-modal-save" onclick="saveDescription()">Guardar</button>
-    </div>
   </div>
 </div>
 
@@ -129,7 +112,6 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.min.js"></script>
 <script>
 'use strict';
 
@@ -184,6 +166,35 @@ function ibpLevelT(val) {
 
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Author points this route gives its owner (public, non-planned routes; computed by the server)
+const POINT_PARTS = { publish: 'Publicada', description: 'Descripción', waypoints: 'Puntos de paso', photos: 'Fotos', cover: 'Portada',
+  tags: 'Etiquetas', ratings: 'Valoraciones', done: 'La han hecho', comments: 'Comentarios' };
+const COMMUNITY_PARTS = new Set(['ratings', 'done', 'comments']);
+function pointsSection(t) {
+  const p = t.author_points;
+  if (!p) return '';
+  const chips = Object.entries(p.parts).map(([k, v]) =>
+    `<span class="pt-chip${COMMUNITY_PARTS.has(k) ? ' c' : ''}">${esc(POINT_PARTS[k] || k)} <b>+${v}</b></span>`).join('');
+  return `<div class="section" id="points-section">
+    <div class="pts-head">
+      <span class="pts-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+      <div style="flex:1;min-width:0"><div class="pts-total">${p.points} <small>puntos de autor</small></div>
+        <div class="pts-sub">Lo que esta ruta da a su autor por su contenido y por lo que hacen otros con ella</div></div>
+    </div>
+    <div class="pts-chips">${chips}</div>
+  </div>`;
+}
+
+// Floating notice (#toast in shared.css)
+function showToast(msg) {
+  let el = document.getElementById('toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
 function hav(lat1, lon1, lat2, lon2) {
@@ -386,76 +397,14 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'ArrowRight') lightboxNav(1);
 });
 
-// ── Añadir a lista ───────────────────────────────────────────────
-const listBtn  = document.getElementById('btn-add-list');
-const listDrop = document.getElementById('list-dropdown');
-let listsCache = null;   // [{id,name,track_count, has}]
-
-async function openListDropdown() {
-  listDrop.classList.add('open');
-  listDrop.innerHTML = '<div class="ld-empty">Cargando…</div>';
-  try {
-    const lists = await fetch('/api/lists').then(r => r.json());
-    // Which lists already contain this track
-    await Promise.all(lists.map(async l => {
-      try { const d = await fetch(`/api/lists/${l.id}/tracks`).then(r => r.json()); l.has = (d.tracks || []).some(t => t.id === trackId); }
-      catch { l.has = false; }
-    }));
-    listsCache = lists;
-    renderListDropdown();
-  } catch { listDrop.innerHTML = '<div class="ld-empty">No se pudieron cargar tus listas</div>'; }
+// ── Guardar en lista (modal compartido: lists-picker.js) ─────────
+const listBtn = document.getElementById('btn-add-list');
+// Filled bookmark when the route is already in one of my lists (same look as the visor)
+function setListSaved(on) { listBtn.classList.toggle('saved', on); listBtn.querySelector('path').setAttribute('fill', on ? 'currentColor' : 'none'); }
+async function refreshListSaved() {
+  try { const ls = await fetch(`/api/lists?track=${trackId}`).then(r => (r.ok ? r.json() : [])); setListSaved(ls.some(l => l.has)); } catch {}
 }
-
-function renderListDropdown() {
-  const rows = listsCache.length
-    ? listsCache.map(l => `<button class="ld-opt" data-lid="${l.id}" data-has="${l.has ? 1 : 0}">
-        <span>${esc(l.name)}</span><span class="ld-count">${l.track_count}</span>
-        ${l.has ? '<span class="ld-check">✓</span>' : ''}</button>`).join('')
-    : '<div class="ld-empty">No tienes listas todavía.</div>';
-  listDrop.innerHTML =
-    `<div class="ld-title">Añadir a lista</div>${rows}` +
-    `<div class="ld-sep"></div>` +
-    `<div class="ld-new"><input type="text" id="ld-new-name" placeholder="Nueva lista…" maxlength="80"><button id="ld-new-btn">Crear</button></div>`;
-}
-
-listBtn.addEventListener('click', e => {
-  e.stopPropagation();
-  if (listDrop.classList.contains('open')) { listDrop.classList.remove('open'); return; }
-  openListDropdown();
-});
-listDrop.addEventListener('click', e => e.stopPropagation());
-document.addEventListener('click', () => listDrop.classList.remove('open'));
-
-listDrop.addEventListener('click', async e => {
-  const opt = e.target.closest('.ld-opt');
-  if (opt) {
-    const lid = parseInt(opt.dataset.lid);
-    const has = opt.dataset.has === '1';
-    try {
-      if (has) {
-        await fetch(`/api/lists/${lid}/tracks/${trackId}`, { method: 'DELETE' });
-      } else {
-        const r = await fetch(`/api/lists/${lid}/tracks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track_id: trackId }) });
-        if (!r.ok && r.status !== 409) throw new Error('No se pudo añadir');
-      }
-      const l = listsCache.find(x => x.id === lid);
-      if (l) { l.has = !has; l.track_count += has ? -1 : 1; }
-      renderListDropdown();
-    } catch (err) { alert(err.message); }
-    return;
-  }
-  if (e.target.id === 'ld-new-btn') {
-    const name = document.getElementById('ld-new-name').value.trim();
-    if (!name) return;
-    try {
-      const l = await fetch('/api/lists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }).then(r => r.json());
-      await fetch(`/api/lists/${l.id}/tracks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track_id: trackId }) });
-      l.has = true; l.track_count = 1;
-      listsCache.unshift(l);
-      renderListDropdown();
-    } catch { alert('No se pudo crear la lista'); }
-  }
-});
+listBtn.addEventListener('click', () => gpxListsPicker(trackId, { onChange: setListSaved }));
 
 // (gMap, gLine, gHoverMk, gTrack, gElePts, gSelHL declared below)
 
@@ -492,6 +441,7 @@ function render(t) {
     if (!me) return;
     if (me.role === 'admin' || me.id === t.owner_id) { document.getElementById('edit-btn').hidden = false; document.body.classList.add('can-edit'); }
     document.getElementById('list-wrap').hidden = false;   // any logged-in user can add to their lists
+    refreshListSaved();
     if (me.id !== t.owner_id) document.getElementById('btn-report').hidden = false;  // non-owners can report
   }).catch(() => {});
   const traceBtn = document.getElementById('trace-btn');
@@ -550,11 +500,15 @@ function updateHeader(t) {
   document.getElementById('track-sub').textContent = ownerParts.join(' · ');
   const ownerEl = document.getElementById('track-owner');
   if (ownerEl) {
-    if (t.owner_username && t.owner_profile_public) {
-      ownerEl.innerHTML = `Por <a href="/u/${encodeURIComponent(t.owner_username)}" title="Ver perfil">${esc(t.owner_username)}</a>`;
-      ownerEl.hidden = false;
-    } else if (t.owner_username) {
-      ownerEl.textContent = `Por ${t.owner_username}`;
+    if (t.owner_username) {
+      // Photo of the owner when there is one, else the initial
+      const av = t.owner_avatar
+        ? `<img class="owner-av" src="${esc(t.owner_avatar)}" alt="">`
+        : `<span class="owner-av">${esc(t.owner_username.charAt(0).toUpperCase())}</span>`;
+      const name = t.owner_profile_public
+        ? `<a href="/u/${encodeURIComponent(t.owner_username)}" title="Ver perfil">${esc(t.owner_username)}</a>`
+        : esc(t.owner_username);
+      ownerEl.innerHTML = `${av}<span>Por ${name}</span>`;
       ownerEl.hidden = false;
     } else {
       ownerEl.hidden = true;
@@ -1185,16 +1139,13 @@ function buildContent(t, color, icon) {
     <div class="section" id="desc-section">
       <div class="desc-section-head">
         <span class="section-head" style="padding:0">Descripción</span>
-        <button class="desc-edit-btn" onclick="editDescription()" title="Editar descripción">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Editar
-        </button>
       </div>
       <div id="desc-view" class="desc-body${!t.notes ? ' desc-empty' : ''}">
         ${t.notes ? (t.notes.trim().startsWith('<') ? t.notes : '<p>' + esc(t.notes).replace(/\n\n+/g,'</p><p>').replace(/\n/g,'<br>') + '</p>') : '<span class="desc-placeholder">Sin descripción</span>'}
       </div>
     </div>
     ${details ? `<div class="section"><div class="section-head">Detalles</div><div class="kv-list">${details}</div></div>` : ''}
+    ${pointsSection(t)}
     <div class="section" id="rating-section">
       <div class="section-head" style="padding:10px 14px 10px">Valoración</div>
       <div id="rating-body" style="padding:4px 14px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:16px">
@@ -1716,58 +1667,6 @@ function climbClick(el) {
   }
 }
 
-// ── Descripción (modal con Quill) ───────────────────────────────
-let gDescQuill = null;
-
-function editDescription() {
-  const modal = document.getElementById('desc-modal');
-  modal.hidden = false;
-  document.body.classList.add('lb-open');
-  if (!gDescQuill) {
-    gDescQuill = new Quill('#desc-modal-editor', {
-      theme: 'snow',
-      placeholder: 'Describe la ruta…',
-      modules: { toolbar: [['bold','italic','underline'],[{list:'ordered'},{list:'bullet'}],['blockquote','link'],['clean']] },
-    });
-  }
-  const html = gTrack?.notes || '';
-  gDescQuill.root.innerHTML = html.trim().startsWith('<') ? html : (html ? '<p>' + html + '</p>' : '');
-  setTimeout(() => gDescQuill.focus(), 50);
-}
-
-async function saveDescription() {
-  if (!gDescQuill || !gTrack) return;
-  const html = gDescQuill.root.innerHTML.trim();
-  const body = (html === '<p><br></p>' || html === '') ? '' : html;
-  const btn = document.getElementById('desc-modal-save');
-  if (btn) btn.disabled = true;
-  try {
-    const r = await fetch(`/api/tracks/${gTrack.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notes: body }),
-    });
-    if (!r.ok) throw new Error('Error al guardar');
-    gTrack.notes = body;
-    const view = document.getElementById('desc-view');
-    if (body) {
-      view.innerHTML = body.trim().startsWith('<') ? body : '<p>' + esc(body).replace(/\n\n+/g,'</p><p>').replace(/\n/g,'<br>') + '</p>';
-      view.classList.remove('desc-empty');
-    } else {
-      view.innerHTML = '<span class="desc-placeholder">Sin descripción</span>';
-      view.classList.add('desc-empty');
-    }
-    cancelDescription();
-  } catch(e) { alert(e.message); }
-  finally { if (btn) btn.disabled = false; }
-}
-
-function cancelDescription() {
-  document.getElementById('desc-modal').hidden = true;
-  document.body.classList.remove('lb-open');
-}
-document.getElementById('desc-modal').addEventListener('click', e => { if (e.target === e.currentTarget) cancelDescription(); });
-
 // ── Comentarios ──────────────────────────────────────────────────
 let gCommentsLoaded = false;
 let gCurrentUser   = null;
@@ -2033,9 +1932,12 @@ function openReportModal(kind, targetId) {
   const m = document.getElementById('report-modal');
   m.querySelector('textarea').value = '';
   m.querySelector('#report-error').textContent = '';
-  m.removeAttribute('hidden');
+  document.getElementById('report-submit-btn').disabled = false;
+  m.querySelector('#report-title').textContent = kind === 'comment' ? 'Denunciar comentario' : 'Denunciar ruta';
+  m.classList.add('open');   // .modal-overlay is display:none until .open (shared.css)
+  setTimeout(() => m.querySelector('textarea').focus(), 30);
 }
-function closeReportModal() { document.getElementById('report-modal').setAttribute('hidden', ''); }
+function closeReportModal() { document.getElementById('report-modal').classList.remove('open'); }
 async function submitReport() {
   const reason = document.getElementById('report-modal').querySelector('textarea').value.trim();
   const errEl = document.getElementById('report-error');
@@ -2056,20 +1958,22 @@ async function submitReport() {
 </script>
 
 <!-- Modal de denuncia -->
-<div id="report-modal" class="modal-overlay" hidden onclick="if(event.target===this)closeReportModal()">
-  <div class="modal" style="max-width:420px">
+<div id="report-modal" class="modal-overlay" onclick="if(event.target===this)closeReportModal()">
+  <div class="modal" style="max-width:460px">
     <div class="modal-head">
-      <strong>Denunciar contenido</strong>
-      <button class="modal-close" onclick="closeReportModal()">✕</button>
+      <h3 id="report-title">Denunciar contenido</h3>
+      <button class="icon-btn" onclick="closeReportModal()" title="Cerrar" aria-label="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
     </div>
     <div class="modal-body" style="display:grid;gap:10px">
-      <p style="margin:0;font-size:.9em;color:var(--ink-2)">Cuéntanos por qué crees que este contenido incumple las normas de la comunidad.</p>
-      <textarea class="input" rows="4" placeholder="Motivo de la denuncia…" style="resize:vertical"></textarea>
-      <span id="report-error" style="color:var(--danger);font-size:.85em"></span>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="btn btn-outline" onclick="closeReportModal()">Cancelar</button>
-        <button class="btn" id="report-submit-btn" onclick="submitReport()">Enviar denuncia</button>
-      </div>
+      <p style="margin:0;font-size:13px;color:var(--ink-2)">Cuéntanos por qué crees que incumple las normas de la comunidad. Un administrador lo revisará.</p>
+      <textarea class="textarea" rows="4" maxlength="500" placeholder="Motivo de la denuncia…"></textarea>
+      <span id="report-error" style="color:var(--danger);font-size:12px"></span>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeReportModal()">Cancelar</button>
+      <button class="btn btn-primary" id="report-submit-btn" onclick="submitReport()">Enviar denuncia</button>
     </div>
   </div>
 </div>

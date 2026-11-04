@@ -205,7 +205,7 @@ async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
                    t.ibp_hiking, t.ibp_bicycle, t.ibp_running
             FROM tracks t JOIN users u ON u.id=t.owner_id WHERE t.owner_id=? AND ${WEB_VISIBLE}
             ORDER BY t.date DESC NULLS LAST, t.id DESC LIMIT ${PROFILE_PAGE} OFFSET ${pageNo * PROFILE_PAGE}`, [u.id]),
-    db.all(`SELECT l.id, l.name, l.description,
+    db.all(`SELECT l.id, l.name, l.description, l.icon,
                    CAST((SELECT COUNT(*) FROM user_list_tracks lt WHERE lt.list_id=l.id) AS INTEGER) AS n
             FROM user_lists l WHERE l.owner_id=? AND l.visibility='public' ORDER BY l.created_at DESC`, [u.id]),
     activityImages(db),
@@ -287,7 +287,7 @@ async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
 
   const listCards = lists.map(l =>
     `<a class="up-list-card" href="${esc(listPath(l))}">
-      <span class="up-list-icon">${svg('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>', 16)}</span>
+      <span class="up-list-icon" data-list-icon="${esc(l.icon || 'bookmark')}">${svg('<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>', 16)}</span>
       <div>
         <div class="up-list-name">${esc(l.name)}</div>
         <div class="up-list-sub">${l.n} ruta${l.n === 1 ? '' : 's'}</div>
@@ -426,7 +426,12 @@ document.getElementById('up-share-btn')?.addEventListener('click', async () => {
   const url = location.href;
   try { await navigator.clipboard.writeText(url); } catch { prompt('Copia el enlace:', url); }
 });
-</script>`;
+</script>
+${lists.length ? `<script src="/icons.js"></script>
+<script>
+// Icon chosen by the owner for each list (icons.js keys)
+document.querySelectorAll('[data-list-icon]').forEach(el => { if (window.gpxIcon) el.innerHTML = gpxIcon(el.dataset.listIcon, { size: 16 }); });
+</script>` : ''}`;
 
   const head = `<style>
 /* ── Perfil público: hero, pestañas, barras y estado vacío en shared.css ── */

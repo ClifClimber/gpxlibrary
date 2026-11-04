@@ -284,6 +284,9 @@
     } catch {}
   }
 
+  // Icon of a list (icons.js key; default bookmark)
+  const listIco = key => gpxIcon(key || 'bookmark', { size: 18 });
+
   function renderListas() {
     const grid = $('lists-grid');
     if (!gListas.length) {
@@ -293,6 +296,7 @@
     grid.innerHTML = gListas.map(l => `
       <div class="list-card" data-lid="${l.id}">
         <div class="list-card-head">
+          <button type="button" class="list-ico" data-ico-list="${l.id}" title="Cambiar el icono de la lista">${listIco(l.icon)}</button>
           <span class="list-card-name">${esc(l.name)}</span>
           ${l.visibility === 'public' ? '<span class="list-badge pub">Pública</span>' : ''}
           ${l.share_count ? `<span class="list-badge shared">${l.share_count} compartida${l.share_count !== 1 ? 's' : ''}</span>` : ''}
@@ -358,6 +362,19 @@
 
   $('lists-grid').addEventListener('click', async e => {
     if (e.target.closest('a')) return;
+    const icoBtn = e.target.closest('[data-ico-list]');
+    if (icoBtn) {
+      e.stopPropagation();
+      const l = gListas.find(x => x.id === +icoBtn.dataset.icoList); if (!l) return;
+      gpxIconPicker(icoBtn, l.icon || 'bookmark', async k => {
+        try {
+          const r = await api(`/api/lists/${l.id}`, { method: 'PATCH', body: JSON.stringify({ icon: k }) });
+          if (!r.ok) return;
+          l.icon = k; icoBtn.innerHTML = listIco(k);
+        } catch {}
+      });
+      return;
+    }
     const copyBtn = e.target.closest('[data-copy-list]');
     if (copyBtn) {
       e.stopPropagation();
@@ -445,6 +462,7 @@
       grid.innerHTML = shared.map(l => `
         <div class="list-card" data-shared="${l.id}">
           <div class="list-card-head">
+            <span class="list-ico ro">${listIco(l.icon)}</span>
             <span class="list-card-name">${esc(l.name)}</span>
             ${l.can_edit ? '<span class="list-badge shared">puedes editar</span>' : ''}
             ${l.visibility === 'public' && !l.shared_with_me ? '<span class="list-badge pub">Pública</span>' : ''}
@@ -482,17 +500,23 @@
     } catch {}
   });
 
+  let gNewListIcon = 'bookmark';
+  $('btn-new-list-icon').innerHTML = listIco(gNewListIcon);
+  $('btn-new-list-icon').addEventListener('click', e => {
+    gpxIconPicker(e.currentTarget, gNewListIcon, k => { gNewListIcon = k; $('btn-new-list-icon').innerHTML = listIco(k); });
+  });
   $('btn-create-list').addEventListener('click', async () => {
     const name = $('inp-list-name').value.trim();
     const description = $('inp-list-desc').value.trim();
     if (!name) { setMsg('msg-list', 'El nombre es obligatorio', false); return; }
     try {
-      const r = await api('/api/lists', { method: 'POST', body: JSON.stringify({ name, description }) });
+      const r = await api('/api/lists', { method: 'POST', body: JSON.stringify({ name, description, icon: gNewListIcon }) });
       if (!r.ok) { const e = await r.json(); setMsg('msg-list', e.error || 'Error', false); return; }
       const lista = await r.json();
       gListas.unshift(lista);
       renderListas();
       $('inp-list-name').value = $('inp-list-desc').value = '';
+      gNewListIcon = 'bookmark'; $('btn-new-list-icon').innerHTML = listIco(gNewListIcon);
       setMsg('msg-list', '¡Lista creada!', true);
     } catch {}
   });

@@ -145,7 +145,8 @@ function showToast(msg, kind) {
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2600);
 }
-const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 });
+window.showToast = showToast;   // used by lists-picker.js
+const nf1 =new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 });
 const nf0 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 });
 
 // ── Map ──────────────────────────────────────────────────────────────
@@ -971,7 +972,9 @@ function trackItemHtml(track) {
     <div class="ti-right">
       ${photo ? `<div class="ti-photo" style="background-image:url('${photo}')"></div>` : ''}
       ${ownerName ? `<div class="ti-owner-row">
-        <div class="ti-avatar" style="background:${c}" title="${escHtml(ownerName)}">${escHtml(ownerInitial)}</div>
+        ${track.owner_avatar
+          ? `<img class="ti-avatar" src="${escHtml(track.owner_avatar)}" alt="" title="${escHtml(ownerName)}" loading="lazy">`
+          : `<div class="ti-avatar" style="background:${c}" title="${escHtml(ownerName)}">${escHtml(ownerInitial)}</div>`}
         <a class="ti-owner" href="/u/${encodeURIComponent(ownerName)}" target="_blank" title="Ver perfil de ${escHtml(ownerName)}">${escHtml(ownerName)}</a>
       </div>` : ''}
     </div>
@@ -1022,7 +1025,7 @@ tracklistEl.addEventListener('click', e => {
   }
   if (e.target.closest('.ti-save-btn')) {
     e.stopPropagation();
-    openSaveToListPicker(e.target.closest('.ti-save-btn'), +e.target.closest('.ti-save-btn').dataset.id);
+    openSaveToListPicker(+e.target.closest('.ti-save-btn').dataset.id);
     return;
   }
   activateTrack(id, true);
@@ -1035,88 +1038,13 @@ function markTrackSaved(trackId) {
   document.querySelectorAll(`.ti-save-btn[data-id="${trackId}"]`).forEach(b => b.classList.add('saved'));
 }
 
-// ── Save to list modal ───────────────────────────────────────────────
-function openSaveToListPicker(btn, trackId) {
-  if (!window.gpxMe) { location.href = '/login.html'; return; }
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay open';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:480px;width:94%">
-      <div class="modal-head">
-        <h3 style="flex:1">Guardar en lista</h3>
-        <button class="icon-btn modal-close" style="font-size:18px;line-height:1;margin-left:auto">✕</button>
-      </div>
-      <div id="save-list-body" style="padding:0 20px 8px;display:flex;flex-direction:column;gap:6px;overflow-y:auto;max-height:320px">
-        <div style="color:var(--muted);font-size:13px;padding:8px 0">Cargando listas…</div>
-      </div>
-      <div style="padding:14px 20px 18px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center">
-        <input id="new-list-input" class="input" placeholder="Crear nueva lista…" style="flex:1;font-size:13px">
-        <button id="new-list-btn" class="btn btn-primary" style="font-size:13px;white-space:nowrap">Crear</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.querySelector('.modal-close').addEventListener('click', close);
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-
-  async function loadLists() {
-    const [lists, ...memberChecks] = await Promise.all([
-      fetch('/api/lists').then(r => r.ok ? r.json() : []),
-    ]);
-    // Check which lists already contain this track
-    const hasSet = new Set();
-    await Promise.all(lists.map(async l => {
-      try {
-        const d = await fetch(`/api/lists/${l.id}/tracks`).then(r => r.json());
-        if ((d.tracks || []).some(t => t.id === trackId)) hasSet.add(l.id);
-      } catch {}
-    }));
-    return { lists, hasSet };
-  }
-
-  loadLists().then(({ lists, hasSet }) => {
-    const body = overlay.querySelector('#save-list-body');
-    if (!lists.length) {
-      body.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:8px 0">No tienes listas aún. Crea una abajo.</div>`;
-    } else {
-      body.innerHTML = lists.map(l => {
-        const has = hasSet.has(l.id);
-        return `<button class="btn btn-ghost" style="justify-content:flex-start;text-align:left;gap:10px${has ? ';color:var(--accent)' : ''}" data-lid="${l.id}" data-has="${has}">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="${has ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-          <span style="flex:1">${escHtml(l.name)}</span>
-          <span style="font-size:11px;color:var(--muted)">${l.track_count} ruta${l.track_count !== 1 ? 's' : ''}</span>
-        </button>`;
-      }).join('');
-      body.querySelectorAll('button[data-lid]').forEach(b => b.addEventListener('click', async () => {
-        const lid = b.dataset.lid;
-        const alreadyHas = b.dataset.has === 'true';
-        if (alreadyHas) { close(); return; }
-        close();
-        const r = await fetch(`/api/lists/${lid}/tracks`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ track_id: trackId }) });
-        if (r.ok || r.status === 409) { markTrackSaved(trackId); showToast('Guardado en la lista'); }
-        else showToast('No se pudo guardar', 'error');
-      }));
-    }
-  }).catch(() => { overlay.querySelector('#save-list-body').innerHTML = '<div style="color:var(--danger);font-size:13px;padding:8px 0">Error al cargar listas</div>'; });
-
-  // Crear nueva lista
-  const input = overlay.querySelector('#new-list-input');
-  const createBtn = overlay.querySelector('#new-list-btn');
-  const doCreate = async () => {
-    const name = input.value.trim(); if (!name) return;
-    createBtn.disabled = true;
-    try {
-      const l = await fetch('/api/lists', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name }) }).then(r => r.json());
-      if (l.id) {
-        const r2 = await fetch(`/api/lists/${l.id}/tracks`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ track_id: trackId }) });
-        if (r2.ok || r2.status === 409) { markTrackSaved(trackId); close(); showToast(`Guardado en "${name}"`); }
-        else { close(); showToast('Lista creada pero no se pudo añadir la ruta', 'warn'); }
-      }
-    } catch { showToast('Error al crear la lista', 'error'); }
-    finally { createBtn.disabled = false; }
-  };
-  createBtn.addEventListener('click', doCreate);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') doCreate(); });
+// ── Guardar en lista: modal compartido (lists-picker.js) ──────────────
+function openSaveToListPicker(trackId) {
+  if (!window.gpxMe) { location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search); return; }
+  gpxListsPicker(trackId, { onChange: saved => {
+    if (saved) markTrackSaved(trackId);
+    else { gSavedTracks.delete(trackId); document.querySelectorAll(`.ti-save-btn[data-id="${trackId}"]`).forEach(b => b.classList.remove('saved')); }
+  } });
 }
 $('tracklist-pages').addEventListener('click', e => {
   const btn = e.target.closest('.page-btn[data-p]');

@@ -39,14 +39,16 @@ function createPostgresRepo({ connectionString, pool: givenPool } = {}) {
 
     async listTracks() {
       return rows(`SELECT ${selectCols(C.LIST_COLS)},
-        (SELECT username FROM users u WHERE u.id = tracks.owner_id) AS owner_username
+        (SELECT username FROM users u WHERE u.id = tracks.owner_id) AS owner_username,
+        (SELECT avatar_key FROM users u WHERE u.id = tracks.owner_id) AS owner_avatar_key
         FROM tracks ORDER BY tracks.imported_at DESC, ${BY_NAME}, id`);
     },
     async getTrack(id) {
       return first(
         `SELECT ${selectCols(C.TRACK_COLS)},
           (SELECT username     FROM users WHERE id = tracks.owner_id) AS owner_username,
-          (SELECT profile_public FROM users WHERE id = tracks.owner_id) AS owner_profile_public
+          (SELECT profile_public FROM users WHERE id = tracks.owner_id) AS owner_profile_public,
+          (SELECT avatar_key   FROM users WHERE id = tracks.owner_id) AS owner_avatar_key
          FROM tracks WHERE id=$1`, [id]);
     },
     async getPoints(id, { clean = false } = {}) {

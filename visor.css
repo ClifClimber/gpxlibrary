@@ -221,6 +221,7 @@ body.panel-resizing { cursor: ew-resize; user-select: none; }
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700; color: #fff;
 }
+img.ti-avatar { object-fit: cover; background: var(--soft); box-shadow: 0 0 0 1px var(--line); }
 .ti-owner {
   font-size: 11px; font-weight: 500; color: var(--ink-2);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;

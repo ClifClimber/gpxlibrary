@@ -193,6 +193,7 @@ async function searchOnce(db, p, viewer, { dataVersion = null, lite = false, ser
      SELECT tr.id, tr.name, tr.date, tr.activity, tr.sierra, tr.ccaa, tr.tags, tr.distance, tr.elevation_gain, tr.elevation_loss,
             tr.min_elevation, tr.max_elevation, tr.ibp_bicycle, tr.ibp_hiking, tr.ibp_running, tr.difficulty, tr.moving_time, tr.stopped_time,
             tr.circular, tr.owner_id, tr.visibility, tr.cover_photo_id, tr.road_types, tr.file, u.username AS owner_username,
+            u.avatar_key AS owner_avatar_key,
             ST_AsGeoJSON(ST_StartPoint(${s.geom}), 5) AS start,
             ST_AsGeoJSON(CASE WHEN ${s.full} THEN ST_Transform(ST_Simplify(ST_Transform(tr.geom, 3857),
                                 ${TOL[p.line]} / cos(radians(ST_Y(ST_Centroid(tr.geom)))), true), 4326)
@@ -253,6 +254,7 @@ async function searchOnce(db, p, viewer, { dataVersion = null, lite = false, ser
       movingTime: t.moving_time || null, stoppedTime: t.stopped_time || null, circular: !!t.circular,
       hasOsm: !!(t.road_types && t.road_types !== '{}'),
       owner_id: t.owner_id || null, owner_username: t.owner_username || null, visibility: t.visibility || 'public',
+      owner_avatar: t.owner_avatar_key ? `/api/profile/avatar/${encodeURIComponent(t.owner_avatar_key)}` : null,
       cover: t.cover_photo_id ? `/api/photos/${t.cover_photo_id}?size=thumb` : null,
       start: st ? [st[1], st[0]] : null,
       bounds: [[t.s, t.w], [t.n, t.e]],

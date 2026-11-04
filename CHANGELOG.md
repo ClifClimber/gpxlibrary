@@ -4,6 +4,17 @@
 
 ---
 
+## v2.19.0 — 2026-11-04
+
+- **Avatar del dueño** en las fichas del visor, el catálogo y el detalle de ruta (la inicial si no tiene foto)
+- **Detalle de ruta**: la descripción ya no se edita desde la ficha (solo desde «Editar ruta»); nueva sección «Puntos de autor» con los puntos que da la ruta y de dónde salen
+- **Guardar en lista**: modal centrado y más grande, común al visor y a la ficha (`lists-picker.js`): icono de cada lista, estado añadida/quitar, crear lista con icono; la ficha usa el mismo marcador que el visor (relleno si la ruta ya está en alguna lista)
+- **Iconos de listas** configurables por el dueño (migración `027`, `user_lists.icon`): en Perfil → Mis listas, al crear una lista y en el modal; se ven en `/lista?id=` y en el perfil público
+- `GET /api/lists?track=N` dice qué listas contienen ya la ruta (antes una petición por lista)
+- Corregido: «Denunciar» en la ficha de ruta no abría el diálogo y, tras enviar, fallaba por un aviso inexistente
+
+---
+
 ## v2.18.0 — 2026-11-03
 
 ### Puntos de autor
