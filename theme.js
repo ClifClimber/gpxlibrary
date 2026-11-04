@@ -108,7 +108,51 @@
     mq.addEventListener('change', () => { if (!root.dataset.theme) { paint(); window.dispatchEvent(new Event('themechange')); } });
     paint();
     nav.appendChild(btn);
+    _initNavMenu(nav, btn);
   });
+
+  // Narrow screens (≤720 px, see shared.css): the text links and the theme toggle collapse into a dropdown.
+  // The panel is filled when it opens, so it reflects the links theme.js adds or removes after /api/auth/me.
+  function _initNavMenu(nav, themeBtn) {
+    const MENU = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';
+    const mbtn = document.createElement('button');
+    mbtn.type = 'button'; mbtn.className = 'nav-menu-btn';
+    mbtn.setAttribute('aria-label', 'Menú'); mbtn.setAttribute('aria-haspopup', 'true');
+    mbtn.setAttribute('aria-expanded', 'false'); mbtn.setAttribute('aria-controls', 'nav-menu');
+    mbtn.innerHTML = MENU;
+    nav.insertBefore(mbtn, nav.firstChild);
+    const menu = document.createElement('div');
+    menu.id = 'nav-menu'; menu.className = 'nav-menu';
+    document.body.appendChild(menu);
+
+    const close = () => { menu.classList.remove('open'); mbtn.setAttribute('aria-expanded', 'false'); };
+    const fill = () => {
+      menu.textContent = '';
+      nav.querySelectorAll(':scope > a:not(.logo):not(.nav-user):not(.nav-upload):not(.nav-login)').forEach(a => {
+        const c = document.createElement('a');
+        c.href = a.getAttribute('href'); c.textContent = a.textContent.trim();
+        if (a.classList.contains('active')) c.className = 'active';
+        menu.appendChild(c);
+      });
+      if (menu.children.length) menu.insertAdjacentHTML('beforeend', '<div class="nav-menu-sep"></div>');
+      const t = document.createElement('button');
+      t.type = 'button';
+      const dark = isDark();
+      t.innerHTML = (dark ? SUN : MOON) + `<span>${dark ? 'Modo claro' : 'Modo oscuro'}</span>`;
+      t.addEventListener('click', () => { themeBtn.click(); close(); });
+      menu.appendChild(t);
+    };
+    mbtn.addEventListener('click', () => {
+      if (menu.classList.contains('open')) return close();
+      fill();
+      menu.classList.add('open'); mbtn.setAttribute('aria-expanded', 'true');
+    });
+    // Capture phase: other nav handlers (the bell) stop propagation
+    document.addEventListener('click', e => { if (!menu.contains(e.target) && !mbtn.contains(e.target)) close(); }, true);
+    menu.addEventListener('click', e => { if (e.target.closest('a')) close(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && menu.classList.contains('open')) { close(); mbtn.focus(); } });
+    matchMedia('(min-width: 721px)').addEventListener('change', e => { if (e.matches) close(); });
+  }
 
   function _initNotifBell(nav) {
     if (nav.querySelector('#nav-notif')) return;
@@ -130,7 +174,7 @@
     // Panel
     const panel = document.createElement('div');
     panel.id = 'nav-notif-panel';
-    panel.style.cssText = 'position:fixed;top:48px;right:8px;width:320px;max-height:420px;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);z-index:1200;display:none;font-size:13px';
+    panel.style.cssText = 'position:fixed;top:48px;right:8px;width:320px;max-width:calc(100vw - 16px);max-height:420px;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);z-index:1200;display:none;font-size:13px';
     document.body.appendChild(panel);
 
     const ICONS = { comment: '💬', rating: '⭐', done: '✓', follow: '👤' };

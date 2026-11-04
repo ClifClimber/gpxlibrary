@@ -347,6 +347,14 @@ body.lb-open { overflow: hidden; }
   #weather-details { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ── Phones: action buttons wrap and the hero numbers shrink so nothing overflows ── */
+@media (max-width: 420px) {
+  #ph-top { flex-wrap: wrap; }
+  #ph-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .hero-stat { min-width: 0; padding: 10px 9px 8px; }
+  .hero-val { font-size: 19px; }
+}
+
 /* ── Descripción ─────────────────────────────────────────────────── */
 .desc-section-head {
   display: flex; align-items: center; justify-content: space-between;
