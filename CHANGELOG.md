@@ -4,6 +4,13 @@
 
 ---
 
+## v2.21.0 — 2026-11-04
+
+- **Admin ve todas las rutas en el visor**: también las privadas de cualquier usuario (antes solo las públicas y las propias). Un usuario normal sigue viendo solo las públicas y las suyas
+- **Catálogo → Cambiar dueño** vuelve a funcionar: el modal no se abría porque se mostraba con el atributo `hidden` en lugar de la clase `open`
+
+---
+
 ## v2.20.0 — 2026-11-04
 
 ### Navegación en móvil

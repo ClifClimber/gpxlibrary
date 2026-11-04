@@ -409,7 +409,7 @@
 
 
 <!-- Change owner modal -->
-<div id="owner-modal" class="modal-overlay" hidden>
+<div id="owner-modal" class="modal-overlay">
   <div class="modal" style="max-width:420px">
     <div class="modal-head">
       <h3>Cambiar dueño</h3>
@@ -1630,7 +1630,8 @@ document.getElementById('btn-bulk-edit').addEventListener('click', openBulkPanel
 // ── Cambiar dueño de las rutas seleccionadas ───────────────────────
 (function () {
   const $ = id => document.getElementById(id);
-  const close = () => { $('owner-modal').hidden = true; };
+  // .modal-overlay is display:none until it has .open (shared.css), so the hidden attribute alone never shows it
+  const close = () => { $('owner-modal').classList.remove('open'); };
   $('btn-bulk-owner').addEventListener('click', async () => {
     if (!selected.size) return;
     $('owner-modal-n').textContent = selected.size;
@@ -1642,7 +1643,7 @@ document.getElementById('btn-bulk-edit').addEventListener('click', openBulkPanel
         `<option value="${u.id}">${escHtml(u.display_name || u.username)} (@${escHtml(u.username)})</option>`).join('') +
         '<option value="">— Sin dueño —</option>';
     } catch { $('owner-modal-err').textContent = 'No se pudo cargar la lista de usuarios'; }
-    $('owner-modal').hidden = false;
+    $('owner-modal').classList.add('open');
   });
   $('owner-modal-ok').addEventListener('click', async () => {
     const owner = $('owner-modal-user').value;

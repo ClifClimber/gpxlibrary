@@ -91,7 +91,7 @@ function buildSearchSql(p, viewer, { nearIds = null } = {}) {
   const full = `(COALESCE(tr.owner_id = ${me}, FALSE) OR ${admin})`;   // routes without owner: NULL would drop them
   const geom = `(CASE WHEN ${full} THEN tr.geom ELSE tr.geom_view END)`;
   // `hidden`: the privacy zone covers the whole route, so only its owner (and admins) may see it
-  const vis = [`(t.visibility = 'public' OR t.owner_id = ${me})`, `(NOT t.hidden OR t.owner_id = ${me} OR ${admin})`];
+  const vis = [`(t.visibility = 'public' OR t.owner_id = ${me} OR ${admin})`, `(NOT t.hidden OR t.owner_id = ${me} OR ${admin})`];
   const base = [...vis];
   if (p.ids.length) base.push(`t.id = ANY(${$(p.ids)}::int[])`);
   // JS coerces a missing distance/gain to 0 (null >= 5 is false, null <= 40 is true)
