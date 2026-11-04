@@ -152,6 +152,10 @@ body.edit-mode a.edit-only { display: inline-flex; }
       </div>
       <input type="file" id="gpx-file" accept=".gpx,application/gpx+xml">
       <div class="wz-msg err" id="step1-err" style="margin-top:12px"></div>
+      <div class="wz-foot">
+        <button class="btn btn-outline" id="b1-back">Atrás</button>
+        <div class="wz-foot-btns"><button class="btn btn-ghost" id="b1-cancel">Cancelar</button></div>
+      </div>
     </section>
 
     <!-- Paso 2 -->
@@ -177,7 +181,10 @@ body.edit-mode a.edit-only { display: inline-flex; }
       </div>
       <div class="wz-foot">
         <button class="btn btn-outline" id="b2-back">Atrás</button>
-        <button class="btn btn-primary" id="b2-next">Continuar</button>
+        <div class="wz-foot-btns">
+          <button class="btn btn-ghost" id="b2-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="b2-next">Continuar</button>
+        </div>
       </div>
       <div class="wz-log" id="import-log"></div>
     </section>
@@ -289,9 +296,12 @@ body.edit-mode a.edit-only { display: inline-flex; }
         <div style="font-size:12px;color:var(--muted);margin-top:6px" id="ph-hint" hidden>Pulsa ☆ en una foto para usarla como <b>portada</b> de la ruta (es la que aparece en la lista del visor).</div>
       </div>
       <div class="wz-foot">
-        <span class="wz-msg err" id="step3-err"></span>
         <div class="wz-foot-btns">
-          <a class="btn edit-only" id="b3-cancel" href="/">Cancelar</a>
+          <button class="btn btn-outline" id="b3-back">Atrás</button>
+          <span class="wz-msg err" id="step3-err"></span>
+        </div>
+        <div class="wz-foot-btns">
+          <button class="btn btn-ghost" id="b3-cancel">Cancelar</button>
           <button class="btn btn-primary" id="b3-save">Guardar track</button>
         </div>
       </div>

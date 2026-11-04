@@ -71,6 +71,7 @@
 
   function readFile(file) {
     $('step1-err').textContent = '';
+    discardDraft();                                 // a new file replaces a route already imported by this wizard
     trackId = null; editingExisting = false;       // a new file starts a new import
     $('dup-panel').hidden = true; $('b2-next').hidden = false; $('import-log').textContent = '';
     if (!/\.gpx$/i.test(file.name)) { $('step1-err').textContent = 'Elige un archivo .gpx'; return; }
@@ -132,6 +133,30 @@
     map.fitBounds(polyline.getBounds(), { padding: [24, 24], maxZoom: 16 });   // initial view (no animation glitch)
     fitRoute();
   }
+
+  // ── Atrás / Cancelar en todas las fases ──
+  // The route is imported on the server when going from step 2 to 3 (so photos can be attached). If the user
+  // backs out afterwards, that route is a draft of this wizard and is removed; a route that already existed
+  // (editing, or «Editar la que ya tengo») is never deleted.
+  const isDraft = () => !!trackId && !editingExisting && !EDIT_ID;
+  function discardDraft() {
+    if (!isDraft()) return Promise.resolve();
+    const id = trackId;
+    return fetch('/api/tracks/' + id, { method: 'DELETE' }).catch(() => {});
+  }
+  const leaveTo = url => { location.href = url; };
+  async function cancelWizard() {
+    if (isDraft()) {
+      if (!confirm('¿Cancelar la subida?\n\nLa ruta ya se había importado: se eliminará junto con las fotos que hayas añadido.')) return;
+      await discardDraft();
+    }
+    leaveTo(EDIT_ID ? '/track?id=' + EDIT_ID : '/');
+  }
+  $('b1-back').addEventListener('click', () => { if (history.length > 1 && document.referrer) history.back(); else leaveTo('/'); });
+  $('b1-cancel').addEventListener('click', cancelWizard);
+  $('b2-cancel').addEventListener('click', cancelWizard);
+  $('b3-cancel').addEventListener('click', cancelWizard);
+  $('b3-back').addEventListener('click', () => { if (EDIT_ID) leaveTo('/track?id=' + EDIT_ID); else goStep(2); });
 
   $('b2-back').addEventListener('click', () => goStep(1));
   $('b2-next').addEventListener('click', importAndEdit);
@@ -226,8 +251,10 @@
     const panel = $('anom-panel'), a = t.anomalies;
     panel.hidden = true; panel.classList.remove('done');
     if (!a || !a.removable || a.applied || a.dismissed) return;
-    const cp = a.clusters.reduce((s, c) => s + Math.max(0, c.count - 2), 0), parts = [];
-    if (a.clusters.length) parts.push(`${plural(a.clusters.length, 'parada', 'paradas')} en las que el GPS se ha vuelto loco y dibuja una estrella o un ovillo (${plural(cp, 'punto', 'puntos')})`);
+    const stars = a.clusters.filter(c => c.kind !== 'phantom'), ph = a.clusters.filter(c => c.kind === 'phantom'), parts = [];
+    const cnt = l => l.reduce((s, c) => s + Math.max(0, c.count - 2), 0);
+    if (stars.length) parts.push(`${plural(stars.length, 'parada', 'paradas')} en las que el GPS se ha vuelto loco y dibuja una estrella o un ovillo (${plural(cnt(stars), 'punto', 'puntos')})`);
+    if (ph.length) parts.push(`${plural(ph.length, 'excursión fantasma', 'excursiones fantasma')}: el GPS perdió la señal y dibujó idas y vueltas rectas con puntos inventados (${plural(cnt(ph), 'punto', 'puntos')})`);
     if (a.spikes.length) parts.push(plural(a.spikes.length, 'salto aislado fuera de la ruta', 'saltos aislados fuera de la ruta'));
     const saved = a.savedM >= 50 ? ` Quitándolos la distancia bajaría de <b>${kmFmt(t.distance)}</b> a unos <b>${kmFmt(t.distance - a.savedM / 1000)} km</b>.` : '';
     $('anom-title').textContent = '⚠️ Hemos detectado puntos GPS anómalos';
@@ -509,7 +536,6 @@
     $('s3-title').textContent = 'Editar ruta';
     $('s3-sub').textContent = 'Cambia lo que quieras y guarda; el trazado no se modifica.';
     $('b3-save').textContent = 'Guardar cambios';
-    $('b3-cancel').href = `/track?id=${EDIT_ID}`;
     (async () => {
       try {
         const [me, t] = await Promise.all([

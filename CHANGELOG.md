@@ -4,6 +4,13 @@
 
 ---
 
+## v2.22.1 — 2026-11-04
+
+- **Excursiones fantasma** (detector de anomalías): tramos rectos de pasos iguales y mismo rumbo que van y vuelven (el dispositivo perdió la señal y rellenó con puntos interpolados). Se avisan y se quitan como las paradas con ruido. En la ruta 1002 son 5 (los saltos de 600 m en zigzag); en las otras 447 rutas no hay ninguna. «Ignorar» solo vale para lo que había al ignorar: si un nuevo análisis encuentra más, vuelve a avisar
+- **Subir ruta**: botones **Atrás** y **Cancelar** en las tres fases. Cancelar, o elegir otro archivo después de importar, elimina la ruta importada a medias (con su confirmación); una ruta que ya existía no se borra nunca
+
+---
+
 ## v2.22.0 — 2026-11-04
 
 - **Detección de puntos GPS anómalos** (`domain/anomalies.js`): al importar avisa de las paradas en las que el GPS dibuja una estrella o un ovillo (cientos de puntos que se mueven en un círculo pequeño y suman kilómetros falsos) y de los saltos aislados fuera de la línea. **Solo avisa**: no quita nada solo. El aviso queda en el log de la importación (y como insignia en Admin → Trabajos) y en la ficha de la ruta, visible solo para el dueño y los administradores, con «Ver en el mapa», «Quitar puntos anómalos» (confirma antes; conserva el primer y último punto de cada parada, recalcula distancia y desnivel), «Ignorar» y «Restaurar el original». El GPX original nunca se toca. `POST /api/tracks/:id/anomalies {action: clean|restore|dismiss}`; migración `028` (`tracks.anomalies`)

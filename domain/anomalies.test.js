@@ -103,3 +103,45 @@ test('empty and tiny tracks do not break it', () => {
   assert.equal(detectAnomalies([pt(40, -3)]).removable, 0);
   assert.equal(detectAnomalies(null).total, 0);
 });
+
+// ── Phantom excursions: interpolated straight stretches out and back ─────────────────────────────
+/** A walk north; at `at` the fix is lost and the track runs `n` equal steps of `step` m in one direction and back again. */
+function withPhantom({ n = 4, step = 53, backStep = 61, sparse = 25 } = {}) {
+  const rand = rng(7), pts = [];
+  let lat = 40;
+  for (let i = 0; i < 40; i++, lat += sparse / M) pts.push(pt(lat + (rand() - 0.5) * 2 / M, -3.7));
+  const lat0 = lat;
+  for (let i = 1; i <= n; i++) pts.push(pt(lat0 + i * step / M, -3.7));                       // out, straight, equal steps
+  for (let i = 1; i <= n; i++) pts.push(pt(lat0 + (n * step - i * backStep) / M, -3.7));       // and back, different step
+  lat = lat0 + (n * step - n * backStep) / M;
+  for (let i = 0; i < 40; i++, lat += sparse / M) pts.push(pt(lat + 5 / M + (rand() - 0.5) * 2 / M, -3.7));
+  return pts;
+}
+
+test('an out-and-back made of equal interpolated steps is a phantom excursion; start and end stay', () => {
+  const pts = withPhantom();
+  const r = detectAnomalies(pts);
+  const ph = r.clusters.filter(c => c.kind === 'phantom');
+  assert.equal(ph.length, 1);
+  assert.ok(ph[0].radiusM >= 150, `far ${ph[0].radiusM}`);
+  const clean = removeAnomalies(pts, r);
+  assert.ok(clean.length < pts.length && r.removable >= 2);
+  assert.match(describeAnomalies(r), /excursi[oó]n fantasma/);
+});
+
+test('a one-way straight stretch of equal steps is not a phantom (nothing comes back)', () => {
+  const pts = [];
+  let lat = 40;
+  for (let i = 0; i < 40; i++, lat += 25 / M) pts.push(pt(lat, -3.7));
+  for (let i = 0; i < 12; i++, lat += 51 / M) pts.push(pt(lat, -3.7));
+  for (let i = 0; i < 40; i++, lat += 25 / M) pts.push(pt(lat, -3.7));
+  assert.equal(detectAnomalies(pts).clusters.filter(c => c.kind === 'phantom').length, 0);
+});
+
+test('a real out-and-back with irregular steps is not a phantom', () => {
+  const rand = rng(3), pts = [];
+  let lat = 40;
+  for (let i = 0; i < 40; i++) { lat += (20 + rand() * 30) / M; pts.push(pt(lat, -3.7)); }      // up, steps 20–50 m
+  for (let i = 0; i < 40; i++) { lat -= (20 + rand() * 30) / M; pts.push(pt(lat, -3.7)); }      // and down again
+  assert.equal(detectAnomalies(pts).clusters.filter(c => c.kind === 'phantom').length, 0);
+});

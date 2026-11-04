@@ -36,7 +36,8 @@ const DRY = flag('--dry-run');
     const rec = anomalyRecord(pts, r);
     // Keep what the user decided about this route: "ignorar" and an applied cleaning survive a new analysis
     let old = null; try { old = t.anomalies ? JSON.parse(t.anomalies) : null; } catch {}
-    if (old) { if (old.dismissed) rec.dismissed = true; if (old.applied) rec.applied = old.applied; }
+    // «Ignorar» holds only for what was found back then: if the analysis now finds more, warn again
+    if (old) { if (old.dismissed && rec.removable <= old.removable) rec.dismissed = true; if (old.applied) rec.applied = old.applied; }
     if (r.removable) {
       withAnomalies++; clusters += r.clusters.length; spikes += r.spikes.length; points += r.removable; km += rec.savedM / 1000;
       console.log(`  ⚠ ${String(t.id).padStart(4)} ${t.name.slice(0, 44).padEnd(44)} ${describeAnomalies(r)} · ${r.removable} pts · ${(rec.savedM / 1000).toFixed(2)} km`);

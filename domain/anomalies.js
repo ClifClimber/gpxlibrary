@@ -5,6 +5,9 @@
 //   cluster — a stop with GPS drift: many points inside a small circle whose path zigzags around instead of going
 //             anywhere (the "star" you see on the map when you stop). Slow, smooth wandering is not flagged. Interior points go; first and last stay, so the
 //             route still enters and leaves the stop and the timing of the track doesn't change.
+//   phantom — an excursion made of interpolated points: the device lost the fix and drew straight stretches of equal
+//             steps (50 m, 50 m, 50 m…, same bearing) out and back again. Real walking never repeats step length and
+//             bearing like that. Reported as a cluster with kind 'phantom'; removing it leaves the start and the end.
 //   spike   — one isolated point far from where the track was and where it goes next (the line jumps out and back).
 const { havM } = require('./geo');
 
@@ -18,6 +21,14 @@ const DEFAULTS = {
   spikeMinM: 100,         // each leg of the spike at least this long…
   spikeSpacingMult: 6,    // …and at least this many times the typical distance between points
   spikeReturnRatio: 0.35, // the neighbours are close to each other (distance ÷ shorter leg)
+  interpMinStepM: 30,     // interpolated stretches: steps of at least this many metres…
+  interpStepTol: 0.04,    // …that differ by less than this fraction from the previous step…
+  interpBearingDeg: 4,    // …with the bearing changing less than this…
+  interpMinSteps: 3,      // …for at least this many steps in a row
+  phantomMinM: 150,       // the excursion goes at least this far from where it started…
+  phantomReturn: 0.3,     // …and comes back to within this fraction of that distance
+  phantomMaxPoints: 80,   // …within this many points
+  phantomMinShare: 0.6,   // share of its steps that are interpolated
   denseMedianM: 40,       // spikes are only looked for in dense recordings (median step below this)
 };
 
@@ -95,6 +106,58 @@ function findClusters(pts, o) {
     pathM: Math.round(c.path), reversal: Math.round(c.reversal * 100) / 100, seconds: c.seconds }));
 }
 
+// Bearing of a→b in degrees
+const bearing = (a, b) => Math.atan2((b.lon - a.lon) * Math.cos(a.lat * Math.PI / 180), b.lat - a.lat) * 180 / Math.PI;
+
+// Straight stretches of equal steps: [{ from, to }] (point indexes, to − from ≥ interpMinSteps)
+function interpolatedRuns(pts, o) {
+  const runs = [];
+  let start = -1, count = 0;
+  const flush = end => { if (start >= 0 && count >= o.interpMinSteps) runs.push({ from: start, to: end }); start = -1; count = 0; };
+  for (let i = 2; i < pts.length; i++) {
+    const d1 = havM(pts[i - 2].lat, pts[i - 2].lon, pts[i - 1].lat, pts[i - 1].lon);
+    const d2 = havM(pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon);
+    let db = Math.abs(bearing(pts[i - 2], pts[i - 1]) - bearing(pts[i - 1], pts[i]));
+    if (db > 180) db = 360 - db;
+    const ok = d2 >= o.interpMinStepM && Math.abs(d1 - d2) <= o.interpStepTol * d2 && db < o.interpBearingDeg;
+    if (ok) { if (start < 0) { start = i - 2; count = 1; } count++; }
+    else flush(i - 1);
+  }
+  flush(pts.length - 1);
+  return runs;
+}
+
+// Out-and-back excursions drawn with interpolated points: they start where an interpolated stretch starts and end when
+// the track is back near that point
+function findPhantoms(pts, o) {
+  const runs = interpolatedRuns(pts, o);
+  if (!runs.length) return [];
+  const inRun = new Uint8Array(pts.length);
+  for (const r of runs) for (let k = r.from + 1; k <= r.to; k++) inRun[k] = 1;      // step k-1 → k belongs to a run
+  const out = [];
+  let minStart = 0;
+  for (const r of runs) {
+    if (r.from < minStart) continue;                 // inside an excursion already found
+    const s = r.from;
+    let far = 0, farIdx = s;
+    for (let j = s + 1; j < pts.length && j - s <= o.phantomMaxPoints; j++) {
+      const d = havM(pts[s].lat, pts[s].lon, pts[j].lat, pts[j].lon);
+      if (d > far) { far = d; farIdx = j; }
+      if (far >= o.phantomMinM && j > farIdx && d <= o.phantomReturn * far) {
+        let interp = 0;
+        for (let k = s + 1; k <= j; k++) interp += inRun[k];
+        if (interp / (j - s) >= o.phantomMinShare) {
+          out.push({ from: s, to: j, count: j - s + 1, lat: pts[farIdx].lat, lon: pts[farIdx].lon, radiusM: Math.round(far),
+            pathM: Math.round(pathM(pts.slice(s, j + 1))), reversal: 1, seconds: pts[s].time != null && pts[j].time != null ? Math.round((pts[j].time - pts[s].time) / 1000) : null, kind: 'phantom' });
+          minStart = j + 1;
+        }
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 function findSpikes(pts, o, skip) {
   const n = pts.length;
   if (n < 5) return [];
@@ -127,7 +190,10 @@ function findSpikes(pts, o, skip) {
 function detectAnomalies(points, opts = {}) {
   const o = { ...DEFAULTS, ...opts };
   const pts = points || [];
-  const clusters = pts.length >= o.clusterMinPoints ? findClusters(pts, o) : [];
+  const phantoms = findPhantoms(pts, o);
+  // A phantom excursion swallows the small stops inside it
+  const stars = (pts.length >= o.clusterMinPoints ? findClusters(pts, o) : []).filter(c => !phantoms.some(w => c.from <= w.to && c.to >= w.from));
+  const clusters = [...stars, ...phantoms].sort((x, y) => x.from - y.from);
   const inCluster = new Set();
   for (const c of clusters) for (let k = c.from + 1; k < c.to; k++) inCluster.add(k);
   const spikes = findSpikes(pts, o, inCluster);
@@ -145,8 +211,10 @@ function removeAnomalies(points, result) {
 /** One-line description for logs and messages, e.g. «2 paradas con ruido GPS (47 puntos) · 1 salto». */
 function describeAnomalies(r) {
   const parts = [];
-  const cp = r.clusters.reduce((s, c) => s + Math.max(0, c.count - 2), 0);
-  if (r.clusters.length) parts.push(`${r.clusters.length} parada${r.clusters.length === 1 ? '' : 's'} con ruido GPS (${cp} punto${cp === 1 ? '' : 's'})`);
+  const stars = r.clusters.filter(c => c.kind !== 'phantom'), ph = r.clusters.filter(c => c.kind === 'phantom');
+  const cp = stars.reduce((s, c) => s + Math.max(0, c.count - 2), 0), pp = ph.reduce((s, c) => s + Math.max(0, c.count - 2), 0);
+  if (stars.length) parts.push(`${stars.length} parada${stars.length === 1 ? '' : 's'} con ruido GPS (${cp} punto${cp === 1 ? '' : 's'})`);
+  if (ph.length) parts.push(`${ph.length} excursion${ph.length === 1 ? '' : 'es'} fantasma (${pp} punto${pp === 1 ? '' : 's'})`);
   if (r.spikes.length) parts.push(`${r.spikes.length} salto${r.spikes.length === 1 ? '' : 's'} aislado${r.spikes.length === 1 ? '' : 's'}`);
   return parts.join(' · ');
 }

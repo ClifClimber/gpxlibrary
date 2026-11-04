@@ -191,8 +191,10 @@ function pointsSection(t) {
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 function anomalyText(a) {
   const parts = [];
-  const cp = a.clusters.reduce((s, c) => s + Math.max(0, c.count - 2), 0);
-  if (a.clusters.length) parts.push(`${plural(a.clusters.length, 'parada', 'paradas')} con ruido GPS (${plural(cp, 'punto', 'puntos')})`);
+  const stars = a.clusters.filter(c => c.kind !== 'phantom'), ph = a.clusters.filter(c => c.kind === 'phantom');
+  const pts = l => l.reduce((s, c) => s + Math.max(0, c.count - 2), 0);
+  if (stars.length) parts.push(`${plural(stars.length, 'parada', 'paradas')} con ruido GPS (${plural(pts(stars), 'punto', 'puntos')})`);
+  if (ph.length) parts.push(`${plural(ph.length, 'excursión fantasma', 'excursiones fantasma')} (${plural(pts(ph), 'punto', 'puntos')})`);
   if (a.spikes.length) parts.push(`${plural(a.spikes.length, 'salto aislado', 'saltos aislados')}`);
   return parts.join(' · ');
 }
@@ -225,7 +227,7 @@ function anomToggleMap() {
   const a = gTrack && gTrack.anomalies; if (!a || !gMap) return;
   gAnomLayer = L.featureGroup();
   a.clusters.forEach(c => L.circle([c.lat, c.lon], { radius: Math.max(c.radiusM * 1.6, 12), color: '#f59e0b', weight: 2, fillColor: '#f59e0b', fillOpacity: .25 })
-    .bindTooltip(`Parada con ruido GPS · ${c.count} puntos${c.seconds ? ` · ${Math.round(c.seconds / 60)} min` : ''}`).addTo(gAnomLayer));
+    .bindTooltip(c.kind === 'phantom' ? `Excursión fantasma · ${c.radiusM} m de ida y vuelta con puntos interpolados` : `Parada con ruido GPS · ${c.count} puntos${c.seconds ? ` · ${Math.round(c.seconds / 60)} min` : ''}`).addTo(gAnomLayer));
   a.spikes.forEach(s => L.circleMarker([s.lat, s.lon], { radius: 7, color: '#dc2626', weight: 2, fillColor: '#dc2626', fillOpacity: .5 })
     .bindTooltip(`Salto aislado · ${s.jumpM} m fuera de la línea`).addTo(gAnomLayer));
   gAnomLayer.addTo(gMap);

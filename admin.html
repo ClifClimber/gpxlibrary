@@ -891,7 +891,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.22.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.22.1</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">4 noviembre 2026</div>
         </div>
       </div>
@@ -910,8 +910,19 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.22.0</span>
+            <span class="cl-version">v2.22.1</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">4 nov 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Excursiones fantasma</b>: el detector de anomalías reconoce las idas y vueltas rectas de puntos interpolados que deja un GPS sin señal (los saltos en zigzag de hasta 600 m) y las quita como las paradas con ruido; «Ignorar» vuelve a avisar si un análisis nuevo encuentra más</li>
+            <li><b>Subir ruta</b>: botones <b>Atrás</b> y <b>Cancelar</b> en las tres fases; cancelar o cambiar de archivo elimina la ruta importada a medias</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.22.0</span>
             <span class="cl-date">4 nov 2026</span>
           </div>
           <ul class="cl-list">
