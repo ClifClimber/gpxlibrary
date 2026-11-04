@@ -42,10 +42,8 @@
       if (btn.dataset.tab === 'listas' && !gListasLoaded) loadListas();
       if (btn.dataset.tab === 'planeadas' && !gPlaneadasLoaded) loadPlaneadas();
       if (btn.dataset.tab === 'stats' && !gStatsLoaded) loadStats();
-      if (btn.dataset.tab === 'logros' && !gLogrosLoaded) loadLogros();
-      if (btn.dataset.tab === 'puntos') loadPuntos();
-      if (btn.dataset.tab === 'siguiendo' && !gSiguiendoLoaded) loadSiguiendo();
-      if (btn.dataset.tab === 'bloqueados' && !gBloqueadosLoaded) loadBloqueados();
+      if (btn.dataset.tab === 'logros') { if (!gLogrosLoaded) loadLogros(); loadPuntos(); }
+      if (btn.dataset.tab === 'siguiendo') { if (!gSiguiendoLoaded) loadSiguiendo(); if (!gBloqueadosLoaded) loadBloqueados(); }
     });
   });
 
@@ -558,47 +556,68 @@
   });
 
   // ── Estadísticas ─────────────────────────────────────────────────
-  let gStatsLoaded = false;
+  // Totals and the activity breakdown follow the year selector; the year chart always shows every year
+  let gStatsLoaded = false, gStatsYear = '', gActColors = null;
 
-  async function loadStats() {
-    gStatsLoaded = true;
+  async function loadStats(year = gStatsYear) {
+    gStatsLoaded = true; gStatsYear = year;
     try {
-      const r = await api('/api/profile/stats');
-      if (!r.ok) return;
-      const { totals, byActivity, byYear } = await r.json();
-      renderTotals(totals);
-      renderBarChart('chart-activity', byActivity, a => esc(a.activity), a => Number(a.km), a => `${fmtKmN(a.km)} · ${a.count} rutas`);
-      renderBarChart('chart-year', byYear, a => String(a.year), a => Number(a.km), a => `${fmtKmN(a.km)} · ${a.count} rutas`);
+      if (!gActColors) {
+        const acts = await fetch('/api/config/activities').then(r => (r.ok ? r.json() : [])).catch(() => []);
+        gActColors = Object.fromEntries((Array.isArray(acts) ? acts : []).map(a => [a.name, a.color]));
+      }
+      // `all` gives the list of years and the year chart; the header strip and the table follow the selected year
+      const get = y => api('/api/profile/stats' + (y ? `?year=${encodeURIComponent(y)}` : '')).then(r => (r.ok ? r.json() : null));
+      const [all, sel] = await Promise.all([get(''), year ? get(year) : null]);
+      if (!all) return;
+      const cur = sel || all;
+      const yearSel = $('st-year');
+      yearSel.innerHTML = '<option value="">Todos los años</option>' + all.byYear.map(y => `<option value="${y.year}">${y.year}</option>`).join('');
+      yearSel.value = year;
+      $('st-title').textContent = year ? `Rutas en el año ${year}` : 'Todas tus rutas';
+      renderActivityTable(cur.byActivity, cur.totals);
+      renderYearChart(all.byYear, year);
     } catch {}
   }
+  $('st-year').addEventListener('change', e => loadStats(e.target.value));
 
   const fmtN = n => n == null ? '—' : Number(n).toLocaleString('es');
   const fmtKmN = n => n == null ? '—' : Number(n).toLocaleString('es', { maximumFractionDigits: 0 }) + ' km';
   const fmtGainN = n => n == null ? '—' : Number(n).toLocaleString('es') + ' m';
+  const fmtHours = s => { s = Number(s) || 0; if (!s) return '—'; const h = Math.floor(s / 3600); return h >= 1 ? `${h.toLocaleString('es')} h` : `${Math.round(s / 60)} min`; };
 
-  function renderTotals(t) {
-    if (!t) return;
-    $('stats-totals').innerHTML = [
-      { val: fmtN(t.total_tracks),  lbl: 'Rutas totales' },
-      { val: fmtKmN(t.total_km),    lbl: 'Kilómetros totales' },
-      { val: fmtGainN(t.total_gain), lbl: 'Desnivel acumulado' },
-      { val: fmtN(t.circular),       lbl: 'Rutas circulares' },
-    ].map(s => `<div class="stat-box"><div class="stat-val">${s.val}</div><div class="stat-lbl">${s.lbl}</div></div>`).join('');
+  function renderActivityTable(rows, totals) {
+    $('st-activity-empty').hidden = !!rows.length;
+    if (!rows.length) { $('st-activity').innerHTML = ''; return; }
+    const max = Math.max(1, ...rows.map(a => Number(a.km) || 0));
+    $('st-activity').innerHTML = rows.map(a => `<tr>
+        <td><span class="st-act"><span class="st-dot" style="background:${esc(gActColors[a.activity] || 'var(--accent)')}"></span>${esc(a.activity)}</span></td>
+        <td class="num-cell">${fmtN(a.count)}</td>
+        <td class="num-cell">${fmtKmN(a.km)}</td>
+        <td><div class="bar-track"><div class="bar-fill" style="width:${Math.max(2, Math.round((Number(a.km) || 0) / max * 100))}%"></div></div></td>
+        <td class="num-cell">${fmtGainN(a.gain)}</td>
+        <td class="num-cell hide-sm">${fmtHours(a.moving)}</td>
+      </tr>`).join('') + `<tr class="st-total-row">
+        <td>Total</td><td class="num-cell">${fmtN(totals.total_tracks)}</td><td class="num-cell">${fmtKmN(totals.total_km)}</td><td></td>
+        <td class="num-cell">${fmtGainN(totals.total_gain)}</td><td class="num-cell hide-sm">${fmtHours(totals.total_moving)}</td></tr>`;
   }
 
-  function renderBarChart(containerId, data, labelFn, valFn, hintFn) {
-    const el = $(containerId); if (!el) return;
-    if (!data || !data.length) { el.innerHTML = '<span style="color:var(--muted);font-size:12px">Sin datos</span>'; return; }
-    const max = Math.max(...data.map(valFn)) || 1;
-    el.innerHTML = data.map(d => {
-      const pct = Math.max(2, Math.round((valFn(d) / max) * 100));
-      return `<div class="bar-row" title="${hintFn(d)}">
-        <div class="bar-label">${labelFn(d)}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
-        <div class="bar-val">${fmtKmN(valFn(d))}</div>
-      </div>`;
-    }).join('');
+  function renderYearChart(rows, year) {
+    const el = $('chart-year');
+    if (!rows.length) { el.innerHTML = '<span style="color:var(--muted);font-size:12px">Sin rutas con fecha</span>'; return; }
+    const max = Math.max(1, ...rows.map(y => Number(y.km) || 0));
+    el.innerHTML = rows.map(y => `<div class="bar-row${String(y.year) === year ? ' sel' : year ? ' dim' : ''}" data-year="${y.year}"
+        title="${fmtKmN(y.km)} · ${y.count} rutas — pulsa para ${String(y.year) === year ? 'ver todos los años' : 'filtrar por este año'}">
+        <div class="bar-label">${y.year}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.max(2, Math.round((Number(y.km) || 0) / max * 100))}%"></div></div>
+        <div class="bar-val">${fmtKmN(y.km)}</div>
+      </div>`).join('');
   }
+  $('chart-year').addEventListener('click', e => {
+    const row = e.target.closest('[data-year]'); if (!row) return;
+    loadStats(row.dataset.year === gStatsYear ? '' : row.dataset.year);
+    $('tab-stats').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   // ── Logros ───────────────────────────────────────────────────────
   let gLogrosLoaded = false;
@@ -649,7 +668,14 @@
       const d = await r.json();
       $('sg-following').innerHTML = d.following.length ? d.following.map(userCard).join('') : '<div class="empty-state" style="padding:18px 0">Todavía no sigues a nadie.</div>';
       $('sg-followers').innerHTML = d.followers.length ? d.followers.map(userCard).join('') : '<div class="empty-state" style="padding:18px 0">Todavía no tienes seguidores.</div>';
+      setCount('followers', d.followers.length);
+      setCount('following', d.following.length);
     } catch {}
+  }
+  // Same number in the header and in the Comunidad card
+  function setCount(kind, n) {
+    $('hs-' + kind).textContent = fmtN(n);
+    $('cm-' + kind + '-n').textContent = n ? fmtN(n) : '';
   }
 
   let gBloqueadosLoaded = false;
@@ -659,6 +685,7 @@
     try {
       const r = await api('/api/profile/blocks'); if (!r.ok) return;
       const list = await r.json();
+      setCount('blocked', list.length);
       if (!list.length) { el.innerHTML = '<div class="empty-state" style="padding:18px 0">No tienes ningún usuario bloqueado.</div>'; return; }
       el.innerHTML = list.map(u => `<div class="sg-item" style="justify-content:space-between">
         <div style="display:flex;align-items:center;gap:10px">
@@ -673,7 +700,12 @@
     btn.disabled = true;
     try {
       const r = await fetch('/api/users/' + uid + '/block', { method: 'DELETE', headers: {'Content-Type':'application/json'} });
-      if (r.ok) { btn.closest('.sg-item').remove(); if (!$('bl-list').children.length) $('bl-list').innerHTML = '<div class="empty-state" style="padding:18px 0">No tienes ningún usuario bloqueado.</div>'; }
+      if (r.ok) {
+        btn.closest('.sg-item').remove();
+        const left = $('bl-list').querySelectorAll('.sg-item').length;
+        setCount('blocked', left);
+        if (!left) $('bl-list').innerHTML = '<div class="empty-state" style="padding:18px 0">No tienes ningún usuario bloqueado.</div>';
+      }
     } catch {}
     btn.disabled = false;
   };
@@ -681,17 +713,14 @@
   // ── Cifras de la cabecera ────────────────────────────────────────
   async function loadHeroStats() {
     try {
-      const [s, f] = await Promise.all([
+      const [s, f, b] = await Promise.all([
         api('/api/profile/stats').then(r => r.ok ? r.json() : null),
         api('/api/profile/follows').then(r => r.ok ? r.json() : null),
+        api('/api/profile/blocks').then(r => r.ok ? r.json() : null),
       ]);
-      const t = s && s.totals;
-      if (t) {
-        $('hs-routes').textContent = fmtN(t.total_tracks);
-        $('hs-km').textContent = t.total_km == null ? '—' : Number(t.total_km).toLocaleString('es', { maximumFractionDigits: 0 });
-        $('hs-gain').textContent = fmtGainN(t.total_gain);
-      }
-      if (f) $('hs-followers').textContent = fmtN(f.followers.length);
+      if (s && s.totals) $('hs-routes').textContent = fmtN(s.totals.total_tracks);
+      if (f) { setCount('followers', f.followers.length); setCount('following', f.following.length); }
+      if (b) setCount('blocked', b.length);
     } catch {}
   }
 
@@ -712,8 +741,7 @@
     let d;
     try { d = await fetchPoints(); } catch { return; }
     if (!d) return;
-    const tab = $('tab-puntos');
-    [...tab.children].forEach(el => { el.hidden = el.id === 'pt-off' ? d.enabled : !d.enabled; });
+    [...$('pt-wrap').children].forEach(el => { el.hidden = el.id === 'pt-off' ? d.enabled : !d.enabled; });
     if (!d.enabled) return;
     $('pt-total').textContent = fmtN(d.total);
     const max = Math.max(1, ...d.categories.map(c => c.points));
@@ -760,19 +788,35 @@
     $('pt-more-btn').textContent = gPtShowAll ? 'Ver menos' : `Ver las ${fmtN(all.length)} rutas`;
   }
   $('pt-more-btn').addEventListener('click', () => { gPtShowAll = !gPtShowAll; renderPointRoutes(); });
-  $('hs-points-link').addEventListener('click', e => {
-    e.preventDefault();
-    const b = document.querySelector('.tab-btn[data-tab="puntos"]');
+  // Opens a tab and, if given, scrolls to one of its sections (header figures, old #puntos/#bloqueados links)
+  function goTo(tab, sec, hash) {
+    const b = document.querySelector(`.tab-btn[data-tab="${CSS.escape(tab)}"]`);
+    if (!b) return;
     b.click();
-    b.closest('.pill-tabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
+    if (hash) history.replaceState(null, '', location.pathname + location.search + '#' + hash);
+    // After the tab's own scrollIntoView; an instant jump (a smooth one gets cut short by it)
+    setTimeout(() => {
+      const el = sec ? $(sec) : b.closest('.pill-tabs');
+      el.scrollIntoView({ block: 'start' });
+      if (el.classList.contains('pf-card')) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+    }, 60);
+  }
+  document.querySelectorAll('.hs-link[data-go]').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    goTo(a.dataset.go, a.dataset.sec, a.getAttribute('href').slice(1));
+  }));
 
   // ── Init ─────────────────────────────────────────────────────────
   await loadProfile();
   loadHeroStats();
   fetchPoints().catch(() => {});
+  const HASH_ALIASES = { puntos: ['logros', 'sec-puntos'], bloqueados: ['siguiendo', 'sec-blocked'],
+    seguidores: ['siguiendo', 'sec-followers'], seguidos: ['siguiendo', 'sec-following'] };
   const startTab = location.hash.slice(1);
-  const startBtn = startTab && document.querySelector(`.tab-btn[data-tab="${CSS.escape(startTab)}"]`);
-  if (startBtn) startBtn.click();
+  if (HASH_ALIASES[startTab]) goTo(...HASH_ALIASES[startTab], startTab);
+  else {
+    const startBtn = startTab && document.querySelector(`.tab-btn[data-tab="${CSS.escape(startTab)}"]`);
+    if (startBtn) startBtn.click();
+  }
 
 })();

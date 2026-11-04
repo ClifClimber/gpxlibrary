@@ -47,6 +47,8 @@ function summarize(lines, code) {
   if (ids) extra.ids = ids[1].split(',').map(Number);
   const errorLines = lines.filter(l => l.startsWith('✗') || /^Error/.test(l));
   if (errorLines.length) extra.detalleErrores = errorLines.slice(0, 5);
+  // A failed job keeps the end of its output, where the cause usually is (Admin → Logs → Ver detalle)
+  if (code !== 0 && code !== 130) extra.ultimasLineas = lines.slice(-15);
   const osmApplied = lines.filter(l => /OSM\s*:.*v[ií]as aplicadas/.test(l)).length;
   const osmNoCache = lines.filter(l => /OSM\s*:.*(sin cach|obsoleta)/i.test(l)).length;
   if (osmApplied || osmNoCache) { extra.osm_aplicado = osmApplied; extra.osm_sin_cache = osmNoCache; }

@@ -124,7 +124,14 @@
 .lv-lvl.warn  { color: #f59e0b; }
 .lv-lvl.raw   { color: var(--muted); }
 .lv-op  { color: var(--ink-2); width: 140px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lv-msg { color: var(--ink); flex: 1; word-break: break-word; }
+.lv-msg { color: var(--ink); flex: 1; word-break: break-word; min-width: 0; }
+.lv-det { margin-top: 3px; }
+.lv-det summary { cursor: pointer; font-size: 11px; font-weight: 600; color: var(--accent); width: max-content; user-select: none; }
+.lv-det[data-err] summary { color: color-mix(in srgb, var(--danger) 85%, var(--ink)); }
+.lv-dgrid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 6px 0 4px; padding: 10px 12px;
+  border-radius: var(--radius-md); background: var(--soft); }
+.lv-dk { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding-top: 1px; }
+.lv-dv { margin: 0; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; white-space: pre-wrap; word-break: break-word; color: var(--ink); }
 #log-filter-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 #log-filter-bar .chip { padding: 4px 12px; font-size: 12px; }
 #log-search { flex: 1; min-width: 140px; max-width: 260px; }
@@ -2389,11 +2396,25 @@ function fmtExtra(e) {
   return badges.join('');
 }
 
+// Everything an entry carries besides time/level/op/message (error, code, stack, process output…), readable
+const LOG_BASE_KEYS = new Set(['ts', 'level', 'op', 'msg']);
+const LOG_KEY_LABEL = { error: 'Error', code: 'Código', detail: 'Detalle', hint: 'Pista', stack: 'Traza', salida: 'Salida del proceso',
+  ultimasLineas: 'Últimas líneas', detalleErrores: 'Líneas de error', user: 'Usuario', job: 'Trabajo', args: 'Argumentos' };
+function fmtLogDetail(e) {
+  const keys = Object.keys(e).filter(k => !LOG_BASE_KEYS.has(k) && e[k] != null && e[k] !== '');
+  if (!keys.length) return '';
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const val = v => Array.isArray(v) ? v.map(x => typeof x === 'object' ? JSON.stringify(x) : x).join('\n')
+    : typeof v === 'object' ? JSON.stringify(v, null, 2) : v;
+  const rows = keys.map(k => `<div class="lv-dk">${esc(LOG_KEY_LABEL[k] || k)}</div><pre class="lv-dv">${esc(val(e[k]))}</pre>`).join('');
+  return `<details class="lv-det"${e.level === 'error' ? ' data-err' : ''}><summary>Ver detalle</summary><div class="lv-dgrid">${rows}</div></details>`;
+}
+
 function renderLogs() {
   const filtered = allLogEntries.filter(e => {
     if (lvFilter !== 'all' && e.level !== lvFilter) return false;
     if (lvSearch) {
-      const hay = ((e.op||'') + ' ' + (e.msg||'')).toLowerCase();
+      const hay = JSON.stringify(e).toLowerCase();   // also finds text inside the error, stack or output
       if (!hay.includes(lvSearch)) return false;
     }
     return true;
@@ -2410,7 +2431,7 @@ function renderLogs() {
       <span class="lv-ts">${fmtLogTs(e.ts)}</span>
       <span class="lv-lvl ${lvl}">${lvl}</span>
       <span class="lv-op" title="${e.op||''}">${e.op||''}</span>
-      <span class="lv-msg">${(e.msg||'').replace(/</g,'&lt;')}${fmtExtra(e)}</span>
+      <span class="lv-msg">${(e.msg||'').replace(/</g,'&lt;')}${fmtExtra(e)}${fmtLogDetail(e)}</span>
     </div>`;
   }).join('');
   viewer.scrollTop = viewer.scrollHeight;

@@ -59,8 +59,48 @@ async function pgColumns(pool, table) {
     'SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position', [table]
   )).rows.map(r => r.column_name);
 }
+// node:sqlite only binds null, numbers, bigints, strings and bytes: dates, booleans and JSON/arrays are converted.
+// Whole numbers go as BigInt: a JS number is bound as REAL, and a TEXT column then stores 1238 as "1238.0".
 const toSqliteValue = v => (v == null ? null : v instanceof Date ? v.toISOString()
-  : typeof v === 'boolean' ? (v ? 1 : 0) : typeof v === 'object' ? JSON.stringify(v) : v);
+  : typeof v === 'boolean' ? (v ? 1n : 0n) : Buffer.isBuffer(v) || v instanceof Uint8Array ? v
+  : typeof v === 'number' && Number.isInteger(v) ? BigInt(v)
+  : typeof v === 'object' ? JSON.stringify(v) : v);
+
+// SQLite → Postgres: each value to the type of its Postgres column. Backups made before the fix above
+// hold integers and booleans as "1238.0" / "0.0", which Postgres refuses as-is.
+async function pgTypes(client, table) {
+  return new Map((await client.query(
+    'SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1', [table])).rows
+    .map(r => [r.column_name, r.data_type]));
+}
+function toPgValue(v, type) {
+  if (v == null) return null;
+  if (['integer', 'bigint', 'smallint'].includes(type)) {
+    if (typeof v === 'bigint') return v.toString();
+    const n = Number(v);
+    return Number.isFinite(n) ? String(Math.round(n)) : v;
+  }
+  if (type === 'boolean') {
+    const s = String(v).toLowerCase();
+    if (['1', '1.0', 'true', 't'].includes(s)) return true;
+    if (['0', '0.0', 'false', 'f'].includes(s)) return false;
+    return v;
+  }
+  return typeof v === 'bigint' ? v.toString() : v;
+}
+const bindable = v => v == null || ['number', 'bigint', 'string'].includes(typeof v) || v instanceof Uint8Array;
+
+// Inserts one row; on failure says which table, row and column (and the type of the value) caused it
+function insertRow(stmt, table, cols, row) {
+  const vals = cols.map(c => toSqliteValue(row[c]));
+  try { stmt.run(...vals); }
+  catch (e) {
+    const bad = cols.map((c, i) => [c, vals[i], row[c]]).filter(([, v]) => !bindable(v))
+      .map(([c, , raw]) => `${c} (${raw === null ? 'null' : raw.constructor ? raw.constructor.name : typeof raw})`);
+    throw new Error(`${table}${row.id != null ? ` id=${row.id}` : ''}: ${e.message}` +
+      (bad.length ? ` · columnas con valor no admitido: ${bad.join(', ')}` : ` · columnas: ${cols.length}`));
+  }
+}
 
 // Postgres → SQLite for one extra table (skipped if it doesn't exist yet in Postgres)
 async function dumpExtra(pool, db, table) {
@@ -69,18 +109,22 @@ async function dumpExtra(pool, db, table) {
   db.exec(`CREATE TABLE IF NOT EXISTS ${table} (${cols.map(c => `"${c}"`).join(', ')})`);
   const rows = (await pool.query(`SELECT ${cols.map(c => `"${c}"`).join(',')} FROM ${table}`)).rows;
   const ins = db.prepare(`INSERT INTO ${table} (${cols.map(c => `"${c}"`).join(',')}) VALUES (${cols.map(() => '?').join(',')})`);
-  for (const r of rows) ins.run(...cols.map(c => toSqliteValue(r[c])));
+  for (const r of rows) insertRow(ins, table, cols, r);
   return rows.length;
 }
 
 // SQLite → Postgres for one extra table (only the columns both sides have)
 async function loadExtra(client, db, table) {
-  const pgCols = new Set((await client.query(
-    'SELECT column_name FROM information_schema.columns WHERE table_name = $1', [table])).rows.map(r => r.column_name));
+  const types = await pgTypes(client, table);
+  const pgCols = new Set(types.keys());
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name).filter(c => pgCols.has(c));
   const rows = db.prepare(`SELECT ${cols.map(c => `"${c}"`).join(',')} FROM ${table}`).all();
   const q = `INSERT INTO ${table} (${cols.map(c => `"${c}"`).join(',')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(',')})`;
-  for (const r of rows) await client.query(q, cols.map(c => (r[c] == null ? null : String(r[c]))));
+  for (const r of rows) {
+    const vals = cols.map(c => { const v = toPgValue(r[c], types.get(c)); return v == null || typeof v === 'boolean' ? v : String(v); });
+    try { await client.query(q, vals); }
+    catch (e) { throw new Error(`${table}${r.id != null ? ` id=${r.id}` : ''}: ${e.message}${e.column ? ` (columna ${e.column})` : ''}`); }
+  }
   if (rows.length && pgCols.has('id'))
     await client.query(`SELECT setval(pg_get_serial_sequence('${table}','id'), GREATEST((SELECT max(id) FROM ${table}),1))`);
   return rows.length;
@@ -146,9 +190,8 @@ async function toSqlite(pool) {
 
   db.exec('BEGIN');
   for (const [table, c] of Object.entries(CONFIG)) {
-    for (const r of configRows[table]) {
-      db.prepare(`INSERT OR REPLACE INTO ${table} (${c.join(',')}) VALUES (${c.map(() => '?').join(',')})`).run(...c.map(k => r[k]));
-    }
+    const st = db.prepare(`INSERT OR REPLACE INTO ${table} (${c.join(',')}) VALUES (${c.map(() => '?').join(',')})`);
+    for (const r of configRows[table]) insertRow(st, table, c, r);
   }
   const ins = db.prepare(`INSERT INTO tracks (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`);
   const rawIns = db.prepare('INSERT INTO raw_points (track_id,seq,lat,lon,ele) VALUES (?,?,?,?,?)');
@@ -156,7 +199,7 @@ async function toSqlite(pool) {
 
   let done = 0;
   for (const t of tracks) {
-    ins.run(...cols.map(k => t[k]));
+    insertRow(ins, 'tracks', cols, t);
     if (t.geom_wkb) {
       const pts = parseWkbLine(t.geom_wkb);
       pts.forEach((p, i) => rawIns.run(t.id, i, p.lat, p.lon, t.ele ? (t.ele[i] ?? null) : null));
@@ -209,21 +252,24 @@ async function toPostgres(pool) {
       // Older backups lack newer columns (e.g. icon/image): restore only what the file has
       const have = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map(x => x.name));
       const c = all.filter(k => have.has(k));
+      const types = await pgTypes(client, table);
       const rows = db.prepare(`SELECT ${c.join(',')} FROM ${table}`).all();
       for (const r of rows) {
-        await client.query(`INSERT INTO ${table} (${c.join(',')}) VALUES (${c.map((_,i)=>`$${i+1}`).join(',')})`, c.map(k => r[k]));
+        await client.query(`INSERT INTO ${table} (${c.join(',')}) VALUES (${c.map((_,i)=>`$${i+1}`).join(',')})`, c.map(k => toPgValue(r[k], types.get(k))));
       }
       if (rows.length) await client.query(`SELECT setval(pg_get_serial_sequence('${table}','id'), (SELECT max(id) FROM ${table}))`);
     }
     const b = cols.length;
     const ph = [...cols.map((_,i)=>`$${i+1}`), `ST_GeomFromText($${b+1},4326)`, `$${b+2}`, `ST_GeomFromText($${b+3},4326)`, `$${b+4}`];
     const insQ = `INSERT INTO tracks (${cols.join(',')},geom,ele,geom_clean,ele_clean) VALUES (${ph.join(',')})`;
+    const trackTypes = await pgTypes(client, 'tracks');
     let done = 0;
     for (const t of tracks) {
       const [geom, ele] = lineParams(rawSt.all(t.id));
       const [geomC, eleC] = lineParams(clnSt.all(t.id));
-      const vals = cols.map(k => (['imported_at','cleaned_at'].includes(k) && t[k] ? t[k].replace(' ','T')+'Z' : t[k]));
-      await client.query(insQ, [...vals, geom, ele, geomC, eleC]);
+      const vals = cols.map(k => (['imported_at','cleaned_at'].includes(k) && t[k] ? t[k].replace(' ','T')+'Z' : toPgValue(t[k], trackTypes.get(k))));
+      try { await client.query(insQ, [...vals, geom, ele, geomC, eleC]); }
+      catch (e) { throw new Error(`tracks id=${t.id}: ${e.message}${e.column ? ` (columna ${e.column})` : ''}`); }
       if (++done % 100 === 0) console.log(`  … ${done} / ${tracks.length}`);
     }
     await client.query(`SELECT setval(pg_get_serial_sequence('tracks','id'), GREATEST((SELECT max(id) FROM tracks),1))`);
@@ -240,4 +286,9 @@ async function toPostgres(pool) {
     if (TO === 'sqlite') await toSqlite(pool);
     else                 await toPostgres(pool);
   } finally { await pool.end(); }
-})().catch(e => { console.error('✗ ' + e.message); process.exit(1); });
+})().catch(e => {
+  console.error('✗ ' + e.message);
+  // The first frames say where it broke (they end up in Admin → Logs → Ver detalle)
+  if (e.stack) console.error(String(e.stack).split('\n').slice(1, 6).join('\n'));
+  process.exit(1);
+});

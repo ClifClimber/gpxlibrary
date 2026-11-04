@@ -118,11 +118,6 @@ button.list-ico:hover { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .pf-section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 26px 0 10px; }
 
 /* ── Estadísticas ─────────────────────────────────────────────── */
-.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.stat-box { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; position: relative; overflow: hidden; }
-.stat-box::after { content: ''; position: absolute; right: -18px; top: -18px; width: 70px; height: 70px; border-radius: 50%; background: var(--accent-soft); opacity: .7; }
-.stat-box .stat-val { font-size: 26px; font-weight: 700; letter-spacing: -.02em; position: relative; z-index: 1; font-variant-numeric: tabular-nums; }
-.stat-box .stat-lbl { font-size: 12px; color: var(--muted); margin-top: 2px; position: relative; z-index: 1; font-weight: 500; }
 
 /* ── Logros ───────────────────────────────────────────────────── */
 .lv-card { display: flex; align-items: center; gap: 20px; color: #fff; padding: 22px 24px;
@@ -153,6 +148,30 @@ button.list-ico:hover { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .ach-pip.on { background: linear-gradient(90deg, #f97316, #db2777); }
 .ach-prog { font-size: 11.5px; color: var(--muted); }
 .pf-note { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.6; }
+
+/* ── Estadísticas ─────────────────────────────────────────────── */
+.st-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.st-title { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.st-year { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.st-year .select { width: auto; min-width: 120px; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--ink); }
+.st-table td { white-space: nowrap; }
+.st-bar-col { width: 32%; }
+.st-table .bar-track { height: 8px; }
+.st-act { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.st-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
+.st-total-row td { font-weight: 700; background: var(--hover-bg); }
+#chart-year .bar-row { cursor: pointer; border-radius: 8px; padding: 2px 4px; }
+#chart-year .bar-row:hover { background: var(--hover-bg); }
+#chart-year .bar-row.sel .bar-label { color: var(--accent); font-weight: 700; }
+#chart-year .bar-row.dim { opacity: .45; }
+
+/* ── Comunidad ────────────────────────────────────────────────── */
+.cm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; align-items: start; }
+.cm-count { font-size: 12px; font-weight: 700; color: var(--muted); background: var(--soft); border-radius: 999px; padding: 1px 8px; margin-left: 4px; vertical-align: 1px; }
+.cm-count:empty { display: none; }
+#sec-followers, #sec-following, #sec-blocked, #sec-puntos { scroll-margin-top: calc(var(--nav-h) + 76px); }
+.pf-card.flash { animation: pf-flash 1.4s ease-out; }
+@keyframes pf-flash { 0%, 30% { box-shadow: var(--shadow), 0 0 0 3px var(--accent); } 100% { box-shadow: var(--shadow); } }
 
 /* ── Puntos de autor ─────────────────────────────────────────── */
 .hs-link { color: inherit; text-decoration: none; transition: background .12s; }
@@ -242,15 +261,15 @@ button.list-ico:hover { box-shadow: inset 0 0 0 1.5px var(--accent); }
       </div>
     </div>
     <div class="hero-stats">
-      <div class="hs"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg></span>
-        <div><div class="hs-val" id="hs-routes">—</div><div class="hs-lbl">Rutas</div></div></div>
-      <div class="hs"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
-        <div><div class="hs-val" id="hs-km">—</div><div class="hs-lbl">Kilómetros</div></div></div>
-      <div class="hs"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg></span>
-        <div><div class="hs-val" id="hs-gain">—</div><div class="hs-lbl">Desnivel +</div></div></div>
-      <div class="hs"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-        <div><div class="hs-val" id="hs-followers">—</div><div class="hs-lbl">Seguidores</div></div></div>
-      <a class="hs hs-link" href="#puntos" id="hs-points-link"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+      <a class="hs hs-link" href="#rutas" data-go="rutas"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg></span>
+        <div><div class="hs-val" id="hs-routes">—</div><div class="hs-lbl">Rutas</div></div></a>
+      <a class="hs hs-link" href="#seguidores" data-go="siguiendo" data-sec="sec-followers"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        <div><div class="hs-val" id="hs-followers">—</div><div class="hs-lbl">Seguidores</div></div></a>
+      <a class="hs hs-link" href="#seguidos" data-go="siguiendo" data-sec="sec-following"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></span>
+        <div><div class="hs-val" id="hs-following">—</div><div class="hs-lbl">Seguidos</div></div></a>
+      <a class="hs hs-link" href="#bloqueados" data-go="siguiendo" data-sec="sec-blocked"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></span>
+        <div><div class="hs-val" id="hs-blocked">—</div><div class="hs-lbl">Bloqueados</div></div></a>
+      <a class="hs hs-link" href="#puntos" data-go="logros" data-sec="sec-puntos" id="hs-points-link"><span class="hs-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
         <div><div class="hs-val" id="hs-points">—</div><div class="hs-lbl">Puntos de autor</div></div></a>
     </div>
   </section>
@@ -262,10 +281,8 @@ button.list-ico:hover { box-shadow: inset 0 0 0 1.5px var(--accent); }
     <button class="tab-btn pill-tab" data-tab="listas"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Mis listas</button>
     <button class="tab-btn pill-tab" data-tab="planeadas"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Planeadas</button>
     <button class="tab-btn pill-tab" data-tab="stats"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Estadísticas</button>
-    <button class="tab-btn pill-tab" data-tab="puntos"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Puntos</button>
-    <button class="tab-btn pill-tab" data-tab="logros"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.48 12.89 17 22l-5-3-5 3 1.52-9.11"/></svg>Logros</button>
+    <button class="tab-btn pill-tab" data-tab="logros"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.48 12.89 17 22l-5-3-5 3 1.52-9.11"/></svg>Logros y puntos</button>
     <button class="tab-btn pill-tab" data-tab="siguiendo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Comunidad</button>
-    <button class="tab-btn pill-tab" data-tab="bloqueados"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>Bloqueados</button>
   </div>
 
   <!-- ── Tab: Ajustes ── -->
@@ -479,21 +496,44 @@ button.list-ico:hover { box-shadow: inset 0 0 0 1.5px var(--accent); }
 
   <!-- ── Tab: Estadísticas ── -->
   <div class="tab-panel" id="tab-stats">
-    <div class="stats-row" id="stats-totals"></div>
-    <div class="pf-grid">
-      <div class="pf-card">
-        <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span><div><h3>Por actividad</h3><p>Kilómetros por tipo de actividad</p></div></div>
-        <div class="bar-chart" id="chart-activity"></div>
+    <div class="st-bar">
+      <label class="st-year"><span>Año</span>
+        <select class="select" id="st-year"><option value="">Todos</option></select></label>
+      <span class="st-title" id="st-title">Todas tus rutas</span>
+    </div>
+    <div class="pf-card flush">
+      <div class="pf-card-head" style="padding-bottom:14px;margin-bottom:0"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span><div><h3>Por actividad</h3><p id="st-act-sub">Rutas, distancia, desnivel y tiempo de cada actividad</p></div></div>
+      <div style="overflow-x:auto">
+        <table class="routes-table st-table">
+          <thead><tr><th>Actividad</th><th style="text-align:right">Rutas</th><th style="text-align:right">Km</th><th class="st-bar-col"></th><th style="text-align:right">Desnivel</th><th style="text-align:right" class="hide-sm">En marcha</th></tr></thead>
+          <tbody id="st-activity"></tbody>
+        </table>
       </div>
-      <div class="pf-card">
-        <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><div><h3>Por año</h3><p>Kilómetros recorridos cada año</p></div></div>
-        <div class="bar-chart" id="chart-year"></div>
-      </div>
+      <div id="st-activity-empty" class="empty-state" hidden>No hay rutas con actividad en este periodo.</div>
+    </div>
+    <div class="pf-card" style="margin-top:16px">
+      <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><div><h3>Por año</h3><p>Kilómetros de cada año · pulsa uno para filtrar</p></div></div>
+      <div class="bar-chart" id="chart-year"></div>
     </div>
   </div>
 
-  <!-- ── Tab: Puntos de autor ── -->
-  <div class="tab-panel" id="tab-puntos">
+  <!-- ── Tab: Logros y puntos ── -->
+  <div class="tab-panel" id="tab-logros">
+    <div class="pf-section-title" style="margin-top:0">Logros</div>
+        <div class="pf-card lv-card">
+      <div class="lv-badge" id="lv-num">—</div>
+      <div style="flex:1;min-width:0">
+        <div class="lv-title">Nivel <span id="lv-num2">—</span></div>
+        <div class="lv-bar"><div class="lv-fill" id="lv-fill"></div></div>
+        <div class="lv-sub" id="lv-sub">—</div>
+      </div>
+    </div>
+    <div class="ach-grid" id="ach-grid"></div>
+    <p class="pf-note">Las rutas marcadas como planeadas no cuentan hasta que las marques como realizadas.</p>
+    <p class="pf-note" style="margin-top:4px" id="ach-multiday" hidden></p>
+    <p class="pf-note" style="margin-top:4px" id="ach-excluded" hidden></p>
+    <div class="pf-section-title" id="sec-puntos">Puntos de autor</div>
+    <div id="pt-wrap">
     <div class="pt-card cover-bg">
       <div class="pt-total-ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
       <div style="flex:1;min-width:0">
@@ -531,42 +571,23 @@ button.list-ico:hover { box-shadow: inset 0 0 0 1.5px var(--accent); }
     </div>
     <div id="pt-off" class="empty-state pf-card" hidden>Los puntos de autor están desactivados.</div>
   </div>
-
-  <!-- ── Tab: Logros ── -->
-  <div class="tab-panel" id="tab-logros">
-    <div class="pf-card lv-card">
-      <div class="lv-badge" id="lv-num">—</div>
-      <div style="flex:1;min-width:0">
-        <div class="lv-title">Nivel <span id="lv-num2">—</span></div>
-        <div class="lv-bar"><div class="lv-fill" id="lv-fill"></div></div>
-        <div class="lv-sub" id="lv-sub">—</div>
-      </div>
-    </div>
-    <div class="ach-grid" id="ach-grid"></div>
-    <p class="pf-note">Las rutas marcadas como planeadas no cuentan hasta que las marques como realizadas.</p>
-    <p class="pf-note" style="margin-top:4px" id="ach-multiday" hidden></p>
-    <p class="pf-note" style="margin-top:4px" id="ach-excluded" hidden></p>
   </div>
 
   <!-- ── Tab: Comunidad ── -->
   <div class="tab-panel" id="tab-siguiendo">
-    <div class="pf-grid">
-      <div class="pf-card">
-        <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></span><div><h3>Siguiendo</h3><p>Su actividad aparece en <a href="/actividad">Actividad</a></p></div></div>
-        <div id="sg-following" class="sg-list"></div>
-      </div>
-      <div class="pf-card">
-        <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><div><h3>Seguidores</h3><p>Personas que siguen tus rutas</p></div></div>
+    <div class="cm-grid">
+      <div class="pf-card" id="sec-followers">
+        <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><div><h3>Seguidores <span class="cm-count" id="cm-followers-n"></span></h3><p>Personas que siguen tus rutas</p></div></div>
         <div id="sg-followers" class="sg-list"></div>
       </div>
-    </div>
-  </div>
-
-  <!-- ── Tab: Bloqueados ── -->
-  <div class="tab-panel" id="tab-bloqueados">
-    <div class="pf-card" style="max-width:640px">
-      <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></span><div><h3>Usuarios bloqueados</h3><p>No pueden seguirte, comentar ni valorar tus rutas.</p></div></div>
-      <div id="bl-list" class="sg-list"></div>
+      <div class="pf-card" id="sec-following">
+        <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></span><div><h3>Seguidos <span class="cm-count" id="cm-following-n"></span></h3><p>Su actividad aparece en <a href="/actividad">Actividad</a></p></div></div>
+        <div id="sg-following" class="sg-list"></div>
+      </div>
+      <div class="pf-card" id="sec-blocked">
+        <div class="pf-card-head"><span class="pf-card-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></span><div><h3>Bloqueados <span class="cm-count" id="cm-blocked-n"></span></h3><p>No pueden seguirte, comentar ni valorar tus rutas</p></div></div>
+        <div id="bl-list" class="sg-list"></div>
+      </div>
     </div>
   </div>
 

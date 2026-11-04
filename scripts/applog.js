@@ -27,10 +27,22 @@ function pruneLogs() {
   } catch {}
 }
 
+// What is worth keeping of an error: message, code (Postgres/Node), the failing SQL detail and the first stack frames
+function errorInfo(e) {
+  if (!e || typeof e !== 'object') return { error: String(e) };
+  const out = { error: e.message || String(e) };
+  for (const k of ['code', 'detail', 'hint', 'table', 'column', 'constraint', 'where', 'position']) if (e[k] != null) out[k] = e[k];
+  if (e.stack) out.stack = String(e.stack).split('\n').slice(1, 9).map(s => s.trim()).join('\n');
+  if (e.output) out.salida = e.output;
+  return out;
+}
+
 function appendLog(level, op, msg, extra = {}) {
   pruneLogs();
+  // An Error passed as extra.error is expanded so the log shows why it failed, not just the message
+  if (extra && extra.error instanceof Error) { const { error, ...rest } = extra; extra = { ...rest, ...errorInfo(error) }; }
   const entry = JSON.stringify({ ts: new Date().toISOString(), level, op, msg, ...extra });
   try { fs.appendFileSync(logFilePath(), entry + '\n'); } catch {}
 }
 
-module.exports = { LOGS_DIR, logFilePath, appendLog, pruneLogs };
+module.exports = { LOGS_DIR, logFilePath, appendLog, pruneLogs, errorInfo };

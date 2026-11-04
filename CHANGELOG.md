@@ -2,6 +2,24 @@
 
 ## Sin publicar
 
+### Perfil reorganizado
+- Cabecera: rutas, seguidores, seguidos, bloqueados y puntos de autor (sin km ni desnivel); cada cifra lleva a su lista
+- Comunidad: seguidores, seguidos y bloqueados en la misma pestaña (desaparece la pestaña Bloqueados)
+- Estadísticas: filtro por año arriba («Rutas en el año XXXX»; también pulsando una barra de «Por año») y tabla por actividad (rutas, km, desnivel, tiempo en movimiento) con su fila de total; `GET /api/profile/stats?year=YYYY`
+- «Logros y puntos» en una sola pestaña; los enlaces antiguos `/perfil#puntos` y `#bloqueados` siguen funcionando
+
+### Copias de seguridad
+- Corregido: el backup fallaba («Provided value cannot be bound to SQLite parameter 57») porque fechas y booleanos de las rutas no se convertían para SQLite
+- Corregido: las copias no se podían restaurar (los enteros se guardaban como «1238.0»); ahora se guardan como enteros y al restaurar cada valor se convierte al tipo de su columna en Postgres, así que también se restauran las copias antiguas. Probado ida y vuelta: 400 rutas, km y 1.190.720 puntos idénticos
+- El backup automático diario también queda en Admin → Logs (antes solo en la consola)
+
+### Más detalle en los logs
+- Admin → Logs: «Ver detalle» en cada entrada con datos extra (error, código, detalle de Postgres, traza, salida del proceso, últimas líneas, usuario…); el buscador busca también dentro
+- Un error no capturado en cualquier petición se registra con método, ruta, usuario y traza y responde 500, en vez de tumbar el servidor; también las promesas rechazadas sin capturar del servidor y del worker
+- Los trabajos fallidos guardan sus últimas 15 líneas; el backup fallido, la salida del volcado
+- `db-copy.js` dice tabla, fila y columna cuando una fila no se puede copiar
+- `appendLog(…, { error: e })` guarda mensaje, código y traza (`errorInfo()` en `scripts/applog.js`)
+
 ---
 
 ## v2.19.0 — 2026-11-04

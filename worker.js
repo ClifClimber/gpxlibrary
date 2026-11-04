@@ -36,4 +36,12 @@ const { appendLog } = require('./scripts/applog');
       process.exit(0);
     });
   }
-})().catch(e => { console.error('✗ ' + e.message); process.exit(1); });
+})().catch(e => {
+  console.error('✗ ' + e.message);
+  appendLog('error', 'worker', `El worker no pudo arrancar: ${e.message}`, { error: e });
+  process.exit(1);
+});
+process.on('unhandledRejection', e => {
+  console.error('[worker] unhandledRejection', e);
+  appendLog('error', 'worker', `Promesa rechazada sin capturar: ${e && e.message || e}`, { error: e instanceof Error ? e : new Error(String(e)) });
+});

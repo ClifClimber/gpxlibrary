@@ -42,7 +42,7 @@ const { PHOTOS_DIR, SMTP, PUBLIC_URL, TRUST_PROXY } = require('./config');   // 
 let _oauthState = null; // { state, ts } — CSRF token para el flujo OAuth
 
 // ── Operations log ─────────────────────────────────────────────────
-const { LOGS_DIR, logFilePath, appendLog } = require('./scripts/applog');
+const { LOGS_DIR, logFilePath, appendLog, errorInfo } = require('./scripts/applog');
 
 const J = { 'Content-Type': 'application/json' };
 
@@ -986,7 +986,12 @@ async function createBackupFile() {
   const out = [];
   const code = await runStreaming(process.execPath,
     [path.join(ROOT, 'scripts', 'db-copy.js'), '--to', 'sqlite', '--sqlite', tmpPath, '--replace'], l => out.push(l));
-  if (code !== 0) throw new Error('Volcado de PostgreSQL fallido: ' + out.slice(-3).join(' · '));
+  if (code !== 0) {
+    const err = new Error('Volcado de PostgreSQL fallido: ' + (out.filter(l => l.startsWith('✗')).slice(-1)[0] || out.slice(-1)[0] || `código ${code}`));
+    err.output = out.slice(-30);   // shown in Admin → Logs → Ver detalle
+    try { fs.unlinkSync(tmpPath); } catch {}
+    throw err;
+  }
   await pipeline(fs.createReadStream(tmpPath), zlib.createGzip({ level: 6 }), fs.createWriteStream(gz));
   fs.unlinkSync(tmpPath);
   return gz;
@@ -1004,7 +1009,7 @@ async function apiAdminStats(res) {
   }
 }
 
-async function apiAdminBackup(res) {
+async function apiAdminBackup(res, user = null) {
   try {
     const gz   = await createBackupFile();
     const cfg  = readBackupConfig();
@@ -1014,7 +1019,7 @@ async function apiAdminBackup(res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, name: path.basename(gz), size }));
   } catch (e) {
-    appendLog('error', 'backup', 'Copia de seguridad fallida', { error: e.message });
+    appendLog('error', 'backup', 'Copia de seguridad fallida', { error: e, user });
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
   }
@@ -1176,7 +1181,7 @@ async function apiStorageStatus(res) {
 // ── Sincronización local (Admin → Base de datos) ────────────────────────────────
 
 // ── Enrutador ──────────────────────────────────────────────────────
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
   const { pathname, searchParams } = new URL(req.url, `http://localhost:${PORT}`);
   const method = req.method;
   const _t0 = Date.now();
@@ -1793,25 +1798,32 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/profile/stats' && method === 'GET') {
     if (!requireAuth(req, res)) return;
     const db = sqlDb();
+    // ?year=YYYY limits totals and the activity breakdown to that year; byYear always lists every year
+    const year = /^\d{4}$/.test(searchParams.get('year') || '') ? searchParams.get('year') : null;
+    const yearCond = year ? ' AND left(date, 4) = ?' : '';
+    const args = year ? [req.user.sub, year] : [req.user.sub];
     const totals = await db.get(
       `SELECT CAST(COUNT(*) AS INTEGER) AS total_tracks,
               ROUND(CAST(SUM(distance) AS NUMERIC), 1) AS total_km,
               CAST(SUM(elevation_gain) AS INTEGER) AS total_gain,
-              CAST(SUM(CASE WHEN circular=1 THEN 1 ELSE 0 END) AS INTEGER) AS circular
-       FROM tracks WHERE owner_id = ?`, [req.user.sub]);
+              CAST(SUM(CASE WHEN circular=1 THEN 1 ELSE 0 END) AS INTEGER) AS circular,
+              CAST(SUM(moving_time) AS BIGINT) AS total_moving,
+              CAST(COUNT(DISTINCT activity) AS INTEGER) AS activities
+       FROM tracks WHERE owner_id = ?${yearCond}`, args);
     const byActivity = await db.all(
       `SELECT activity, CAST(COUNT(*) AS INTEGER) AS count,
               ROUND(CAST(SUM(distance) AS NUMERIC), 1) AS km,
-              CAST(SUM(elevation_gain) AS INTEGER) AS gain
-       FROM tracks WHERE owner_id = ? AND activity IS NOT NULL
-       GROUP BY activity ORDER BY count DESC`, [req.user.sub]);
+              CAST(SUM(elevation_gain) AS INTEGER) AS gain,
+              CAST(SUM(moving_time) AS BIGINT) AS moving
+       FROM tracks WHERE owner_id = ? AND activity IS NOT NULL${yearCond}
+       GROUP BY activity ORDER BY count DESC`, args);
     const byYear = await db.all(
       `SELECT CAST(left(date, 4) AS INTEGER) AS year,
               CAST(COUNT(*) AS INTEGER) AS count,
               ROUND(CAST(SUM(distance) AS NUMERIC), 1) AS km
        FROM tracks WHERE owner_id = ? AND date IS NOT NULL AND length(date) >= 4
        GROUP BY year ORDER BY year DESC`, [req.user.sub]);
-    res.writeHead(200, J); return res.end(JSON.stringify({ totals, byActivity, byYear }));
+    res.writeHead(200, J); return res.end(JSON.stringify({ year, totals, byActivity, byYear }));
   }
 
   // ── Follows ──────────────────────────────────────────────────────
@@ -2953,7 +2965,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/admin/stats' && method === 'GET')
     return apiAdminStats(res);
   if (pathname === '/api/admin/backup' && method === 'POST')
-    return apiAdminBackup(res);
+    return apiAdminBackup(res, req.user?.username);
   if (pathname === '/api/admin/backups' && method === 'GET')
     return apiAdminBackups(res);
   if (pathname === '/api/admin/backup-config' && method === 'GET') {
@@ -3216,6 +3228,18 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404); res.end('Not found'); return;
   }
   serveStatic(res, filePath, req);
+}
+
+// Any error a route lets through is logged with its context (Admin → Logs → Ver detalle) and answered with
+// a 500, instead of crashing the process and leaving only a line in the container output
+const server = http.createServer((req, res) => {
+  handleRequest(req, res).catch(e => {
+    let pathname = req.url; try { pathname = new URL(req.url, 'http://x').pathname; } catch {}
+    console.error(`[error] ${req.method} ${pathname}:`, e);
+    appendLog('error', 'http', `${req.method} ${pathname}: ${e.message}`, { error: e, user: req.user?.username || null });
+    if (!res.headersSent) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Error interno del servidor' })); }
+    else { try { res.end(); } catch {} }
+  });
 });
 
 // HOST=0.0.0.0 in the container; locally only loopback.
@@ -3226,6 +3250,17 @@ if (!process.env.HOST) {
   server6.on('error', () => {});
   server6.listen(PORT, '::1');
 }
+
+// Last resort: errors outside any request (timers, fire-and-forget promises) also reach Admin → Logs
+process.on('unhandledRejection', e => {
+  console.error('[unhandledRejection]', e);
+  appendLog('error', 'server', `Promesa rechazada sin capturar: ${e && e.message || e}`, { error: e instanceof Error ? e : new Error(String(e)) });
+});
+process.on('uncaughtException', e => {
+  console.error('[uncaughtException]', e);
+  appendLog('error', 'server', `Excepción no capturada, el servidor se reinicia: ${e.message}`, { error: e });
+  process.exit(1);   // the process state can't be trusted any more; Docker restarts it
+});
 
 // docker stop sends SIGTERM: close the database pool and the store cleanly
 for (const sig of ['SIGTERM', 'SIGINT']) {
@@ -3263,8 +3298,12 @@ ready.then(() => server.listen(PORT, HOST, () => {
         const cfg = readBackupConfig();
         pruneBackups(cfg.maxKeep || 10);
         console.log(`  ✓ Auto-backup: ${path.basename(gz)}`);
+        appendLog('info', 'backup', `Copia automática creada: ${path.basename(gz)}`, { size: fs.statSync(gz).size });
       }
-    } catch (e) { console.error('  ✗ Auto-backup:', e.message); }
+    } catch (e) {
+      console.error('  ✗ Auto-backup:', e.message);
+      appendLog('error', 'backup', 'Copia automática fallida', { error: e });
+    }
   });
   // Used or expired password reset links are of no use after a day
   const pruneResets = () => sqlDb().run("DELETE FROM password_resets WHERE expires_at < NOW() - INTERVAL '1 day'").catch(() => {});
