@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+---
+
+## v2.20.0 — 2026-11-04
+
+### Navegación en móvil
+- Por debajo de 720 px los enlaces de texto (Visor, Catálogo, Comparar, Admin, Actividad) y el cambio de tema pasan a un menú desplegable; quedan visibles logo, Upload Trail, campana y avatar. Sin scroll horizontal a 320 px (también en la cabecera de la ruta y la búsqueda del catálogo)
+
 ### Perfil reorganizado
 - Cabecera: rutas, seguidores, seguidos, bloqueados y puntos de autor (sin km ni desnivel); cada cifra lleva a su lista
 - Comunidad: seguidores, seguidos y bloqueados en la misma pestaña (desaparece la pestaña Bloqueados)
