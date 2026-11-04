@@ -53,6 +53,18 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 }
 .exp-opt:hover { background: var(--soft); }
 
+/* Aviso de puntos GPS anómalos (Resumen) */
+.anom { padding: 12px 14px 14px; background: color-mix(in srgb, var(--warn) 11%, var(--surface)); box-shadow: inset 3px 0 0 var(--warn); }
+.anom.anom-done { background: color-mix(in srgb, var(--success) 10%, var(--surface)); box-shadow: inset 3px 0 0 var(--success); }
+.anom-head { display: flex; gap: 11px; align-items: flex-start; }
+.anom-ico { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
+  background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.anom-done .anom-ico { background: color-mix(in srgb, var(--success) 22%, transparent); color: var(--success); }
+.anom-head b { font-size: 13.5px; }
+.anom-head p { margin: 3px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+.anom-head p.anom-note { color: var(--muted); font-size: 11.5px; }
+.anom-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+
 /* Puntos de autor de la ruta (Resumen) */
 #points-section { padding: 12px 14px 14px; }
 .pts-head { display: flex; align-items: center; gap: 12px; }

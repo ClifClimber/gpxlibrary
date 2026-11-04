@@ -19,6 +19,8 @@ const JOBS = {
   'extract-urls':      { label: 'Extraer URLs' },
   'backfill-elapsed':  { label: 'Tiempos de las rutas (días con actividad)' },
   'track-derive':      { label: 'Geometrías derivadas' },
+  'scan-anomalies':    { label: 'Analizar puntos GPS anómalos' },
+  'clean-anomalies':   { label: 'Quitar puntos GPS anómalos' },
 };
 
 // Job types that add new GPX files to S3 — automatically trigger a local sync after success
@@ -42,7 +44,11 @@ function summarize(lines, code) {
     extra.existian   = mEx  ? +mEx[1]  : 0;
     extra.review     = mRev ? +mRev[1] : 0;
     extra.errores    = mErr ? +mErr[1] : 0;
+    const mAno = all.match(/Con anomal[ií]as\s*:\s*(\d+)/);
+    if (mAno && +mAno[1]) extra.anomalias = +mAno[1];
   }
+  const mCl = all.match(/Rutas limpiadas\s*:\s*(\d+)/), mPts = all.match(/Puntos quitados\s*:\s*(\d+)/);
+  if (mCl) { extra.limpiadas = +mCl[1]; if (mPts) extra.puntos_quitados = +mPts[1]; }
   const ids = all.match(/IMPORTED_IDS:([\d,]+)/);
   if (ids) extra.ids = ids[1].split(',').map(Number);
   const errorLines = lines.filter(l => l.startsWith('✗') || /^Error/.test(l));
@@ -66,6 +72,10 @@ function deriveArgsAfter(job, lines) {
     const a = (job.payload && job.payload.args) || [];
     const i = a.indexOf('--ids');
     return i >= 0 && a[i + 1] ? ['--ids', a[i + 1]] : ['--all'];
+  }
+  if (job.type === 'clean-anomalies') {
+    const m = lines.join('\n').match(/CLEANED_IDS:([\d,]+)/);
+    return m ? ['--ids', m[1]] : null;
   }
   return null;
 }

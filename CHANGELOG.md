@@ -4,6 +4,21 @@
 
 ---
 
+## v2.22.0 — 2026-11-04
+
+- **Detección de puntos GPS anómalos** (`domain/anomalies.js`): al importar avisa de las paradas en las que el GPS dibuja una estrella o un ovillo (cientos de puntos que se mueven en un círculo pequeño y suman kilómetros falsos) y de los saltos aislados fuera de la línea. **Solo avisa**: no quita nada solo. El aviso queda en el log de la importación (y como insignia en Admin → Trabajos) y en la ficha de la ruta, visible solo para el dueño y los administradores, con «Ver en el mapa», «Quitar puntos anómalos» (confirma antes; conserva el primer y último punto de cada parada, recalcula distancia y desnivel), «Ignorar» y «Restaurar el original». El GPX original nunca se toca. `POST /api/tracks/:id/anomalies {action: clean|restore|dismiss}`; migración `028` (`tracks.anomalies`)
+- `scripts/scan-anomalies.js [--missing|--all|--ids|--owner|--dry-run]` analiza las rutas ya existentes (en la biblioteca actual: 101 de 428 con anomalías, unos 25 km inflados)
+- **Admin → Gestión de Tracks → Puntos GPS anómalos**: elige un usuario o todos y pulsa **Analizar** (solo avisa), **Simular** (qué se limpiaría) o **Quitar anomalías** (trabajo `clean-anomalies`, con confirmación y resumen: rutas limpiadas, puntos quitados, km corregidos). Se saltan las que su dueño ignoró y las ya limpiadas; `GET /api/admin/anomaly-stats` da las pendientes por usuario
+- **Subir ruta**: tras importar, el paso de detalles avisa de los puntos anómalos y pregunta si quitarlos ahora («Quitar puntos anómalos» / «Dejarla como está»)
+- Quitar anomalías funciona también en rutas ya simplificadas con «Limpiar tracks»: la distancia se recalcula sin las estrellas, se conserva la simplificación y se guarda la geometría anterior para restaurarla
+- **Admin → Estadísticas** (nueva): cifras de toda la biblioteca (rutas públicas/privadas, km, desnivel, usuarios, fotos, listas, comentarios, valoraciones, seguimientos), tabla de usuarios ordenable (rutas, km, fotos, listas, seguidores, actividad social, puntos de autor, última ruta, alta), rutas por actividad, por origen (Wikiloc, Garmin, otra web, sin enlace) y por año, y rutas subidas y altas de los últimos 12 meses; `GET /api/admin/insights`
+- **Admin → Varios días** reorganizada: explicación arriba y cifras por motivo que filtran; lista con una sola columna de tiempo que dice de dónde sale, el motivo explicado y los días editables por ruta («1 día» la saca de la lista); buscador «¿Falta alguna?» para declarar una ruta no detectada; ajustes de detección plegados abajo con «Probar sin guardar»
+- Corregido: «h total» absurda (p. ej. 195 989 h) cuando las horas del GPX no son fiables; ahora solo se muestra si lo son. Números con formato uniforme
+- `/multidia` redirige a Admin → Varios días (la página duplicada se elimina)
+- Admin → Logs registra los cambios de datos personales (qué cambia, sin el texto de la bio), los cambios de contraseña y los intentos con contraseña incorrecta, y los cambios de foto de perfil
+
+---
+
 ## v2.21.0 — 2026-11-04
 
 - **Admin ve todas las rutas en el visor**: también las privadas de cualquier usuario (antes solo las públicas y las propias). Un usuario normal sigue viendo solo las públicas y las suyas

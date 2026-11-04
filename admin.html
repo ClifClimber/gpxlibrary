@@ -39,6 +39,87 @@
   .adm-nav .seg-tab { width: auto; flex: 0 0 auto; border-radius: 999px; padding: 0 13px; }
 }
 
+/* Estadísticas */
+.in-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.in-kpi { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; display: flex; flex-direction: column; gap: 1px; }
+.in-kpi b { font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.in-kpi span { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.in-kpi small { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.in-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; margin-top: 16px; align-items: start; }
+.in-users th { background: var(--hover-bg); }
+.in-sort { cursor: pointer; user-select: none; }
+.in-sort:hover { color: var(--ink); }
+.in-sort.on { color: var(--accent); }
+.in-users td { white-space: nowrap; }
+.in-user { display: flex; align-items: center; gap: 10px; }
+.in-user a { color: var(--ink); font-weight: 600; text-decoration: none; }
+.in-user a:hover { color: var(--accent); }
+.in-av { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; object-fit: cover; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; }
+.in-sub { font-size: 11.5px; color: var(--muted); }
+.in-zero { color: var(--ink-3); }
+.in-date { color: var(--ink-2); font-size: 12px; }
+.in-off td { opacity: .55; }
+#tab-insights .bar-val { width: auto; min-width: 44px; text-align: right; }
+#tab-insights .bar-val small { display: block; font-size: 10.5px; color: var(--ink-3); }
+.in-mcols { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; height: 160px; align-items: end; }
+.in-mcol { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
+.in-mbars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 3px; }
+.in-mb { width: 40%; max-width: 14px; border-radius: 4px 4px 0 0; }
+.in-mb.r, .in-legend i.r { background: var(--accent); }
+.in-mb.u, .in-legend i.u { background: color-mix(in srgb, #f97316 80%, transparent); }
+.in-mlbl { font-size: 10.5px; color: var(--muted); }
+.in-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+.in-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+/* Varios días */
+.md-stats { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.md-stat { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius-md); background: var(--soft); }
+.md-stat b { font-size: 22px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.md-stat span { font-size: 11.5px; color: var(--muted); line-height: 1.3; }
+.md-reasons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; min-width: 260px; }
+.md-reasons-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-right: 2px; }
+.md-chip { height: 30px; padding: 0 12px; border: none; border-radius: 999px; background: var(--soft); color: var(--ink-2); font-size: 12px; font-weight: 600; cursor: pointer; }
+.md-chip b { margin-left: 3px; color: var(--ink); }
+.md-chip:hover { background: var(--line); }
+.md-chip.active { background: var(--solid); color: var(--on-solid); }
+.md-chip.active b { color: var(--on-solid); }
+.md-preview { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; padding: 12px 16px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warn) 14%, transparent); font-size: 13px; }
+.md-preview span { flex: 1; min-width: 220px; }
+.md-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.md-search { position: relative; flex: 1 1 200px; max-width: 300px; }
+.md-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
+.md-search .input { padding-left: 32px; height: 34px; }
+.md-toolbar .select { width: auto; height: 34px; }
+.md-count { margin-left: auto; font-size: 13px; color: var(--muted); }
+.md-table th { background: var(--hover-bg); }
+.md-table td { vertical-align: middle; }
+.md-name { color: var(--ink); font-weight: 600; text-decoration: none; }
+.md-name:hover { color: var(--accent); }
+.md-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.md-time { white-space: nowrap; }
+.md-time small { display: block; font-size: 10.5px; color: var(--muted); font-weight: 400; }
+.md-reason { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: help;
+  background: var(--soft); color: var(--ink-2); }
+.md-r-0 { background: color-mix(in srgb, #7c3aed 15%, transparent); color: color-mix(in srgb, #6d28d9 80%, var(--ink)); }
+.md-r-1 { background: color-mix(in srgb, #16a34a 15%, transparent); color: color-mix(in srgb, #15803d 80%, var(--ink)); }
+.md-r-2 { background: var(--accent-soft); color: var(--accent); }
+.md-r-3 { background: color-mix(in srgb, #d97706 15%, transparent); color: color-mix(in srgb, #b45309 80%, var(--ink)); }
+.md-r-4 { background: color-mix(in srgb, #64748b 15%, transparent); color: color-mix(in srgb, #475569 80%, var(--ink)); }
+.md-days { width: auto; height: 30px; font-size: 12px; padding: 0 26px 0 8px; }
+.md-add-results { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; }
+.md-add-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--radius-md); }
+.md-add-row:hover { background: var(--hover-bg); }
+.md-config > summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 16px 18px; cursor: pointer; }
+.md-config > summary::-webkit-details-marker { display: none; }
+.md-config > summary h2 { font-size: 15px; font-weight: 600; }
+.md-config > summary p { font-size: 12px; color: var(--muted); }
+.md-config > summary::after { content: '▾'; color: var(--muted); transition: transform .15s; }
+.md-config[open] > summary::after { transform: rotate(180deg); }
+.md-config[open] > summary { border-bottom: 1px solid var(--line); }
+.md-config-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+
 /* Estado de la BD: mosaicos */
 #stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 700px) { #stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -60,6 +141,9 @@
 .op-btns label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
 .op-item > p { font-size: 12px; color: var(--muted); line-height: 1.55; }
 .op-item code { background: var(--line); }
+.anom-summary { font-size: 12.5px; color: var(--ink-2); line-height: 1.6; }
+.anom-summary b { color: var(--ink); }
+.anom-summary .warn { color: var(--warn); font-weight: 600; }
 .db-num { width: 64px; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; font-size: 12px; outline: none; background: var(--surface); }
 .db-num:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
@@ -279,6 +363,7 @@ tr.inactive td { opacity: .4; }
     <div class="adm-nav" id="admin-tabs">
       <div class="adm-group">Datos</div>
       <button class="seg-tab active" data-tab="bd" data-sub="Almacén S3, estado de la base de datos, mantenimiento y copias de seguridad"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>Base de datos</button>
+      <button class="seg-tab" data-tab="insights" data-sub="Rutas y usuarios de toda la biblioteca"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Estadísticas</button>
       <button class="seg-tab" data-tab="tracks" data-sub="Importar, limpiar, enriquecer y exportar rutas"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>Gestión de Tracks</button>
       <button class="seg-tab" data-tab="jobs" data-sub="Trabajos en segundo plano: ver, cancelar y repetir"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Trabajos</button>
       <button class="seg-tab" data-tab="logs" data-sub="Registro de la aplicación de los últimos 30 días"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>Logs</button>
@@ -380,6 +465,22 @@ tr.inactive td { opacity: .4; }
   </div>
 
   <!-- ── Tab: Gestión de Tracks ── -->
+  <div class="tab-panel" id="tab-insights">
+    <div class="in-kpis" id="in-kpis"><div class="empty-state">Cargando…</div></div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-body" style="padding-bottom:6px"><div class="ico-head" style="margin-bottom:6px"><span class="ico-head-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><div><h2>Usuarios</h2><p>Rutas, actividad social y puntos de cada cuenta · pulsa una columna para ordenar</p></div></div></div>
+      <div style="overflow-x:auto"><table class="table in-users"><thead id="in-users-head"></thead><tbody id="in-users"></tbody></table></div>
+    </div>
+
+    <div class="in-grid">
+      <div class="card"><div class="card-body"><div class="ico-head"><span class="ico-head-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M17 21l-3-6-3 1-3 5M6 12l3-3 4 1 3 4"/></svg></span><div><h2>Por actividad</h2><p>Rutas y kilómetros de cada actividad</p></div></div><div class="bar-chart" id="in-activity"></div></div></div>
+      <div class="card"><div class="card-body"><div class="ico-head"><span class="ico-head-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span><div><h2>Origen</h2><p>De dónde vienen las rutas (enlace guardado)</p></div></div><div class="bar-chart" id="in-sources"></div></div></div>
+      <div class="card"><div class="card-body"><div class="ico-head"><span class="ico-head-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><div><h2>Por año de la ruta</h2><p>Rutas según la fecha de la actividad</p></div></div><div class="bar-chart" id="in-years"></div></div></div>
+      <div class="card"><div class="card-body"><div class="ico-head"><span class="ico-head-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span><div><h2>Últimos 12 meses</h2><p>Rutas subidas y altas de usuarios por mes</p></div></div><div class="in-months" id="in-months"></div></div></div>
+    </div>
+  </div>
+
   <div class="tab-panel" id="tab-tracks">
     <div class="card">
       <div class="card-head"><h2>Gestión de Tracks</h2></div>
@@ -409,6 +510,21 @@ tr.inactive td { opacity: .4; }
               </div>
             </div>
             <p><b>min-dist</b>: descarta puntos GPS a menos de N metros del anterior (elimina pausas grabadas). <b>RDP</b>: aplica Douglas-Peucker con epsilon en metros, reduciendo el número de puntos sin perder la forma de la ruta. Los puntos limpios se guardan en <code>clean_points</code> y se usan al exportar el catálogo.</p>
+          </div>
+
+          <div class="op-item" id="anom-op">
+            <div class="op-head">
+              <h3>Puntos GPS anómalos</h3>
+              <div class="op-btns">
+                <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px">Usuario
+                  <select class="select" id="anom-owner" style="height:28px;font-size:12px;padding:0 8px"></select></label>
+                <button class="btn btn-ghost btn-sm" id="btn-anom-scan" title="Vuelve a analizar las rutas elegidas; no cambia ninguna">Analizar</button>
+                <button class="btn btn-ghost btn-sm" id="btn-anom-sim" title="Muestra qué rutas se limpiarían, sin cambiar nada">Simular</button>
+                <button class="btn btn-primary btn-sm" id="btn-anom-clean">Quitar anomalías</button>
+              </div>
+            </div>
+            <p>Paradas en las que el GPS dibuja una <b>estrella</b> o un ovillo, y saltos aislados fuera de la línea: suman kilómetros falsos. <b>Analizar</b> solo avisa; <b>Quitar anomalías</b> las elimina de las rutas del usuario elegido (o de todas) y recalcula distancia y desnivel. El GPX original no se toca y cada ruta se puede restaurar desde su página. Se saltan las que su dueño decidió ignorar y las que ya están limpias; las que ya pasaron por «Limpiar tracks» conservan su simplificación.</p>
+            <div id="anom-summary" class="anom-summary"></div>
           </div>
 
           <div class="op-item">
@@ -775,7 +891,7 @@ tr.inactive td { opacity: .4; }
           <div style="font-size:13px;color:var(--muted);margin-top:2px">Visor y gestor personal de tracks GPS</div>
         </div>
         <div style="margin-left:auto;text-align:right">
-          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.21.0</div>
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="about-version">v2.22.0</div>
           <div style="font-size:11px;color:var(--muted)" id="about-date">4 noviembre 2026</div>
         </div>
       </div>
@@ -794,8 +910,23 @@ tr.inactive td { opacity: .4; }
 
         <div class="changelog-entry current">
           <div class="cl-header">
-            <span class="cl-version">v2.21.0</span>
+            <span class="cl-version">v2.22.0</span>
             <span class="cl-badge current">Actual</span>
+            <span class="cl-date">4 nov 2026</span>
+          </div>
+          <ul class="cl-list">
+            <li><b>Puntos GPS anómalos</b>: al importar avisa de las paradas en las que el GPS dibuja una estrella y de los saltos aislados. Solo avisa; desde la ficha de la ruta se pueden quitar, ver en el mapa, ignorar o restaurar. El GPX original no se toca</li>
+            <li><b>Admin → Gestión de Tracks → Puntos GPS anómalos</b>: analizar, simular y quitar anomalías para un usuario o para todos</li>
+            <li><b>Subir ruta</b> pregunta al terminar si quieres quitar los puntos anómalos detectados</li>
+            <li><b>Admin → Estadísticas</b> (nueva) y <b>Varios días</b> reorganizada</li>
+            <li>Admin → Logs registra cambios de datos personales y de contraseña</li>
+            <li>Comparar: al arrastrar varios GPX ya se cargan todos, no solo el primero</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="cl-header">
+            <span class="cl-version">v2.21.0</span>
             <span class="cl-date">4 nov 2026</span>
           </div>
           <ul class="cl-list">
@@ -1397,16 +1528,53 @@ tr.inactive td { opacity: .4; }
 
   <div class="tab-panel" id="tab-multidia">
 
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-head">
-        <h2>Configuración — Rutas de varios días</h2>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span class="gm-dirty" id="md-dirty" hidden>● Cambios sin guardar</span>
-          <button class="btn btn-primary btn-sm" id="md-save">Guardar</button>
-        </div>
+    <div class="card md-intro">
+      <div class="card-body">
+        <div class="ico-head" style="margin-bottom:10px"><span class="ico-head-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+          <div><h2>Rutas de varios días</h2>
+            <p>Las travesías de varios días no compiten con las rutas de un día en los récords de Logros (ruta más larga, mayor desnivel). Aquí ves cuáles se han detectado, por qué, y puedes corregir los días de cada una.</p></div></div>
+        <div class="md-stats" id="md-stats"></div>
       </div>
-      <div class="card-body gm-form">
+    </div>
 
+    <div class="md-preview" id="md-preview" hidden>
+      <span id="md-preview-txt"></span>
+      <button class="btn btn-sm" id="md-preview-exit">Volver a la lista real</button>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="md-toolbar">
+        <div class="md-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input class="input" type="search" id="md-f-search" placeholder="Buscar ruta…">
+        </div>
+        <select class="select" id="md-f-owner"><option value="">Todos los dueños</option></select>
+        <select class="select" id="md-f-activity"><option value="">Todas las actividades</option></select>
+        <input type="hidden" id="md-f-reason" value="">
+        <span class="md-count" id="md-count"></span>
+      </div>
+      <div id="md-tbl-area"><div class="empty-state">Cargando…</div></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-body">
+        <div class="ico-head"><span class="ico-head-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
+          <div><h2>¿Falta alguna?</h2><p>Busca una ruta que no se ha detectado y dile cuántos días son.</p></div></div>
+        <div class="md-search" style="max-width:420px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input class="input" type="search" id="md-add-q" placeholder="Nombre de la ruta…" autocomplete="off">
+        </div>
+        <div id="md-add-results" class="md-add-results"></div>
+      </div>
+    </div>
+
+    <details class="card md-config" id="md-config" style="margin-top:16px">
+      <summary class="md-config-sum">
+        <span class="ico-head-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></span>
+        <div style="flex:1"><h2>Ajustes de detección</h2><p>Cuándo se considera que una ruta es de varios días</p></div>
+        <span class="gm-dirty" id="md-dirty" hidden>● Cambios sin guardar</span>
+      </summary>
+      <div class="card-body gm-form">
         <div class="gm-checks">
           <label title="Activa toda la lógica de detección. Si está desactivado, ninguna ruta se marca como varios días.">
             <input type="checkbox" id="gm-md-enabled"> <strong>Detectar rutas de varios días</strong>
@@ -1483,34 +1651,12 @@ tr.inactive td { opacity: .4; }
           <span class="section-desc" style="margin:0;flex:1;min-width:240px">Las rutas importadas antes de la versión que añadió las marcas de tiempo hay que procesarlas una vez para extraer sus horas del GPX:</span>
           <button class="btn btn-ghost btn-sm" id="gm-backfill">Calcular tiempos de las rutas</button>
         </div>
-
-      </div>
-    </div>
-
-    <div class="stats-grid" id="md-stats" style="margin-bottom:16px"></div>
-
-    <div class="card">
-      <div class="card-head">
-        <h2>Rutas detectadas</h2>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-          <input class="input" type="search" id="md-f-search" placeholder="Buscar nombre…" style="width:180px;height:32px;font-size:13px">
-          <select class="select" id="md-f-owner" style="height:32px;font-size:13px"><option value="">Todos los dueños</option></select>
-          <select class="select" id="md-f-activity" style="height:32px;font-size:13px"><option value="">Todas las actividades</option></select>
-          <select class="select" id="md-f-reason" style="height:32px;font-size:13px">
-            <option value="">Todos los motivos</option>
-            <option value="días con actividad">Horas del GPX</option>
-            <option value="nombre">Nombre</option>
-            <option value="tiempo en movimiento">Movimiento</option>
-            <option value="distancia y desnivel">Estimación</option>
-            <option value="declarado">Declarado</option>
-          </select>
-          <span id="md-count" style="font-size:13px;color:var(--muted)"></span>
+        <div class="md-config-actions">
+          <button class="btn" id="md-try">Probar sin guardar</button>
+          <button class="btn btn-primary" id="md-save">Guardar ajustes</button>
         </div>
       </div>
-      <div class="card-body" style="padding:0">
-        <div id="md-tbl-area"><div style="padding:40px;text-align:center;color:var(--muted)">Cargando…</div></div>
-      </div>
-    </div>
+    </details>
   </div>
 
   <div class="tab-panel" id="tab-users">
@@ -1933,6 +2079,49 @@ document.getElementById('btn-export-folders').addEventListener('click', function
     streamScript('/api/db/import-temp', 'Importar desde _TEMP_', body, () => {})
       .finally(() => { this.disabled = false; loadStats(); });
   });
+})();
+
+// Puntos GPS anómalos: analizar / simular / quitar para un usuario o para todos
+(function () {
+  const sel = document.getElementById('anom-owner'), sum = document.getElementById('anom-summary');
+  let owners = [];
+  const km = n => Number(n).toLocaleString('es-ES', { maximumFractionDigits: 1 });
+  const cur = () => owners.find(o => String(o.owner_id) === sel.value) || null;
+  const body = extra => ({ owner_id: sel.value ? parseInt(sel.value) : undefined, ...extra });
+  function paintSummary() {
+    const rows = sel.value ? owners.filter(o => String(o.owner_id) === sel.value) : owners;
+    const t = rows.reduce((a, o) => ({ total: a.total + o.total, analysed: a.analysed + o.analysed, pending: a.pending + o.pending,
+      applied: a.applied + o.applied, ignored: a.ignored + o.ignored, km: a.km + o.saved_km }), { total: 0, analysed: 0, pending: 0, applied: 0, ignored: 0, km: 0 });
+    const parts = [t.pending ? `<span class="warn">⚠ ${t.pending} ruta(s) con anomalías pendientes</span> (unos <b>${km(t.km)} km</b> inflados)` : '<b>Ninguna ruta con anomalías pendientes</b>'];
+    if (t.applied) parts.push(`${t.applied} ya limpiada(s)`);
+    if (t.ignored) parts.push(`${t.ignored} ignorada(s) por su dueño`);
+    if (t.analysed < t.total) parts.push(`<span style="color:var(--muted)">${t.total - t.analysed} sin analizar (pulsa Analizar)</span>`);
+    sum.innerHTML = parts.join(' · ');
+  }
+  async function load() {
+    try {
+      owners = (await fetch('/api/admin/anomaly-stats').then(r => r.json())).owners || [];
+      const keep = sel.value, all = owners.reduce((n, o) => n + o.pending, 0);
+      sel.innerHTML = `<option value="">Todos (${all})</option>` + owners.filter(o => o.owner_id).map(o =>
+        `<option value="${o.owner_id}">${escHtml(o.name)} (${o.pending})</option>`).join('');
+      if (keep && owners.some(o => String(o.owner_id) === keep)) sel.value = keep;
+      paintSummary();
+    } catch { sum.textContent = 'No se pudo cargar el estado.'; }
+  }
+  sel.addEventListener('change', paintSummary);
+  const who = () => (sel.value ? `de ${sel.options[sel.selectedIndex].text.replace(/ [(][0-9]+[)]$/, '')}` : 'de todos los usuarios');
+  const run = (btn, title, b) => { btn.disabled = true; streamScript('/api/db/anomalies', title, b).finally(() => { btn.disabled = false; load(); }); };
+  document.getElementById('btn-anom-scan').addEventListener('click', function () { run(this, 'Analizar puntos anómalos ' + who(), body({ action: 'scan' })); });
+  document.getElementById('btn-anom-sim').addEventListener('click', function () { run(this, 'Simulación: qué se limpiaría ' + who(), body({ action: 'clean', dry_run: true })); });
+  document.getElementById('btn-anom-clean').addEventListener('click', function () {
+    const o = cur(), n = o ? o.pending : owners.reduce((a, x) => a + x.pending, 0);
+    if (!confirm(`¿Quitar los puntos anómalos ${who()}?
+
+` + (n ? `Hay ${n} ruta(s) con anomalías pendientes. ` : 'No hay anomalías pendientes según el último análisis; se volverá a comprobar. ') +
+        'Se recalculan distancia y desnivel. El GPX original no se modifica y cada ruta se puede restaurar desde su página.')) return;
+    run(this, 'Quitar puntos anómalos ' + who(), body({ action: 'clean' }));
+  });
+  load();
 })();
 
 document.getElementById('btn-clean').addEventListener('click', function() {
@@ -2414,6 +2603,7 @@ function fmtExtra(e) {
     if (e.existian)        badges.push(badge(`⏭ ${e.existian} ya existía${e.existian>1?'n':''}`, 'color-mix(in srgb,#0369a1 15%,transparent)'));
     if (e.review)          badges.push(badge(`⚠ ${e.review} revisión`, 'color-mix(in srgb,#92400e 15%,transparent)'));
     if (e.errores)         badges.push(badge(`✗ ${e.errores} error${e.errores>1?'es':''}`, 'color-mix(in srgb,#b91c1c 15%,transparent)'));
+    if (e.anomalias)       badges.push(badge(`⚠ ${e.anomalias} con puntos anómalos`, 'color-mix(in srgb,#92400e 15%,transparent)'));
   }
   if (e.osm_aplicado  > 0) badges.push(badge(`OSM ✓ ${e.osm_aplicado}`, 'color-mix(in srgb,#0369a1 15%,transparent)'));
   if (e.osm_sin_cache > 0) badges.push(badge(`OSM — ${e.osm_sin_cache}`, 'color-mix(in srgb,#888 12%,transparent)'));
@@ -3455,19 +3645,19 @@ loadActivities();
 <script>
 // Tab: Varios días
 (function () {
-  const REASON_LABEL = {
-    'días con actividad': 'Horas del GPX',
-    'nombre': 'Nombre',
-    'tiempo en movimiento': 'Movimiento',
-    'distancia y desnivel': 'Estimación',
-    'declarado': 'Declarado',
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  // Why a route counts as multi-day, from most to least reliable
+  const REASONS = {
+    'declarado':            { label: 'Indicado a mano',  tip: 'Su dueño o un administrador ha dicho cuántos días son' },
+    'días con actividad':   { label: 'Horas del GPX',    tip: 'El GPX tiene horas fiables y hay actividad en 2 días o más, separados por paradas nocturnas' },
+    'nombre':               { label: 'Nombre',           tip: 'El nombre encaja con las palabras clave (etapas, días, travesía…)' },
+    'tiempo en movimiento': { label: 'Tiempo en marcha', tip: 'El tiempo en movimiento supera el máximo de un día' },
+    'distancia y desnivel': { label: 'Estimación',       tip: 'Por distancia y desnivel saldrían más horas de las que caben en un día' },
   };
-  let allRoutes = [], loaded = false;
-
-  function fmt(n) {
-    if (n == null) return '—';
-    return typeof n === 'number' ? n.toLocaleString('es-ES', { maximumFractionDigits: 1 }) : n;
-  }
+  const nf1 = n => n == null ? '—' : Number(n).toLocaleString('es-ES', { maximumFractionDigits: 1 });
+  const nf0 = n => n == null ? '—' : Number(n).toLocaleString('es-ES', { maximumFractionDigits: 0 });
+  let allRoutes = [], realRoutes = [], totalTracks = 0, loaded = false, previewing = false;
 
   async function apiFetch(url, method = 'GET', body) {
     const r = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
@@ -3477,82 +3667,142 @@ loadActivities();
   }
 
   async function load() {
-    $('md-tbl-area').innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando…</div>';
+    $('md-tbl-area').innerHTML = '<div class="empty-state">Cargando…</div>';
     try {
       const d = await apiFetch('/api/admin/gamification/multiday');
-      allRoutes = d.multiDay;
-      buildFilters(d);
-      renderStats(d);
-      renderTable();
-    } catch (e) {
-      $('md-tbl-area').innerHTML = `<div style="padding:40px;text-align:center;color:var(--muted)">${esc(e.message)}</div>`;
-    }
+      realRoutes = allRoutes = d.multiDay; totalTracks = d.totalTracks; previewing = false;
+      $('md-preview').hidden = true;
+      refresh();
+    } catch (e) { $('md-tbl-area').innerHTML = `<div class="empty-state">${esc(e.message)}</div>`; }
+  }
+  function refresh() { buildFilters(); renderStats(); renderTable(); }
+
+  function buildFilters() {
+    const keep = (id, opts, all) => { const sel = $(id), cur = sel.value;
+      sel.innerHTML = `<option value="">${all}</option>` + opts.map(o => `<option>${esc(o)}</option>`).join('');
+      sel.value = opts.includes(cur) ? cur : ''; };
+    keep('md-f-owner', [...new Set(allRoutes.map(r => r.owner).filter(Boolean))].sort(), 'Todos los dueños');
+    keep('md-f-activity', [...new Set(allRoutes.map(r => r.activity).filter(Boolean))].sort(), 'Todas las actividades');
   }
 
-  function buildFilters(d) {
-    const owners = [...new Set(d.multiDay.map(r => r.owner).filter(Boolean))].sort();
-    const acts   = [...new Set(d.multiDay.map(r => r.activity).filter(Boolean))].sort();
-    $('md-f-owner').innerHTML    = '<option value="">Todos los dueños</option>'   + owners.map(o => `<option>${esc(o)}</option>`).join('');
-    $('md-f-activity').innerHTML = '<option value="">Todas las actividades</option>' + acts.map(a => `<option>${esc(a)}</option>`).join('');
+  // Figures on top; the reason ones work as a filter
+  function renderStats() {
+    const days = allRoutes.reduce((s, r) => s + (r.estDays || 0), 0);
+    const cur = $('md-f-reason').value;
+    const byReason = Object.keys(REASONS).map(k => ({ k, n: allRoutes.filter(r => r.reason === k).length })).filter(x => x.n);
+    $('md-stats').innerHTML =
+      `<div class="md-stat"><b>${nf0(allRoutes.length)}</b><span>rutas de varios días<br>de ${nf0(totalTracks)}</span></div>` +
+      `<div class="md-stat"><b>${nf0(days)}</b><span>días en total</span></div>` +
+      `<div class="md-reasons"><span class="md-reasons-lbl">Por qué:</span>` +
+      `<button class="md-chip${cur ? '' : ' active'}" data-reason="">Todas</button>` +
+      byReason.map(x => `<button class="md-chip${cur === x.k ? ' active' : ''}" data-reason="${esc(x.k)}" title="${esc(REASONS[x.k].tip)}">${esc(REASONS[x.k].label)} <b>${x.n}</b></button>`).join('') +
+      `</div>`;
   }
+  $('md-stats').addEventListener('click', e => {
+    const b = e.target.closest('[data-reason]'); if (!b) return;
+    $('md-f-reason').value = b.dataset.reason; renderStats(); renderTable();
+  });
 
-  function renderStats(d) {
-    const total = d.multiDay.length;
-    if (!total) { $('md-stats').innerHTML = ''; return; }
-    const totalDays = d.multiDay.reduce((s, r) => s + (r.estDays || 0), 0);
-    const maxDays   = Math.max(...d.multiDay.map(r => r.estDays || 0));
-    $('md-stats').innerHTML = [
-      { val: total,          lbl: `de ${fmt(d.totalTracks)} rutas` },
-      { val: totalDays,      lbl: 'días estimados en total' },
-      { val: maxDays,        lbl: 'días máx. de una ruta' },
-    ].map(s => `<div class="stat"><div class="val">${fmt(s.val)}</div><div class="lbl">${esc(s.lbl)}</div></div>`).join('');
+  // One time column: the most reliable figure there is, saying where it comes from
+  function timeCell(r) {
+    if (r.elapsedHours != null) return `${nf1(r.elapsedHours)} h<small>del GPX (con paradas)</small>`;
+    if (r.movingHours != null)  return `${nf1(r.movingHours)} h<small>en movimiento</small>`;
+    return `${nf1(r.estHours)} h<small>estimadas</small>`;
+  }
+  // Days: «Auto» keeps the detection; 1 takes the route off the list; N or «varios» fix it
+  function daysSelect(r) {
+    const cur = r.declared == null ? 'auto' : String(r.declared);
+    const opts = [['auto', `Auto (${r.reason === 'declarado' ? '—' : r.estDays})`], ['1', '1 día (no es de varios)'],
+      ...Array.from({ length: 13 }, (_, i) => [String(i + 2), `${i + 2} días`]), ['0', 'Varios (sin número)']];
+    if (r.declared != null && !opts.some(([v]) => v === cur)) opts.push([cur, `${cur} días`]);
+    return `<select class="select md-days" data-id="${r.id}" ${previewing ? 'disabled title="Sal de la vista previa para cambiar días"' : ''}>` +
+      opts.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('') + '</select>';
   }
 
   function renderTable() {
     const search = $('md-f-search').value.trim().toLowerCase();
-    const owner  = $('md-f-owner').value;
-    const act    = $('md-f-activity').value;
-    const reason = $('md-f-reason').value;
-    const rows = allRoutes.filter(r =>
-      (!search || r.name.toLowerCase().includes(search)) &&
-      (!owner  || r.owner === owner) &&
-      (!act    || r.activity === act) &&
-      (!reason || r.reason === reason)
-    );
-    $('md-count').textContent = rows.length === allRoutes.length
-      ? `${rows.length} rutas` : `${rows.length} de ${allRoutes.length}`;
+    const owner = $('md-f-owner').value, act = $('md-f-activity').value, reason = $('md-f-reason').value;
+    const rows = allRoutes.filter(r => (!search || r.name.toLowerCase().includes(search)) && (!owner || r.owner === owner) &&
+      (!act || r.activity === act) && (!reason || r.reason === reason));
+    $('md-count').textContent = rows.length === allRoutes.length ? `${rows.length} rutas` : `${rows.length} de ${allRoutes.length}`;
     if (!rows.length) {
-      $('md-tbl-area').innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Ninguna ruta coincide con los filtros.</div>';
+      $('md-tbl-area').innerHTML = `<div class="empty-state">${allRoutes.length ? 'Ninguna ruta coincide con los filtros.' : 'No hay rutas de varios días.'}</div>`;
       return;
     }
-    $('md-tbl-area').innerHTML = `<div style="overflow-x:auto"><table class="table" style="font-size:13px">
-      <thead><tr>
-        <th>Ruta</th><th>Dueño</th><th>Actividad</th>
-        <th class="num">km</th><th class="num">D+</th>
-        <th class="num">h total</th><th class="num">h estim.</th><th class="num">h movim.</th>
-        <th>Motivo</th><th class="num" style="font-weight:700">Días</th>
-      </tr></thead>
-      <tbody>${rows.map(r => `<tr>
-        <td><a href="/track?id=${r.id}" target="_blank">${esc(r.name)}</a></td>
-        <td>${r.owner ? '@' + esc(r.owner) : '—'}</td>
-        <td>${esc(r.activity || '—')}</td>
-        <td class="num">${fmt(r.km)}</td>
-        <td class="num">${fmt(r.gain)}</td>
-        <td class="num">${r.elapsedHours ?? '—'}</td>
-        <td class="num">${fmt(r.estHours)}</td>
-        <td class="num">${r.movingHours ?? '—'}</td>
-        <td><span class="tag">${esc(REASON_LABEL[r.reason] || r.reason)}</span></td>
-        <td class="num" style="font-weight:700">${r.estDays}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
+    $('md-tbl-area').innerHTML = `<div style="overflow-x:auto"><table class="table md-table">
+      <thead><tr><th>Ruta</th><th class="num">Distancia</th><th class="num">Desnivel +</th><th class="num">Tiempo</th><th>Por qué</th><th class="num">Días</th></tr></thead>
+      <tbody>${rows.map(r => {
+        const R = REASONS[r.reason] || { label: r.reason, tip: '' };
+        const sub = [r.owner ? '@' + r.owner : null, r.activity, r.date].filter(Boolean).map(esc).join(' · ');
+        return `<tr>
+          <td><a class="md-name" href="/track?id=${r.id}" target="_blank">${esc(r.name)}</a>${sub ? `<div class="md-sub">${sub}</div>` : ''}</td>
+          <td class="num">${nf1(r.km)} km</td>
+          <td class="num">${nf0(r.gain)} m</td>
+          <td class="num md-time">${timeCell(r)}</td>
+          <td><span class="md-reason md-r-${Object.keys(REASONS).indexOf(r.reason)}" title="${esc(R.tip)}">${esc(R.label)}</span></td>
+          <td class="num">${daysSelect(r)}</td>
+        </tr>`; }).join('')}</tbody></table></div>`;
   }
 
-  $('md-f-search').addEventListener('input', renderTable);
-  $('md-f-owner').addEventListener('change', renderTable);
-  $('md-f-activity').addEventListener('change', renderTable);
-  $('md-f-reason').addEventListener('change', renderTable);
+  // Saves the days as days_declared of the route (null = automatic detection)
+  async function setDays(id, value) {
+    const days_declared = value === 'auto' ? null : Number(value);
+    await apiFetch(`/api/tracks/${id}`, 'PATCH', { days_declared });
+    toast(days_declared === 1 ? '✓ Marcada como ruta de un día' : days_declared == null ? '✓ Vuelve a la detección automática' : '✓ Días guardados');
+  }
+  $('md-tbl-area').addEventListener('change', async e => {
+    const sel = e.target.closest('.md-days'); if (!sel) return;
+    sel.disabled = true;
+    try { await setDays(+sel.dataset.id, sel.value); await load(); }
+    catch (err) { toast(err.message, true); sel.disabled = false; }
+  });
 
-  // Save: ensure gami config is loaded (so XP/families fields are populated), then save all
+  ['md-f-search', 'md-f-owner', 'md-f-activity'].forEach(id => $(id).addEventListener(id === 'md-f-search' ? 'input' : 'change', renderTable));
+
+  // «¿Falta alguna?»: search any route (admins see every one) and declare its days
+  let addTimer = null;
+  $('md-add-q').addEventListener('input', () => {
+    clearTimeout(addTimer);
+    const q = $('md-add-q').value.trim();
+    if (q.length < 2) { $('md-add-results').innerHTML = ''; return; }
+    addTimer = setTimeout(async () => {
+      try {
+        const d = await apiFetch(`/api/search?q=${encodeURIComponent(q)}&size=8`);
+        const inList = new Set(realRoutes.map(r => r.id));
+        $('md-add-results').innerHTML = d.items.length ? d.items.map(t => `<div class="md-add-row">
+            <div style="flex:1;min-width:0"><a class="md-name" href="/track?id=${t.id}" target="_blank">${esc(t.name)}</a>
+              <div class="md-sub">${[t.owner_username ? '@' + t.owner_username : null, t.activity, `${nf1(t.distance)} km`].filter(Boolean).map(esc).join(' · ')}</div></div>
+            ${inList.has(t.id) ? '<span class="md-sub">Ya está en la lista</span>'
+              : `<select class="select md-add-days" data-id="${t.id}"><option value="">Marcar como…</option>${Array.from({ length: 13 }, (_, i) => `<option value="${i + 2}">${i + 2} días</option>`).join('')}<option value="0">Varios (sin número)</option></select>`}
+          </div>`).join('') : '<div class="md-sub" style="padding:8px 0">Ninguna ruta con ese nombre.</div>';
+      } catch (err) { $('md-add-results').innerHTML = `<div class="md-sub">${esc(err.message)}</div>`; }
+    }, 250);
+  });
+  $('md-add-results').addEventListener('change', async e => {
+    const sel = e.target.closest('.md-add-days'); if (!sel || sel.value === '') return;
+    sel.disabled = true;
+    try { await setDays(+sel.dataset.id, sel.value); $('md-add-q').value = ''; $('md-add-results').innerHTML = ''; await load(); }
+    catch (err) { toast(err.message, true); sel.disabled = false; }
+  });
+
+  // Settings: try them on the list without saving, or save them
+  $('md-try').addEventListener('click', async () => {
+    const btn = $('md-try'); btn.disabled = true;
+    try {
+      await window.gamiEnsureLoaded();
+      const d = await apiFetch('/api/admin/gamification/preview', 'POST', window.gamiRead());
+      allRoutes = d.multiDay; totalTracks = d.totalTracks; previewing = true;
+      $('md-preview-txt').innerHTML = `<b>Vista previa con los ajustes sin guardar:</b> ${d.multiDay.length} rutas de varios días (ahora son ${realRoutes.length}).`;
+      $('md-preview').hidden = false;
+      refresh();
+      $('md-preview').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) { toast(e.message, true); }
+    finally { btn.disabled = false; }
+  });
+  $('md-preview-exit').addEventListener('click', () => {
+    allRoutes = realRoutes; previewing = false; $('md-preview').hidden = true; refresh();
+  });
+
   $('md-save').addEventListener('click', async () => {
     const btn = $('md-save'); btn.disabled = true; btn.textContent = 'Guardando…';
     try {
@@ -3560,20 +3810,115 @@ loadActivities();
       await apiFetch('/api/admin/gamification', 'PUT', window.gamiRead());
       $('md-dirty').hidden = true;
       const gmDirty = document.getElementById('gm-dirty'); if (gmDirty) gmDirty.hidden = true;
-      toast('✓ Configuración de varios días guardada');
-      loaded = false; load();
+      toast('✓ Ajustes de varios días guardados');
+      await load();
     } catch (e) { toast(e.message, true); }
-    finally { btn.disabled = false; btn.textContent = 'Guardar'; }
+    finally { btn.disabled = false; btn.textContent = 'Guardar ajustes'; }
   });
 
-  // Mark dirty when config fields change
-  $('tab-multidia').addEventListener('input', e => { if (e.target.closest('.gm-form')) $('md-dirty').hidden = false; });
-  $('tab-multidia').addEventListener('change', e => { if (e.target.closest('.gm-form')) $('md-dirty').hidden = false; });
+  $('md-config').addEventListener('input', e => { if (e.target.closest('.gm-form')) $('md-dirty').hidden = false; });
+  $('md-config').addEventListener('change', e => { if (e.target.closest('.gm-form')) $('md-dirty').hidden = false; });
 
   document.querySelector('#admin-tabs [data-tab="multidia"]').addEventListener('click', () => {
-    window.gamiEnsureLoaded();  // populate gm-md-* and gm-groups before user edits them
+    window.gamiEnsureLoaded();  // fills the settings (gm-md-*, gm-groups) before they can be edited
     if (!loaded) { loaded = true; load(); }
   });
+})();
+</script>
+
+<script>
+// Tab: Estadísticas (rutas y usuarios de toda la biblioteca)
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const nf = n => n == null ? '—' : Number(n).toLocaleString('es-ES', { maximumFractionDigits: 0 });
+  const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  let data = null, sortKey = 'routes', sortDir = -1, loaded = false;
+
+  const COLS = [
+    { k: 'username', l: 'Usuario' }, { k: 'routes', l: 'Rutas', n: 1 }, { k: 'public', l: 'Públicas', n: 1 },
+    { k: 'km', l: 'Km', n: 1 }, { k: 'gain', l: 'Desnivel', n: 1 }, { k: 'photos', l: 'Fotos', n: 1 }, { k: 'lists', l: 'Listas', n: 1 },
+    { k: 'followers', l: 'Seguidores', n: 1 }, { k: 'following', l: 'Sigue', n: 1 }, { k: 'comments', l: 'Coment.', n: 1, t: 'Comentarios escritos' },
+    { k: 'ratings', l: 'Valor.', n: 1, t: 'Valoraciones dadas' }, { k: 'done', l: 'Hechas', n: 1, t: '«La he hecho» marcadas' },
+    { k: 'points', l: 'Puntos', n: 1, t: 'Puntos de autor' }, { k: 'last_upload', l: 'Última ruta' }, { k: 'created_at', l: 'Alta' },
+  ];
+
+  async function load() {
+    try {
+      const r = await fetch('/api/admin/insights');
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      data = await r.json();
+      render();
+    } catch (e) { $('in-kpis').innerHTML = `<div class="empty-state">${esc(e.message)}</div>`; }
+  }
+
+  function render() {
+    const t = data.totals;
+    const kpi = (v, l, s) => `<div class="in-kpi"><b>${v}</b><span>${l}</span>${s ? `<small>${s}</small>` : ''}</div>`;
+    $('in-kpis').innerHTML = [
+      kpi(nf(t.tracks), 'rutas', `${nf(t.public)} públicas · ${nf(t.tracks - t.public)} privadas`),
+      kpi(nf(t.km), 'km', `${nf(t.gain)} m de desnivel`),
+      kpi(nf(t.users), 'usuarios activos', `${nf(data.users.length)} cuentas en total`),
+      kpi(nf(t.photos), 'fotos', `${nf(t.lists)} listas`),
+      kpi(nf(t.comments), 'comentarios', `${nf(t.ratings)} valoraciones · ${nf(t.done)} «la he hecho»`),
+      kpi(nf(t.follows), 'seguimientos', t.planned ? `${nf(t.planned)} rutas planeadas` : ''),
+    ].join('');
+    renderUsers();
+    bars('in-activity', data.byActivity, d => `${nf(d.km)} km`);
+    bars('in-sources', data.sources);
+    bars('in-years', data.byYear, d => `${nf(d.km)} km`);
+    renderMonths();
+  }
+
+  function renderUsers() {
+    $('in-users-head').innerHTML = '<tr>' + COLS.map(c =>
+      `<th class="${c.n ? 'num' : ''} in-sort${sortKey === c.k ? ' on' : ''}" data-k="${c.k}"${c.t ? ` title="${esc(c.t)}"` : ''}>${c.l}${sortKey === c.k ? (sortDir < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('') + '</tr>';
+    const val = (u, k) => k === 'km' || k === 'gain' ? Number(u[k]) || 0 : u[k];
+    const rows = [...data.users].sort((a, b) => {
+      const x = val(a, sortKey), y = val(b, sortKey);
+      if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+      return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y))) * sortDir;
+    });
+    $('in-users').innerHTML = rows.map(u => {
+      const av = u.avatar_url ? `<img class="in-av" src="${esc(u.avatar_url)}" alt="">` : `<span class="in-av">${esc((u.display_name || u.username).charAt(0).toUpperCase())}</span>`;
+      const tags = (u.role === 'admin' ? '<span class="badge badge-blue">admin</span>' : '') + (u.active ? '' : '<span class="badge badge-red">inactivo</span>');
+      return `<tr class="${u.active ? '' : 'in-off'}">
+        <td><div class="in-user">${av}<div><a href="/u/${encodeURIComponent(u.username)}" target="_blank">@${esc(u.username)}</a> ${tags}
+          ${u.display_name ? `<div class="in-sub">${esc(u.display_name)}</div>` : ''}</div></div></td>
+        ${COLS.slice(1).map(c => `<td class="${c.n ? 'num' : 'in-date'}">${c.n ? (u[c.k] ? nf(u[c.k]) : '<span class="in-zero">0</span>') : esc(u[c.k] || '—')}</td>`).join('')}
+      </tr>`;
+    }).join('');
+  }
+  $('in-users-head').addEventListener('click', e => {
+    const th = e.target.closest('[data-k]'); if (!th) return;
+    if (sortKey === th.dataset.k) sortDir = -sortDir; else { sortKey = th.dataset.k; sortDir = th.dataset.k === 'username' ? 1 : -1; }
+    renderUsers();
+  });
+
+  function bars(id, rows, extra) {
+    if (!rows || !rows.length) { $(id).innerHTML = '<span class="in-sub">Sin datos</span>'; return; }
+    const max = Math.max(1, ...rows.map(r => r.count));
+    $(id).innerHTML = rows.map(r => `<div class="bar-row" title="${esc(r.label)}: ${nf(r.count)} rutas${extra ? ' · ' + extra(r) : ''}">
+      <div class="bar-label">${esc(r.label)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.max(2, Math.round(r.count / max * 100))}%"></div></div>
+      <div class="bar-val">${nf(r.count)}${extra ? `<small>${extra(r)}</small>` : ''}</div></div>`).join('');
+  }
+
+  // Columns per month: routes uploaded and new users
+  function renderMonths() {
+    const max = Math.max(1, ...data.imports.map(m => m.count));
+    const maxU = Math.max(1, ...data.signups.map(m => m.count));
+    $('in-months').innerHTML = `<div class="in-mcols">${data.imports.map((m, i) => {
+      const u = data.signups[i].count, [y, mo] = m.label.split('-');
+      return `<div class="in-mcol" title="${MONTHS[+mo - 1]} ${y}: ${nf(m.count)} rutas subidas · ${nf(u)} altas">
+        <div class="in-mbars"><span class="in-mb r" style="height:${m.count ? Math.max(4, Math.round(m.count / max * 100)) : 0}%"></span>
+          <span class="in-mb u" style="height:${u ? Math.max(4, Math.round(u / maxU * 100)) : 0}%"></span></div>
+        <div class="in-mlbl">${MONTHS[+mo - 1]}</div></div>`; }).join('')}</div>
+      <div class="in-legend"><span><i class="r"></i>Rutas subidas (${nf(data.imports.reduce((s, m) => s + m.count, 0))})</span>
+        <span><i class="u"></i>Altas de usuarios (${nf(data.signups.reduce((s, m) => s + m.count, 0))})</span></div>`;
+  }
+
+  document.querySelector('#admin-tabs [data-tab="insights"]').addEventListener('click', () => { if (!loaded) { loaded = true; load(); } else load(); });
 })();
 </script>
 

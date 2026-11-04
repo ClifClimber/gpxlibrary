@@ -187,6 +187,67 @@ function pointsSection(t) {
   </div>`;
 }
 
+// ── Puntos GPS anómalos (solo los ve quien puede actuar: el dueño y los administradores) ──────────────
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+function anomalyText(a) {
+  const parts = [];
+  const cp = a.clusters.reduce((s, c) => s + Math.max(0, c.count - 2), 0);
+  if (a.clusters.length) parts.push(`${plural(a.clusters.length, 'parada', 'paradas')} con ruido GPS (${plural(cp, 'punto', 'puntos')})`);
+  if (a.spikes.length) parts.push(`${plural(a.spikes.length, 'salto aislado', 'saltos aislados')}`);
+  return parts.join(' · ');
+}
+const kmStr = n => Number(n).toLocaleString('es-ES', { maximumFractionDigits: 1 });
+function anomalySection(t) {
+  const a = t.anomalies;
+  if (!a || window.GPX_ANON) return '';
+  if (a.applied) {
+    return `<div class="section anom anom-done" id="anom-section">
+      <div class="anom-head"><span class="anom-ico">✓</span><div><b>Puntos anómalos quitados</b>
+        <p>${plural(a.applied.removed, 'punto quitado', 'puntos quitados')}: la distancia pasó de ${kmStr(a.applied.before.distance)} a ${kmStr(t.distance)} km. El GPX original no se ha modificado.</p></div></div>
+      <div class="anom-actions"><button class="btn btn-sm" onclick="anomAct('restore')">Restaurar el original</button></div></div>`;
+  }
+  if (!a.removable || a.dismissed) return '';
+  const saved = a.savedM >= 50 ? `<p>Quitarlos reduciría la distancia en unos <b>${kmStr(a.savedM / 1000)} km</b> y corregiría el desnivel.</p>` : '';
+  return `<div class="section anom" id="anom-section">
+    <div class="anom-head"><span class="anom-ico">⚠</span><div><b>Puntos GPS anómalos</b>
+      <p>${esc(anomalyText(a))}.</p>${saved}
+      <p class="anom-note">Es solo un aviso: no se ha quitado nada, y el GPX original nunca se modifica.</p></div></div>
+    <div class="anom-actions">
+      <button class="btn btn-primary btn-sm" onclick="anomAct('clean')">Quitar puntos anómalos</button>
+      <button class="btn btn-sm" id="anom-map-btn" onclick="anomToggleMap()">Ver en el mapa</button>
+      <button class="btn btn-ghost btn-sm" onclick="anomAct('dismiss')">Ignorar</button>
+    </div></div>`;
+}
+let gAnomLayer = null;
+function anomToggleMap() {
+  const btn = document.getElementById('anom-map-btn');
+  if (gAnomLayer) { gAnomLayer.remove(); gAnomLayer = null; if (btn) btn.textContent = 'Ver en el mapa'; return; }
+  const a = gTrack && gTrack.anomalies; if (!a || !gMap) return;
+  gAnomLayer = L.featureGroup();
+  a.clusters.forEach(c => L.circle([c.lat, c.lon], { radius: Math.max(c.radiusM * 1.6, 12), color: '#f59e0b', weight: 2, fillColor: '#f59e0b', fillOpacity: .25 })
+    .bindTooltip(`Parada con ruido GPS · ${c.count} puntos${c.seconds ? ` · ${Math.round(c.seconds / 60)} min` : ''}`).addTo(gAnomLayer));
+  a.spikes.forEach(s => L.circleMarker([s.lat, s.lon], { radius: 7, color: '#dc2626', weight: 2, fillColor: '#dc2626', fillOpacity: .5 })
+    .bindTooltip(`Salto aislado · ${s.jumpM} m fuera de la línea`).addTo(gAnomLayer));
+  gAnomLayer.addTo(gMap);
+  if (btn) btn.textContent = 'Ocultar del mapa';
+  if (a.clusters.length + a.spikes.length === 1) gMap.setView(gAnomLayer.getBounds().getCenter(), 17);
+  else gMap.fitBounds(gAnomLayer.getBounds(), { maxZoom: 16, padding: [40, 40] });
+}
+async function anomAct(action) {
+  const a = gTrack && gTrack.anomalies;
+  if (action === 'clean' && !confirm(`¿Quitar ${plural(a.removable, 'punto anómalo', 'puntos anómalos')}?\n\n` +
+      `La línea del mapa se corrige y la distancia baja de ${kmStr(gTrack.distance)} a unos ${kmStr(gTrack.distance - a.savedM / 1000)} km. ` +
+      `El GPX original no se modifica y podrás restaurarlo.`)) return;
+  if (action === 'restore' && !confirm('¿Volver a los puntos originales de la ruta?')) return;
+  try {
+    const r = await fetch(`/api/tracks/${trackId}/anomalies`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { showToast(d.error || 'No se pudo completar'); return; }
+    if (action === 'dismiss') { document.getElementById('anom-section')?.remove(); showToast('Aviso ignorado'); return; }
+    location.reload();   // line, profile and figures all change
+  } catch { showToast('Error de red'); }
+}
+
 // Floating notice (#toast in shared.css)
 function showToast(msg) {
   let el = document.getElementById('toast');
@@ -1121,6 +1182,7 @@ function buildContent(t, color, icon) {
   // ── Tab: Resumen ──────────────────────────────────────────────
   const tagChips = (t.tags||[]).map(tag=>`<span class="track-tag">${esc(tag)}</span>`).join('');
   const tabResumen = `
+    ${anomalySection(t)}
     <div class="stats-hero">
       <div class="hero-stat accent"><div class="hero-val">${dist}<small>km</small></div><div class="hero-lbl">Distancia</div></div>
       <div class="hero-stat"><div class="hero-val">${gain}<small>m</small></div><div class="hero-lbl">Desnivel +</div></div>

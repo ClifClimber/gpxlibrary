@@ -16,7 +16,8 @@ const { pipeline } = require('stream/promises');
 const { spawn } = require('child_process');
 const { applyGpxMetadata, buildGpx, metaFromTrack, parseGpx, computeTimes, sampleEvenly,
         DEFAULT_CONFIG: GAMI_DEFAULTS, mergeConfig, validateConfig, multiDayInfo, computeAchievements,
-        privacyZones, inZones, searchText } = require('./domain');
+        privacyZones, inZones, searchText, computeMetrics,
+        describeAnomalies } = require('./domain');
 const crypto = require('crypto');
 const { sendMail } = require('./mail/smtp');
 const { parseSearchParams, runSearch, runMeta } = require('./repo/search');
@@ -177,6 +178,7 @@ const USER_API = [
   ['GET',    /^\/api\/photos\/\d+$/],
   ['DELETE', /^\/api\/photos\/\d+$/],
   ['PATCH',  /^\/api\/tracks\/\d+\/cover$/],
+  ['POST',   /^\/api\/tracks\/\d+\/anomalies$/],
   ['GET',    /^\/api\/tracks\/\d+\/days$/],
   ['GET',    /^\/api\/activity-images\/[\w.-]+$/],
   ['GET',    /^\/api\/activity-icons\/[\w.-]+$/],
@@ -291,6 +293,7 @@ function countGpx(dir) {
 // same SSE stream: apiRunScript queues the job and relays its output from the database, so a closed
 // browser no longer stops an import.
 const { createQueue, startBoss, TERMINAL } = require('./queue');
+const { TRACK_SQL, cleanTrack, restoreTrack } = require('./scripts/anomaly-ops');
 const { createWorker } = require('./queue/worker');
 const { JOBS, IMPORT_TYPES, summarize, deriveArgsAfter } = require('./queue/jobs');
 let boss = null;
@@ -456,6 +459,12 @@ async function apiGetTrackById(res, id, full = false, viewer = null) {
       if (track.bounds) { [[track.sw_lat, track.sw_lon], [track.ne_lat, track.ne_lon]] = track.bounds; }
     }
     delete track.waypoints_json;
+    // The warning about anomalous points is for whoever can act on it
+    const mayAct = viewer && (viewer.role === 'admin' || (viewer.sub && viewer.sub === track.owner_id));
+    let anomalies = null;
+    try { anomalies = mayAct && track.anomalies ? JSON.parse(track.anomalies) : null; } catch {}
+    if (anomalies && anomalies.applied) { const { prev, ...ap } = anomalies.applied; anomalies = { ...anomalies, applied: ap }; }   // the backup of the previous geometry stays server-side
+    track.anomalies = anomalies;
     track.owner_avatar = track.owner_avatar_key ? `/api/profile/avatar/${encodeURIComponent(track.owner_avatar_key)}` : null;
     delete track.owner_avatar_key;
     track.author_points = await routePoints(sqlDb(), track.id, await gamificationConfig()).catch(() => null);
@@ -754,6 +763,23 @@ async function userCompletedTracks(uid) {
     `SELECT id, name, activity, distance, elevation_gain, moving_time, time_segments, days_declared, province, circular, date
      FROM tracks WHERE owner_id = ? AND NOT planned`, [uid]);
 }
+// Routes counted as multi-day with the given config (Admin → Varios días), most days first.
+// `elapsedHours` only when the GPX times can be trusted: glued files give absurd spans (e.g. 195 989 h).
+async function multiDayList(cfg) {
+  const tracks = await sqlDb().all(
+    `SELECT t.id, t.name, t.activity, t.date, t.distance, t.elevation_gain, t.moving_time, t.time_segments, t.days_declared,
+            u.username AS owner
+     FROM tracks t LEFT JOIN users u ON u.id = t.owner_id WHERE NOT t.planned`);
+  const multiDay = tracks.map(t => ({ t, i: multiDayInfo(t, cfg) })).filter(x => x.i.multiDay)
+    .sort((a, b) => b.i.estDays - a.i.estDays || b.i.estHours - a.i.estHours)
+    .map(({ t, i }) => ({ id: t.id, name: t.name, owner: t.owner, activity: t.activity, date: t.date,
+      km: Math.round((Number(t.distance) || 0) * 10) / 10, gain: t.elevation_gain,
+      estHours: i.estHours, movingHours: i.movingHours, elapsedHours: i.timesTrusted ? i.elapsedHours : null,
+      timesTrusted: i.timesTrusted, reason: i.reason, estDays: i.estDays,
+      declared: t.days_declared == null || t.days_declared === '' ? null : Number(t.days_declared) }));
+  return { multiDay, totalTracks: tracks.length };
+}
+
 async function userAchievements(uid, cfg) {
   const db = sqlDb();
   const photos = (await db.get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM track_photos WHERE owner_id = ?', [uid])).n;
@@ -1624,8 +1650,18 @@ async function handleRequest(req, res) {
       updates.push('privacy_radius = ?'); vals.push(r);
     }
     if (!updates.length) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Nada que actualizar' })); }
+    // Before/after of the personal data for Admin → Logs (passwords are never logged; the bio only as «cambiada»)
+    const before = await db.get('SELECT display_name, bio, web_visible, profile_public, privacy_radius, prefs FROM users WHERE id = ?', [req.user.sub]);
     updates.push('updated_at = NOW()'); vals.push(req.user.sub);
     await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, vals);
+    const after = await db.get('SELECT display_name, bio, web_visible, profile_public, privacy_radius, prefs FROM users WHERE id = ?', [req.user.sub]);
+    const changes = {};
+    for (const k of ['display_name', 'web_visible', 'profile_public', 'privacy_radius']) {
+      if (String(before[k]) !== String(after[k])) changes[k] = `${before[k] ?? '—'} → ${after[k] ?? '—'}`;
+    }
+    if (before.bio !== after.bio) changes.bio = 'cambiada';
+    if ((before.prefs?.map_mode) !== (after.prefs?.map_mode)) changes.map_mode = `${before.prefs?.map_mode ?? '—'} → ${after.prefs?.map_mode ?? '—'}`;
+    if (Object.keys(changes).length) appendLog('info', 'perfil', `Datos personales cambiados por ${req.user.username}`, { user: req.user.username, changes });
     if (body.web_visible !== undefined || body.profile_public !== undefined) dataChanged();
     if (body.privacy_radius !== undefined) {
       dataChanged();
@@ -1641,8 +1677,12 @@ async function handleRequest(req, res) {
     if (!current || !next || next.length < 6) { res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Contraseña inválida (mínimo 6 caracteres)' })); }
     const db = sqlDb();
     const u = await db.get('SELECT password_hash FROM users WHERE id = ?', [req.user.sub]);
-    if (!u || !checkPassword(current, u.password_hash)) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Contraseña actual incorrecta' })); }
+    if (!u || !checkPassword(current, u.password_hash)) {
+      appendLog('warn', 'perfil', `Cambio de contraseña rechazado (contraseña actual incorrecta): ${req.user.username}`, { user: req.user.username });
+      res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Contraseña actual incorrecta' }));
+    }
     await db.run('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?', [hashPassword(next), req.user.sub]);
+    appendLog('info', 'perfil', `Contraseña cambiada por ${req.user.username}`, { user: req.user.username });
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
   }
 
@@ -1724,6 +1764,7 @@ async function handleRequest(req, res) {
     const newKey = `avatars/${req.user.sub}-${Date.now()}${ext}`;
     await blob.put(newKey, buf);
     await db.run('UPDATE users SET avatar_key = ?, updated_at = NOW() WHERE id = ?', [newKey, req.user.sub]);
+    appendLog('info', 'perfil', `Foto de perfil cambiada por ${req.user.username}`, { user: req.user.username, size: buf.length });
     res.writeHead(200, J); return res.end(JSON.stringify({ ok: true, avatar_url: `/api/profile/avatar/${encodeURIComponent(newKey)}` }));
   }
 
@@ -2121,6 +2162,43 @@ async function handleRequest(req, res) {
     return apiRunScript(res, path.join(ROOT,'scripts','clean-tracks.js'), args, req.user);
   }
 
+  // Admin → Gestión de Tracks → Puntos GPS anómalos: analyse or clean the routes of one user or of everybody
+  if (pathname === '/api/db/anomalies' && method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    const o = await parseBody(req);
+    const owner = parseInt(o.owner_id);
+    const args = owner ? ['--owner', String(owner)] : ['--all'];
+    if (o.action === 'scan') return apiRunScript(res, path.join(ROOT, 'scripts', 'scan-anomalies.js'), args, req.user);
+    if (o.action === 'clean') {
+      if (o.include_dismissed) args.push('--include-dismissed');
+      if (o.dry_run) args.push('--dry-run');
+      return apiRunScript(res, path.join(ROOT, 'scripts', 'clean-anomalies.js'), args, req.user);
+    }
+    res.writeHead(400, J); return res.end(JSON.stringify({ error: 'Acción no válida' }));
+  }
+
+  // Routes with anomalous points per owner (from the stored analysis), for the admin selector
+  if (pathname === '/api/admin/anomaly-stats' && method === 'GET') {
+    if (!requireAdmin(req, res)) return;
+    const rows = await sqlDb().all(`
+      SELECT t.owner_id, COALESCE(u.display_name, u.username, '(sin dueño)') AS name,
+             CAST(COUNT(*) AS INTEGER) AS total,
+             CAST(COUNT(t.anomalies) AS INTEGER) AS analysed,
+             CAST(COUNT(*) FILTER (WHERE a.j IS NOT NULL AND COALESCE((a.j->>'removable')::int, 0) > 0 AND a.j->'applied' IS NULL
+                                    AND a.j->'dismissed' IS NULL) AS INTEGER) AS pending,
+             CAST(COUNT(*) FILTER (WHERE a.j->'applied' IS NOT NULL) AS INTEGER) AS applied,
+             CAST(COUNT(*) FILTER (WHERE a.j->'dismissed' IS NOT NULL AND a.j->'applied' IS NULL AND COALESCE((a.j->>'removable')::int, 0) > 0) AS INTEGER) AS ignored,
+             COALESCE(SUM(CASE WHEN a.j IS NOT NULL AND a.j->'applied' IS NULL AND a.j->'dismissed' IS NULL
+                               THEN COALESCE((a.j->>'savedM')::numeric, 0) ELSE 0 END), 0) AS saved_m
+        FROM tracks t
+        LEFT JOIN users u ON u.id = t.owner_id
+        LEFT JOIN LATERAL (SELECT CASE WHEN t.anomalies IS NULL THEN NULL ELSE t.anomalies::jsonb END AS j) a ON true
+       GROUP BY t.owner_id, u.display_name, u.username
+       ORDER BY pending DESC, name`);
+    res.writeHead(200, J);
+    return res.end(JSON.stringify({ owners: rows.map(r => ({ ...r, saved_km: Math.round(Number(r.saved_m) / 100) / 10 })) }));
+  }
+
   // ── Export GPX ────────────────────────────────────────────────────
   if (pathname === '/api/tracks/export-gpx' && method === 'POST')
     return apiExportGpx(req, res);
@@ -2191,6 +2269,49 @@ async function handleRequest(req, res) {
   if (trackMoveMatch && method === 'POST') {
     if (!isAdmin && !(await ownsTrack(parseInt(trackMoveMatch[1]), req.user.sub))) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Solo el propietario puede modificar esta ruta' })); }
     return apiMoveTrack(req, res, parseInt(trackMoveMatch[1]));
+  }
+
+  // Anomalous GPS points of a route: remove them, bring the original back, or stop warning about them.
+  // The original GPX is never touched: «quitar» writes the clean geometry (the one the detail page and the visor
+  // use) and recomputes distance and elevation from it, «restaurar» undoes both.
+  const anomMatch = pathname.match(/^\/api\/tracks\/(\d+)\/anomalies$/);
+  if (anomMatch && method === 'POST') {
+    const tid = parseInt(anomMatch[1]);
+    if (!isAdmin && !(await ownsTrack(tid, req.user.sub))) { res.writeHead(403, J); return res.end(JSON.stringify({ error: 'Solo el propietario puede modificar esta ruta' })); }
+    const { action } = await parseBody(req);
+    const db = sqlDb();
+    const t = await db.get(`${TRACK_SQL} WHERE id = ?`, [tid]);
+    const fail = (code, error) => { res.writeHead(code, J); res.end(JSON.stringify({ error })); };
+    if (!t) return fail(404, 'Ruta no encontrada');
+    let rec = null; try { rec = t.anomalies ? JSON.parse(t.anomalies) : null; } catch {}
+    const save = r => db.run('UPDATE tracks SET anomalies = ? WHERE id = ?', [JSON.stringify(r), tid]);
+
+    if (action === 'dismiss') {
+      if (!rec) return fail(404, 'Esta ruta no tiene avisos');
+      await save({ ...rec, dismissed: true });
+      res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+    }
+
+    if (action === 'clean') {
+      const r = await cleanTrack(db, t);
+      if (!r.ok) return fail(r.code, r.error);
+      appendLog('info', 'anomalias', `Puntos anómalos quitados de «${t.name}»: ${describeAnomalies(r.found)}`,
+        { track: tid, removed: r.removed, distance: `${r.before.distance} → ${r.after.distance} km`, by: req.user.username });
+      dataChanged();
+      jobQueue().enqueue('track-derive', { args: ['--ids', String(tid)] }).catch(() => {});
+      res.writeHead(200, J);
+      return res.end(JSON.stringify({ ok: true, removed: r.removed, before: r.before, after: r.after }));
+    }
+
+    if (action === 'restore') {
+      const r = await restoreTrack(db, t);
+      if (!r.ok) return fail(r.code, r.error);
+      appendLog('info', 'anomalias', `Puntos originales restaurados en «${t.name}»`, { track: tid, by: req.user.username });
+      dataChanged();
+      jobQueue().enqueue('track-derive', { args: ['--ids', String(tid)] }).catch(() => {});
+      res.writeHead(200, J); return res.end(JSON.stringify({ ok: true }));
+    }
+    return fail(400, 'Acción no válida');
   }
 
   const trackMatch = pathname.match(/^\/api\/tracks\/(\d+)$/);
@@ -2840,9 +2961,9 @@ async function handleRequest(req, res) {
   if (pathname === '/admin' && method === 'GET')
     return serveStatic(res, path.join(ROOT, 'admin.html'), req);
 
+  // The list of multi-day routes lives in Admin → Varios días
   if (pathname === '/multidia' && method === 'GET') {
-    if (!requireAdmin(req, res)) return;
-    return serveStatic(res, path.join(ROOT, 'multidia.html'), req);
+    res.writeHead(302, { Location: '/admin#multidia' }); return res.end();
   }
 
   if (pathname === '/api/admin/storage' && method === 'GET') return apiStorageStatus(res);
@@ -2895,17 +3016,8 @@ async function handleRequest(req, res) {
   // Multi-day routes with the saved config
   if (pathname === '/api/admin/gamification/multiday' && method === 'GET') {
     if (!requireAdmin(req, res)) return;
-    const db = sqlDb();
-    const cfg = await gamificationConfig();
-    const tracks = await db.all(
-      `SELECT t.id, t.name, t.activity, t.distance, t.elevation_gain, t.moving_time, t.time_segments, t.days_declared, u.username AS owner
-       FROM tracks t LEFT JOIN users u ON u.id = t.owner_id WHERE NOT t.planned`);
-    const multiDay = tracks.map(t => ({ t, i: multiDayInfo(t, cfg) })).filter(x => x.i.multiDay)
-      .sort((a, b) => b.i.estHours - a.i.estHours)
-      .map(({ t, i }) => ({ id: t.id, name: t.name, owner: t.owner, activity: t.activity,
-                            km: Math.round(t.distance * 10) / 10, gain: t.elevation_gain,
-                            estHours: i.estHours, movingHours: i.movingHours, elapsedHours: i.elapsedHours, reason: i.reason, estDays: i.estDays }));
-    res.writeHead(200, J); return res.end(JSON.stringify({ multiDay, totalTracks: tracks.length }));
+    const { multiDay, totalTracks } = await multiDayList(await gamificationConfig());
+    res.writeHead(200, J); return res.end(JSON.stringify({ multiDay, totalTracks }));
   }
   // Preview with an unsaved config: which routes count as multi-day and how each user ends up
   if (pathname === '/api/admin/gamification/preview' && method === 'POST') {
@@ -2914,21 +3026,14 @@ async function handleRequest(req, res) {
     try { cfg = validateConfig(mergeConfig(await parseBody(req))); }
     catch (e) { res.writeHead(400, J); return res.end(JSON.stringify({ error: e.message })); }
     const db = sqlDb();
-    const tracks = await db.all(
-      `SELECT t.id, t.name, t.activity, t.distance, t.elevation_gain, t.moving_time, t.time_segments, t.days_declared, u.username AS owner
-       FROM tracks t LEFT JOIN users u ON u.id = t.owner_id WHERE NOT t.planned`);
-    const multiDay = tracks.map(t => ({ t, i: multiDayInfo(t, cfg) })).filter(x => x.i.multiDay)
-      .sort((a, b) => b.i.estHours - a.i.estHours)
-      .map(({ t, i }) => ({ id: t.id, name: t.name, owner: t.owner, activity: t.activity,
-                            km: Math.round(t.distance * 10) / 10, gain: t.elevation_gain,
-                            estHours: i.estHours, movingHours: i.movingHours, elapsedHours: i.elapsedHours, reason: i.reason, estDays: i.estDays }));
+    const { multiDay, totalTracks } = await multiDayList(cfg);
     const users = await db.all('SELECT id, username FROM users WHERE active ORDER BY username');
     const perUser = [];
     for (const u of users) {
       const a = await userAchievements(u.id, cfg);
       perUser.push({ username: u.username, level: a.level, xp: a.xp, unlocked: a.unlocked, total: a.total });
     }
-    res.writeHead(200, J); return res.end(JSON.stringify({ multiDay, perUser, totalTracks: tracks.length }));
+    res.writeHead(200, J); return res.end(JSON.stringify({ multiDay, perUser, totalTracks }));
   }
 
   if (pathname === '/api/admin/version' && method === 'GET') {
@@ -2964,6 +3069,69 @@ async function handleRequest(req, res) {
 
   if (pathname === '/api/admin/stats' && method === 'GET')
     return apiAdminStats(res);
+
+  // Admin → Estadísticas: routes and users across the whole library
+  if (pathname === '/api/admin/insights' && method === 'GET') {
+    if (!requireAdmin(req, res)) return;
+    const db = sqlDb();
+    const n = sql => db.get(sql).then(r => Number(Object.values(r)[0]) || 0);
+    const [totals, users, byActivity, byYear, imports, signups, sources] = await Promise.all([
+      db.get(`SELECT CAST(COUNT(*) AS INTEGER) AS tracks, ROUND(CAST(COALESCE(SUM(distance),0) AS NUMERIC), 0) AS km,
+                CAST(COALESCE(SUM(elevation_gain),0) AS BIGINT) AS gain,
+                CAST(SUM(CASE WHEN visibility='public' THEN 1 ELSE 0 END) AS INTEGER) AS public,
+                CAST(SUM(CASE WHEN planned THEN 1 ELSE 0 END) AS INTEGER) AS planned,
+                CAST(SUM(CASE WHEN owner_id IS NULL THEN 1 ELSE 0 END) AS INTEGER) AS orphans
+              FROM tracks`),
+      db.all(`SELECT u.id, u.username, u.display_name, u.avatar_key, u.role, u.active,
+                to_char(u.created_at, 'YYYY-MM-DD') AS created_at,
+                CAST((SELECT COUNT(*) FROM tracks t WHERE t.owner_id=u.id) AS INTEGER) AS routes,
+                CAST((SELECT COUNT(*) FROM tracks t WHERE t.owner_id=u.id AND t.visibility='public') AS INTEGER) AS public,
+                ROUND(CAST((SELECT COALESCE(SUM(distance),0) FROM tracks t WHERE t.owner_id=u.id) AS NUMERIC), 0) AS km,
+                CAST((SELECT COALESCE(SUM(elevation_gain),0) FROM tracks t WHERE t.owner_id=u.id) AS BIGINT) AS gain,
+                to_char((SELECT MAX(imported_at) FROM tracks t WHERE t.owner_id=u.id), 'YYYY-MM-DD') AS last_upload,
+                CAST((SELECT COUNT(*) FROM track_photos p WHERE p.owner_id=u.id) AS INTEGER) AS photos,
+                CAST((SELECT COUNT(*) FROM user_lists l WHERE l.owner_id=u.id) AS INTEGER) AS lists,
+                CAST((SELECT COUNT(*) FROM follows f WHERE f.followee_id=u.id) AS INTEGER) AS followers,
+                CAST((SELECT COUNT(*) FROM follows f WHERE f.follower_id=u.id) AS INTEGER) AS following,
+                CAST((SELECT COUNT(*) FROM track_comments c WHERE c.user_id=u.id AND c.hidden_at IS NULL) AS INTEGER) AS comments,
+                CAST((SELECT COUNT(*) FROM track_ratings r WHERE r.user_id=u.id) AS INTEGER) AS ratings,
+                CAST((SELECT COUNT(*) FROM track_done d WHERE d.user_id=u.id) AS INTEGER) AS done
+              FROM users u ORDER BY routes DESC, u.username`),
+      db.all(`SELECT COALESCE(activity, 'Sin actividad') AS label, CAST(COUNT(*) AS INTEGER) AS count,
+                ROUND(CAST(COALESCE(SUM(distance),0) AS NUMERIC), 0) AS km
+              FROM tracks GROUP BY 1 ORDER BY count DESC`),
+      db.all(`SELECT left(date, 4) AS label, CAST(COUNT(*) AS INTEGER) AS count, ROUND(CAST(COALESCE(SUM(distance),0) AS NUMERIC), 0) AS km
+              FROM tracks WHERE date ~ '^\\d{4}' GROUP BY 1 ORDER BY 1 DESC`),
+      db.all(`SELECT to_char(date_trunc('month', imported_at), 'YYYY-MM') AS label, CAST(COUNT(*) AS INTEGER) AS count
+              FROM tracks WHERE imported_at >= date_trunc('month', NOW()) - INTERVAL '11 months' GROUP BY 1 ORDER BY 1`),
+      db.all(`SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS label, CAST(COUNT(*) AS INTEGER) AS count
+              FROM users WHERE created_at >= date_trunc('month', NOW()) - INTERVAL '11 months' GROUP BY 1 ORDER BY 1`),
+      db.all(`SELECT CASE WHEN url ILIKE '%wikiloc%' THEN 'Wikiloc' WHEN url ILIKE '%garmin%' THEN 'Garmin'
+                          WHEN url IS NOT NULL AND url <> '' THEN 'Otra web' ELSE 'Sin enlace' END AS label,
+                CAST(COUNT(*) AS INTEGER) AS count FROM tracks GROUP BY 1 ORDER BY count DESC`),
+    ]);
+    const social = {
+      photos: await n('SELECT CAST(COUNT(*) AS INTEGER) FROM track_photos'),
+      lists: await n('SELECT CAST(COUNT(*) AS INTEGER) FROM user_lists'),
+      comments: await n('SELECT CAST(COUNT(*) AS INTEGER) FROM track_comments WHERE hidden_at IS NULL'),
+      ratings: await n('SELECT CAST(COUNT(*) AS INTEGER) FROM track_ratings'),
+      done: await n('SELECT CAST(COUNT(*) AS INTEGER) FROM track_done'),
+      follows: await n('SELECT CAST(COUNT(*) AS INTEGER) FROM follows'),
+    };
+    const cfg = await gamificationConfig();
+    for (const u of users) {
+      u.avatar_url = u.avatar_key ? `/api/profile/avatar/${encodeURIComponent(u.avatar_key)}` : null;
+      delete u.avatar_key;
+      u.points = cfg.points.enabled ? (await authorPoints(db, u.id, cfg)).total : null;
+    }
+    // Last 12 months, with the empty ones too, so the bars read as a timeline
+    const months = [];
+    for (let i = 11; i >= 0; i--) { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - i); months.push(d.toISOString().slice(0, 7)); }
+    const fill = rows => months.map(m => ({ label: m, count: (rows.find(r => r.label === m) || {}).count || 0 }));
+    res.writeHead(200, J);
+    return res.end(JSON.stringify({ totals: { ...totals, users: users.filter(u => u.active).length, ...social },
+      users, byActivity, byYear, imports: fill(imports), signups: fill(signups), sources }));
+  }
   if (pathname === '/api/admin/backup' && method === 'POST')
     return apiAdminBackup(res, req.user?.username);
   if (pathname === '/api/admin/backups' && method === 'GET')

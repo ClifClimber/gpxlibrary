@@ -15,7 +15,8 @@ const path = require('path');
 const { openSql } = require('../repo/sql');
 const { newUid, sha256, putFile, deleteTrackFile } = require('./store');
 const { parseGpx, computeMetrics, computeTimes, elapsedSeconds, timeSegments, inferActivity, sierraFromBbox,
-        extractSierraFromNominatim, locationFromNominatim, computeIBP } = require('../domain');
+        extractSierraFromNominatim, locationFromNominatim, computeIBP,
+        detectAnomalies, describeAnomalies, anomalyRecord } = require('../domain');
 const { CACHE_DIR, slugify }      = require('./osm-strategy-batch');
 const { fetchTrackPts, filterWaysToBbox, applyWaysToTrack } = require('./osm-shared');
 
@@ -171,7 +172,7 @@ function collectTempGpx(dir) {
     });
   }
 
-  let imported = 0, skipped = 0, reviewed = 0, errors = 0;
+  let imported = 0, skipped = 0, reviewed = 0, errors = 0, withAnomalies = 0;
   const importedIds = [];
 
   for (let i = 0; i < files.length; i++) {
@@ -207,6 +208,14 @@ function collectTempGpx(dir) {
     } catch (e) { console.log(`  ✗ Error parseando: ${e.message}`); errors++; continue; }
 
     console.log(`  Métricas  : ${track.distance} km  /  +${track.elevationGain}m  (centro: ${track.centerLat}, ${track.centerLon})`);
+
+    // Anomalous GPS points (stops drawn as a star, isolated spikes): only reported, nothing is removed here
+    const anomalies = detectAnomalies(track.points);
+    const anomalyJson = JSON.stringify(anomalyRecord(track.points, anomalies));
+    if (anomalies.removable) {
+      console.log(`  ⚠ Puntos anómalos: ${describeAnomalies(anomalies)} (${anomalies.removable} de ${anomalies.total})`);
+      console.log(`    No se ha quitado nada: revísalos y quítalos desde el detalle de la ruta.`);
+    }
 
     // ── Paso 1: Obtener datos geográficos con Nominatim ─────────────
     let province = null, ccaa = null, sierraNominatim = null;
@@ -246,6 +255,8 @@ function collectTempGpx(dir) {
       if (track.elapsed) await db.run('UPDATE tracks SET elapsed_time=?, time_segments=? WHERE id=?',
         [track.elapsed, track.segments ? JSON.stringify(track.segments) : null, newId]);
       if (needsReview) await db.run('UPDATE tracks SET tags=? WHERE id=?', [JSON.stringify(['revisar']), newId]);
+      await db.run('UPDATE tracks SET anomalies=? WHERE id=?', [anomalyJson, newId]);
+      if (anomalies.removable) withAnomalies++;
       importedIds.push(newId);
       imported++;
       if (!KEEP_SRC) { try { fs.unlinkSync(filePath); } catch {} }
@@ -287,9 +298,13 @@ function collectTempGpx(dir) {
   console.log(`  Importados          : ${imported}`);
   console.log(`  Ya existían (BD)    : ${skipped}`);
   console.log(`  Por revisar         : ${reviewed}`);
+  console.log(`  Con anomalías       : ${withAnomalies}`);
   console.log(`  Errores             : ${errors}`);
   if (reviewed > 0) {
     console.log(`\n⚠  ${reviewed} tracks con la etiqueta «revisar» necesitan clasificación manual.`);
+  }
+  if (withAnomalies > 0) {
+    console.log(`\n⚠  ${withAnomalies} tracks con puntos GPS anómalos (se avisa en su detalle; no se ha quitado nada).`);
   }
   if (importedIds.length > 0) {
     console.log(`IMPORTED_IDS:${importedIds.join(',')}`);

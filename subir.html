@@ -68,6 +68,10 @@
 .dup-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .dup-actions .input { flex: 1; min-width: 180px; }
 .dup-or { font-size: 12px; color: var(--muted); }
+.anom-panel { margin: 0 0 16px; padding: 14px 16px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--warn) 12%, transparent); box-shadow: inset 3px 0 0 var(--warn); }
+.anom-panel.done { background: color-mix(in srgb, var(--success) 11%, transparent); box-shadow: inset 3px 0 0 var(--success); }
+.anom-panel p { font-size: 13px; color: var(--ink-2); margin: 3px 0 10px; line-height: 1.5; }
+.anom-panel .anom-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .days-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .days-num { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
 .days-num .input { width: 76px; }
@@ -182,6 +186,14 @@ body.edit-mode a.edit-only { display: inline-flex; }
     <section class="wz-step" id="step-3">
       <div class="wz-title" id="s3-title">Detalles del track</div>
       <div class="wz-sub" id="s3-sub">Hemos precalculado actividad, dificultad y zona. Ajusta lo que quieras y guarda.</div>
+      <div class="anom-panel" id="anom-panel" hidden>
+        <div class="dup-title" id="anom-title">⚠️ Puntos GPS anómalos</div>
+        <p id="anom-text"></p>
+        <div class="anom-actions" id="anom-actions">
+          <button class="btn btn-primary" id="anom-clean">Quitar puntos anómalos</button>
+          <button class="btn btn-outline" id="anom-keep">Dejarla como está</button>
+        </div>
+      </div>
       <div class="wz-field">
         <label>Nombre</label>
         <input type="text" class="input" id="f-name" maxlength="200">

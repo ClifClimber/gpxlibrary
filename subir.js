@@ -219,6 +219,38 @@
 
   function slugify(s) { return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60) || 'ruta'; }
 
+  // ── Puntos GPS anómalos: el servidor los detecta al importar; aquí se le pregunta al usuario si quiere quitarlos ──
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const kmFmt = n => Number(n).toLocaleString('es-ES', { maximumFractionDigits: 1 });
+  function showAnomalies(t) {
+    const panel = $('anom-panel'), a = t.anomalies;
+    panel.hidden = true; panel.classList.remove('done');
+    if (!a || !a.removable || a.applied || a.dismissed) return;
+    const cp = a.clusters.reduce((s, c) => s + Math.max(0, c.count - 2), 0), parts = [];
+    if (a.clusters.length) parts.push(`${plural(a.clusters.length, 'parada', 'paradas')} en las que el GPS se ha vuelto loco y dibuja una estrella o un ovillo (${plural(cp, 'punto', 'puntos')})`);
+    if (a.spikes.length) parts.push(plural(a.spikes.length, 'salto aislado fuera de la ruta', 'saltos aislados fuera de la ruta'));
+    const saved = a.savedM >= 50 ? ` Quitándolos la distancia bajaría de <b>${kmFmt(t.distance)}</b> a unos <b>${kmFmt(t.distance - a.savedM / 1000)} km</b>.` : '';
+    $('anom-title').textContent = '⚠️ Hemos detectado puntos GPS anómalos';
+    $('anom-text').innerHTML = esc(parts.join(' y ')).replace(/^./, c => c.toUpperCase()) + '.' + saved +
+      ' Puedes quitarlos ahora o hacerlo más tarde desde la página de la ruta; tu GPX original no se modifica.';
+    $('anom-actions').hidden = false;
+    $('anom-clean').disabled = false;
+    $('anom-clean').onclick = async () => {
+      $('anom-clean').disabled = true;
+      try {
+        const r = await fetch(`/api/tracks/${t.id}/anomalies`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clean' }) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'No se pudo quitar');
+        panel.classList.add('done');
+        $('anom-title').textContent = '✓ Puntos anómalos quitados';
+        $('anom-text').textContent = `${plural(d.removed, 'punto quitado', 'puntos quitados')}: la distancia pasa de ${kmFmt(d.before.distance)} a ${kmFmt(d.after.distance)} km. Puedes restaurar el original desde la página de la ruta.`;
+        $('anom-actions').hidden = true;
+      } catch (err) { $('anom-text').textContent = '✗ ' + err.message; $('anom-clean').disabled = false; }
+    };
+    $('anom-keep').onclick = () => { panel.hidden = true; };
+    panel.hidden = false;
+  }
+
   // ── Paso 3: cargar precálculo + datalists ──
   async function loadTrackIntoForm() {
     const [t, acts, geo] = await Promise.all([
@@ -227,6 +259,7 @@
       fetch('/api/config/provinces').then(r => r.json()).catch(() => ({})),
     ]);
     $('f-name').value = t.name || parsed?.name || '';
+    showAnomalies(t);
     setDescHtml(t.notes || '');
     $('f-planned').checked = !!t.planned;
     // Extra fields (edit mode only)

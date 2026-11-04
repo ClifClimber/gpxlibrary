@@ -1254,7 +1254,7 @@ loadTracks();
 
 <script>
 (function() {
-  let pendingFile = null;
+  let pendingFiles = [];
   const overlay   = document.getElementById('dnd-overlay');
   const modalOvl  = document.getElementById('dnd-modal-overlay');
   const logEl     = document.getElementById('dnd-log');
@@ -1288,10 +1288,10 @@ loadTracks();
   document.addEventListener('drop', e => {
     e.preventDefault();
     dragCount = 0; showOverlay(false);
-    const f = e.dataTransfer.files[0];
-    if (!f || !f.name.toLowerCase().endsWith('.gpx')) return;
-    pendingFile = f;
-    nameEl.textContent = f.name;
+    const files = [...e.dataTransfer.files].filter(f => f.name.toLowerCase().endsWith('.gpx'));
+    if (!files.length) return;
+    pendingFiles = files;
+    nameEl.textContent = files.length === 1 ? files[0].name : `${files.length} ficheros GPX`;
     logEl.innerHTML = '';
     logEl.style.display = 'none';
     document.getElementById('dnd-choice').style.display = 'flex';
@@ -1303,7 +1303,7 @@ loadTracks();
 
   document.getElementById('dnd-close').onclick = closeModal;
 
-  function closeModal() { modalOvl.style.display = 'none'; pendingFile = null; }
+  function closeModal() { modalOvl.style.display = 'none'; pendingFiles = []; }
 
   function hideChoice() {
     document.getElementById('dnd-choice').style.display = 'none';
@@ -1312,53 +1312,61 @@ loadTracks();
 
   // ── Opción 1: ver en el mapa (track temporal) ──
   async function doViewOnMap() {
-    if (!pendingFile) return;
+    const files = [...pendingFiles];
+    if (!files.length) return;
     hideChoice();
-    addLog('📖 Leyendo ' + pendingFile.name + '…');
-    const text = await pendingFile.text();
-    const doc  = new DOMParser().parseFromString(text, 'text/xml');
-    const name = doc.querySelector('trk > name')?.textContent?.trim()
-               || pendingFile.name.replace(/\.gpx$/i, '');
-    const trkpts = [...doc.querySelectorAll('trkpt')];
-    if (!trkpts.length) { addLog('✗ No se encontraron puntos en el fichero'); showClose(); return; }
-    const pts = trkpts.map(p => [
-      parseFloat(p.getAttribute('lat')),
-      parseFloat(p.getAttribute('lon')),
-      parseFloat(p.querySelector('ele')?.textContent || 0)
-    ]);
-    addLog('✓ ' + pts.length + ' puntos leídos — añadiendo al mapa…');
-    const filename = pendingFile.name;
-    closeModal();
-    addTempTrack({ name, pts, gpxText: text, filename });
+    let added = 0;
+    for (const file of files) {
+      addLog('📖 Leyendo ' + file.name + '…');
+      const text = await file.text();
+      const doc  = new DOMParser().parseFromString(text, 'text/xml');
+      const name = doc.querySelector('trk > name')?.textContent?.trim()
+                 || file.name.replace(/\.gpx$/i, '');
+      const trkpts = [...doc.querySelectorAll('trkpt')];
+      if (!trkpts.length) { addLog('✗ ' + file.name + ': no tiene puntos'); continue; }
+      const pts = trkpts.map(p => [
+        parseFloat(p.getAttribute('lat')),
+        parseFloat(p.getAttribute('lon')),
+        parseFloat(p.querySelector('ele')?.textContent || 0)
+      ]);
+      addLog('✓ ' + file.name + ': ' + pts.length + ' puntos — añadido al mapa');
+      addTempTrack({ name, pts, gpxText: text, filename: file.name });
+      added++;
+    }
+    addLog(`${added} de ${files.length} rutas añadidas al mapa`);
+    showClose();
   }
 
   // ── Opción 2: importar al catálogo ──
   async function doImport() {
-    if (!pendingFile) return;
+    const files = [...pendingFiles];
+    if (!files.length) return;
     hideChoice();
-    addLog('⬆ Subiendo ' + pendingFile.name + '…');
-
-    const buf = await pendingFile.arrayBuffer();
-    let uploaded;
-    try {
-      const r = await fetch('/api/import/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/gpx+xml', 'X-Filename': pendingFile.name },
-        body: buf
-      });
-      uploaded = await r.json();
-    } catch(e) {
-      addLog('✗ Error subiendo: ' + e.message);
-      showClose(); return;
+    const stored = [];
+    for (const file of files) {
+      addLog('⬆ Subiendo ' + file.name + '…');
+      try {
+        const r = await fetch('/api/import/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/gpx+xml', 'X-Filename': file.name },
+          body: await file.arrayBuffer()
+        });
+        const up = await r.json();
+        if (!up.ok) { addLog('✗ ' + file.name + ': error en servidor'); continue; }
+        stored.push(up.filename);
+      } catch(e) {
+        addLog('✗ ' + file.name + ': ' + e.message);
+      }
     }
-    if (!uploaded.ok) { addLog('✗ Error en servidor'); showClose(); return; }
-    addLog('✓ Fichero guardado, iniciando importación…');
+    if (!stored.length) { showClose(); return; }
+    addLog(`✓ ${stored.length} de ${files.length} ficheros guardados, iniciando importación…`);
+    const uploaded = { filename: null, names: stored };
 
     let isErr = false;
     fetch('/api/db/import-temp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ files: [uploaded.filename], keep: true })
+      body: JSON.stringify({ files: uploaded.names, keep: true })
     }).then(resp => {
       const reader = resp.body.getReader();
       const dec = new TextDecoder();

@@ -10,6 +10,7 @@ module.exports = {
   ...require('./gpx-export'),
   ...require('./gamification'),
   ...require('./privacy'),
+  ...require('./anomalies'),
   ...require('./derive'),
   ...require('./slug'),
 };
