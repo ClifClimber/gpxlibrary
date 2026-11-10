@@ -65,6 +65,12 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #chips::-webkit-scrollbar { display: none; }
 .chip-geo.active { background: var(--accent); }
 .chips-sep { flex: 1; min-width: 4px; }
+#chip-filters { display: none; }
+.pop-search { width: 100%; height: 32px; font-size: 13px; margin-bottom: 8px; }
+.pop-search[hidden] { display: none; }
+.pop-note { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.45; }
+.pop-note:empty { display: none; }
+.preset-pills { margin-top: 12px; }
 #geo-place-name { font-size: 12px; color: var(--ink-2); line-height: 1.45; }
 .cat-dot:hover { transform: scale(1.25); }
 
@@ -363,10 +369,27 @@ img.ti-avatar { object-fit: cover; background: var(--soft); box-shadow: 0 0 0 1p
   }
   #search-box { grid-area: 1 / 1; }
   #chips { grid-area: 2 / 1; }
+  /* Phones: one «Filtros» button; the chips open below it as a wrapped panel */
+  #chip-filters { display: inline-flex; }
+  #chips:not(.expanded) > .chip:not(#chip-filters):not(.chip-geo):not(.chip-clear) { display: none; }
+  #chips.expanded { flex-wrap: wrap; overflow: visible; align-content: flex-start; padding: 8px; border-radius: 14px;
+    background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: var(--shadow); }
+  #overlay:has(#chips.expanded) { grid-template-rows: var(--bar-h) auto minmax(0, 1fr) auto auto; }
   #profile, #app.panel-collapsed #profile { grid-column: 1; grid-row: 4; }
   #panel, #app.panel-collapsed #panel { grid-column: 1; grid-row: 5; max-height: 42vh; align-self: end; }
   #panel-resize { display: none; }
-  #btn-crear-ruta, #app.panel-collapsed #btn-crear-ruta { left: auto; right: 12px; transform: none; bottom: calc(42vh + 20px); padding: 10px 16px; }
+  #btn-crear-ruta, #app.panel-collapsed #btn-crear-ruta { left: auto; right: 12px; transform: none; bottom: calc(42vh + 20px); padding: 8px 14px; font-size: 13px; }
+  .leaflet-control-zoom { display: none; }            /* phones pinch to zoom, and the buttons sat under «Crear ruta» */
+  /* Compact route cards: the list shows two or three routes instead of one */
+  .track-item { padding: 8px 8px; gap: 9px; }
+  .ti-main { gap: 3px; }
+  .ti-name { font-size: 14px; -webkit-line-clamp: 2; }
+  .ti-data-row { gap: 12px; margin-top: 1px; }
+  .ti-datum-val { font-size: 13px; }
+  .ti-actions { margin-top: 2px; }
+  .ti-photo { width: 64px; height: 64px; }
+  .ti-right { gap: 4px; }
+  .ti-owner-row { display: none; }
   #btn-crear-ruta:hover { transform: translateY(-2px); }
   #profile-svg-wrap { height: 110px; }
   #pd-stats { width: 88px; }

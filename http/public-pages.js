@@ -191,6 +191,14 @@ function ibpDiff(ibp) {
   return                 { label: 'Extremo',     cls: 'diff-xtreme' };
 }
 
+// A vía ferrata shows the grade its author chose (F…ED, stored in tracks.difficulty) and no IBP
+const FERRATA_GRADES = ['F', 'PD', 'AD', 'D', 'TD', 'ED'];
+const FERRATA_CLS = ['diff-easy', 'diff-mod', 'diff-mod', 'diff-hard', 'diff-vhard', 'diff-xtreme'];
+function routeDifficulty(t) {
+  if (/ferrata/i.test(t.activity || '')) return t.difficulty != null && FERRATA_GRADES[t.difficulty] ? { label: FERRATA_GRADES[t.difficulty], cls: FERRATA_CLS[t.difficulty] } : null;
+  return ibpDiff(t.ibp_hiking ?? t.ibp_bicycle ?? t.ibp_running);
+}
+
 async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
   const u = await db.get(
     `SELECT id, username, display_name, bio, avatar_key, profile_public, web_visible,
@@ -202,7 +210,7 @@ async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
                    CAST(SUM(CASE WHEN t.circular=1 THEN 1 ELSE 0 END) AS INTEGER) AS circular
             FROM tracks t JOIN users u ON u.id=t.owner_id WHERE t.owner_id=? AND ${WEB_VISIBLE}`, [u.id]),
     db.all(`SELECT t.id, t.name, t.activity, t.sierra, t.province, t.date, t.distance, t.elevation_gain, t.cover_photo_id,
-                   t.ibp_hiking, t.ibp_bicycle, t.ibp_running
+                   t.ibp_hiking, t.ibp_bicycle, t.ibp_running, t.difficulty
             FROM tracks t JOIN users u ON u.id=t.owner_id WHERE t.owner_id=? AND ${WEB_VISIBLE}
             ORDER BY t.date DESC NULLS LAST, t.id DESC LIMIT ${PROFILE_PAGE} OFFSET ${pageNo * PROFILE_PAGE}`, [u.id]),
     db.all(`SELECT l.id, l.name, l.description, l.icon,
@@ -264,8 +272,7 @@ async function renderProfile(db, username, { base, viewer, pageNo = 0 }) {
   // Route cards (feed style)
   const trailCards = routes.map(t => {
     const img = routeImage(t, actImg);
-    const ibp = t.ibp_hiking ?? t.ibp_bicycle ?? t.ibp_running;
-    const diff = ibpDiff(ibp);
+    const diff = routeDifficulty(t);
     const stats = [
       t.distance ? `<span class="up-trail-stat"><b>${nf1.format(t.distance)}</b> km</span>` : '',
       t.elevation_gain ? `<span class="up-trail-stat"><b>${nf0.format(t.elevation_gain)}</b> m+</span>` : '',

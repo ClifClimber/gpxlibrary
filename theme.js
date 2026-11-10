@@ -1,5 +1,9 @@
 // Loaded in <head> (not deferred) so the saved theme applies before first paint.
 (function () {
+  // The Inter font is imported by shared.css: open the connections to its servers as early as possible
+  for (const [h, co] of [['https://fonts.googleapis.com', false], ['https://fonts.gstatic.com', true]]) {
+    const l = document.createElement('link'); l.rel = 'preconnect'; l.href = h; if (co) l.crossOrigin = ''; document.head.appendChild(l);
+  }
   const KEY = 'gpx-theme';
   const root = document.documentElement;
   try { const t = localStorage.getItem(KEY); if (t === 'dark' || t === 'light') root.dataset.theme = t; } catch {}
@@ -57,9 +61,9 @@
       if (!(me.prefs && me.prefs.web_notice_seen) && location.pathname !== '/perfil') {
         const bar = document.createElement('div');
         bar.className = 'web-notice';
-        bar.innerHTML = '<span><b>Novedad:</b> tus rutas públicas ya se pueden ver en Internet sin cuenta y compartir con un enlace. ' +
-          'Puedes desactivarlo o activar una zona de privacidad en tu perfil.</span>' +
-          '<a class="btn btn-sm" href="/perfil">Ajustes de privacidad</a><button class="btn btn-sm btn-primary" type="button">Entendido</button>';
+        bar.innerHTML = '<span><b>Novedad:</b> tus rutas públicas ya se pueden ver en Internet sin cuenta y compartir con un enlace.' +
+          '<span class="wn-more"> Puedes desactivarlo o activar una zona de privacidad en tu perfil.</span></span>' +
+          '<a class="btn btn-sm wn-settings" href="/perfil">Ajustes</a><button class="btn btn-sm btn-primary" type="button">Entendido</button>';
         const seen = () => fetch('/api/profile/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ web_notice_seen: true }) }).catch(() => {});
         bar.querySelector('button').addEventListener('click', () => { seen(); bar.remove(); });
         bar.querySelector('a').addEventListener('click', seen);

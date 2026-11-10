@@ -232,7 +232,7 @@ body.edit-mode a.edit-only { display: inline-flex; }
       </div>
       <div class="wz-row">
         <div class="wz-field">
-          <label>Dificultad <span class="precalc" id="pc-grade"></span></label>
+          <label><span id="lbl-grade">Dificultad</span> <span class="precalc" id="pc-grade"></span></label>
           <select class="select" id="f-grade">
             <option value="0">Muy fácil</option>
             <option value="1">Fácil</option>
@@ -309,6 +309,8 @@ body.edit-mode a.edit-only { display: inline-flex; }
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/map-layers.js"></script>
+<script src="/grades.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.min.js"></script>
 <script src="/gpx-drop.js"></script>
 <script src="/subir.js"></script>

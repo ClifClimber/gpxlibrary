@@ -256,6 +256,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 <div id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/map-layers.js"></script>
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
@@ -271,14 +272,7 @@ function toast(msg, isErr) {
 
 // ── Map ─────────────────────────────────────────────────────────────
 const map = L.map('map', { zoomControl: false }).setView([40.4, -3.7], 6);
-const tileLayers = {
-  'Carto Voyager':   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>', subdomains: 'abcd', maxZoom: 20 }),
-  'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19 }),
-  'Stadia Outdoors': L.tileLayer('https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png', { attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://openmaptiles.org/">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/about">OpenStreetMap</a>', maxZoom: 20 }),
-  'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '© OpenTopoMap', maxZoom: 17 }),
-  'IGN Topográfico': L.tileLayer('https://www.ign.es/wmts/mapa-raster?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=MTN&STYLE=default&FORMAT=image/jpeg&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', { attribution: '© <a href="https://www.ign.es">IGN España</a>', maxZoom: 20 }),
-  'Google Satélite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains: '0123', attribution: '© Google', maxZoom: 20 }),
-};
+const tileLayers = gpxBaseLayers();
 // Drawing needs trail detail, so default to a topo map unless the user picked something else.
 let baseName = 'OpenTopoMap';
 try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}

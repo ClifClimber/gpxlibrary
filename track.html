@@ -8,10 +8,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <link rel="stylesheet" href="/shared.css">
   <script src="/theme.js"></script>
+  <script src="/map-layers.js"></script>
+  <script src="/grades.js"></script>
   <script src="/icons.js"></script>
   <script src="/lists-picker.js"></script>
   <link rel="stylesheet" href="/track.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.snow.css">
 </head>
 <body>
 
@@ -162,6 +163,28 @@ function ibpForTrackT(t) {
 function ibpLevelT(val) {
   if (val == null) return null;
   return IBP_LEVELS_T.find(l => val >= l.min && val <= l.max) || null;
+}
+
+// Vía ferratas: the grade the author chose (F…ED) instead of the IBP, which says nothing about verticality or exposure
+function ferrataGradeSection(t) {
+  const F = gpxFerrata, i = t.difficulty;
+  if (i == null || !F.grades[i]) return '';
+  const g = F.grades[i], c = F.colors[i];
+  const scale = F.grades.map((x, k) => `<div style="flex:1;text-align:center" title="${esc(x.label + ' · ' + x.name)}">
+      <div style="height:7px;border-radius:3px;background:${F.colors[k]};opacity:${k === i ? 1 : 0.18}"></div>
+      <div style="font-size:10px;margin-top:3px;color:${k === i ? F.colors[k] : '#94a3b8'};font-weight:${k === i ? 700 : 400}">${x.label}</div></div>`).join('');
+  return `<div class="section">
+    <div class="section-head">Grado de la ferrata</div>
+    <div style="padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+        <div style="flex-shrink:0;text-align:center;min-width:64px;padding:10px 14px;border-radius:10px;background:color-mix(in srgb,${c} 12%,transparent);border:1.5px solid ${c}40">
+          <div style="font-size:30px;font-weight:900;line-height:1;color:${c}">${esc(g.label)}</div></div>
+        <div><div style="font-size:18px;font-weight:800;color:${c};margin-bottom:5px">${esc(g.name)}</div>
+          <div style="font-size:12.5px;color:var(--muted);line-height:1.6">${esc(g.desc)}</div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:4px">✎ Grado indicado por el autor</div></div>
+      </div>
+      <div style="display:flex;gap:5px">${scale}</div>
+    </div></div>`;
 }
 
 function esc(s) {
@@ -551,7 +574,8 @@ function render(t) {
   // Road bar (div exists in DOM now)
   updateMapBar(t);
 
-  if (hasEle) requestAnimationFrame(() => drawProfile(t, color));
+  // The profile sheet only has its real height once drawn: frame the route again so it is not left under it
+  if (hasEle) requestAnimationFrame(() => { drawProfile(t, color); requestAnimationFrame(() => fitTrack(t)); });
 }
 
 function updateHeader(t) {
@@ -608,16 +632,8 @@ window.addEventListener('resize', () => {
 // ── Map ──────────────────────────────────────────────────────────
 function initMap(t, color) {
   const map = L.map('map', { zoomControl: false });
-  const tileLayers = {
-    'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19 }),
-    'Stadia Outdoors': L.tileLayer('https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png', { attribution:'© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://openmaptiles.org/">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/about">OpenStreetMap</a>', maxZoom:20 }),
-    'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',   { attribution:'© OpenTopoMap', maxZoom:17 }),
-    'IGN Topográfico': L.tileLayer('https://www.ign.es/wmts/mapa-raster?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=MTN&STYLE=default&FORMAT=image/jpeg&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', { attribution:'© <a href="https://www.ign.es">IGN España</a>', maxZoom:20 }),
-    'Google Maps':     L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
-    'Google Satélite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
-    'Google Híbrido':  L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
-  };
-  let baseName = 'OpenStreetMap';
+  const tileLayers = gpxBaseLayers();
+  let baseName = gpxDefaultBase;
   try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}
   tileLayers[baseName].addTo(map);
   map.on('baselayerchange', e => { try { localStorage.setItem('visor-base-layer', e.name); } catch {} });
@@ -1153,7 +1169,7 @@ function buildContent(t, color, icon) {
   const ownGrade = t.difficulty != null && IBP_LEVELS_T[t.difficulty] ? IBP_LEVELS_T[t.difficulty] : null;
   const calcLvl = ibpLevelT(ibpVal);
   const ibpLvl = ownGrade || calcLvl;   // the grade chosen by the author wins over the IBP one
-  const ibpSection = ibpLvl ? (() => {
+  const ibpSection = (window.gpxFerrata && gpxFerrata.is(t.activity)) ? ferrataGradeSection(t) : ibpLvl ? (() => {
     const scaleBar = IBP_LEVELS_T.map(l => {
       const active = l === ibpLvl;
       const shortLabel = l.label.split(' ').pop(); // "fácil", "Moderada" etc.

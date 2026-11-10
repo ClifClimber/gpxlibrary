@@ -64,7 +64,7 @@ const MIME = {
 
 // ── Archivos estáticos ─────────────────────────────────────────────
 // Public: the pages and styles at the root, the browser scripts listed here and assets/.
-const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js', 'lists-picker.js', 'gpx-drop.js']);
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js', 'lists-picker.js', 'gpx-drop.js', 'map-layers.js', 'grades.js']);
 function isPublicFile(rel) {
   if (rel.split('/').some(s => s.startsWith('.'))) return false;
   if (rel.startsWith('assets/')) return true;
@@ -227,15 +227,18 @@ function userMayAccess(pathname, method) {
 function serveStatic(res, filePath, req) {
   const ext  = path.extname(filePath).toLowerCase();
   const mime = MIME[ext] || 'application/octet-stream';
+  // Pages are always revalidated (they decide about login); scripts and styles may be reused for a minute while moving
+  // between pages; the images of assets/ almost never change
+  const cache = ext === '.html' ? 'no-cache' : /[/\\]assets[/\\]/.test(filePath) ? 'public, max-age=604800' : (ext === '.js' || ext === '.css') ? 'public, max-age=60' : 'no-cache';
   fs.stat(filePath, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404); res.end('Not found'); return; }
     const etag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
     if (req && req.headers['if-none-match'] === etag) {
-      res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); res.end(); return;
+      res.writeHead(304, { ETag: etag, 'Cache-Control': cache }); res.end(); return;
     }
     fs.readFile(filePath, (err2, data) => {
       if (err2) { res.writeHead(404); res.end('Not found'); return; }
-      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache', ETag: etag });
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': cache, ETag: etag });
       res.end(data);
     });
   });
@@ -765,6 +768,15 @@ async function userCompletedTracks(uid) {
 }
 // Routes counted as multi-day with the given config (Admin → Varios días), most days first.
 // `elapsedHours` only when the GPX times can be trusted: glued files give absurd spans (e.g. 195 989 h).
+// Ids of the multi-day routes, for the visor filter; recomputed only when the data changes
+let _multiDayIds = { v: null, ids: null };
+async function multiDayIds(version) {
+  if (_multiDayIds.v === version && _multiDayIds.ids) return _multiDayIds.ids;
+  const { multiDay } = await multiDayList(await gamificationConfig());
+  _multiDayIds = { v: version, ids: multiDay.map(r => r.id) };
+  return _multiDayIds.ids;
+}
+
 async function multiDayList(cfg) {
   const tracks = await sqlDb().all(
     `SELECT t.id, t.name, t.activity, t.date, t.distance, t.elevation_gain, t.moving_time, t.time_segments, t.days_declared,
@@ -2240,9 +2252,13 @@ async function handleRequest(req, res) {
   if (pathname === '/api/search' && method === 'GET') {
     try {
       const dataVersion = await dataVersionKey();
-      const out = searchParams.get('meta') === '1'
-        ? await runMeta(sqlDb(), req.user, { dataVersion })
-        : await runSearch(sqlDb(), parseSearchParams(searchParams), req.user, { dataVersion });
+      let out;
+      if (searchParams.get('meta') === '1') out = await runMeta(sqlDb(), req.user, { dataVersion });
+      else {
+        const p = parseSearchParams(searchParams);
+        if (p.multi) p.multiIds = await multiDayIds(dataVersion);   // «Varios días»: the same rule as Admin → Varios días
+        out = await runSearch(sqlDb(), p, req.user, { dataVersion });
+      }
       res.writeHead(200, { ...J, 'Cache-Control': 'no-cache' });
       return res.end(JSON.stringify(out));
     } catch (e) {

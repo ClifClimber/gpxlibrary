@@ -4,7 +4,7 @@
 let gCurrentUser = null;
 let META = { years: [], owners: [], maxDist: 0, maxEle: 0, core: null };
 let UNIVERSE = { activity: {}, sierra: {}, tags: {} };   // every pill value (counts of the unfiltered set)
-const SORT_KEYS = ['name', 'date', 'id-desc', 'dist-asc', 'dist-desc', 'ele-desc', 'ibp-asc'];
+const SORT_KEYS = ['near', 'date', 'rating', 'name', 'id-desc', 'dist-asc', 'dist-desc', 'ele-asc', 'ele-desc', 'time-asc', 'ibp-asc'];
 const PAGE_SIZE = 15;
 
 try {
@@ -50,6 +50,20 @@ function ibpLevelIdxV(val) {
 // Difficulty grade (0–5): the one the user chose, else derived from the IBP
 function gradeIdxV(t) {
   return t.difficulty != null ? t.difficulty : ibpLevelIdxV(ibpForTrackV(t));
+}
+// What a card shows as difficulty: a ferrata shows the grade its author chose (F…ED) and no IBP; the rest the 6 levels
+function gradeBadgeV(t) {
+  const fer = window.gpxFerrata && gpxFerrata.is(t.activity);
+  if (fer) {
+    if (t.difficulty == null) return null;
+    const g = gpxFerrata.grades[t.difficulty], tone = IBP_LEVELS[t.difficulty];
+    return g ? { label: g.label, color: tone.color, bg: tone.bg, border: tone.border, title: `Ferrata ${g.label} · ${g.name} (indicado por el autor)` } : null;
+  }
+  const li = gradeIdxV(t), ibp = ibpForTrackV(t);
+  if (li < 0) return null;
+  const l = IBP_LEVELS[li];
+  return { label: l.label, color: l.color, bg: l.bg, border: l.border,
+    title: (ibp != null ? `IBP ${Math.round(ibp)} · ` : '') + l.label + (t.difficulty != null ? ' (indicada por el autor)' : '') };
 }
 
 // ── Activity colors & icons ──────────────────────────────────────────
@@ -152,16 +166,8 @@ const nf0 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 });
 // ── Map ──────────────────────────────────────────────────────────────
 const map = L.map('map', { center:[40.4,-3.7], zoom:7, zoomControl:false, renderer:L.canvas({ tolerance:4 }) });
 
-const tileLayers = {
-  'OpenStreetMap':   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19 }),
-  'Stadia Outdoors': L.tileLayer('https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png', { attribution:'© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://openmaptiles.org/">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/about">OpenStreetMap</a>', maxZoom:20 }),
-  'OpenTopoMap':     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',   { attribution:'© OpenTopoMap', maxZoom:17 }),
-  'IGN Topográfico': L.tileLayer('https://www.ign.es/wmts/mapa-raster?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=MTN&STYLE=default&FORMAT=image/jpeg&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', { attribution:'© <a href="https://www.ign.es">IGN España</a>', maxZoom:20 }),
-  'Google Maps':     L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
-  'Google Satélite': L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
-  'Google Híbrido':  L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains:'0123', attribution:'© Google', maxZoom:20 }),
-};
-let baseName = 'OpenStreetMap';
+const tileLayers = gpxBaseLayers();
+let baseName = gpxDefaultBase;
 try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}
 tileLayers[baseName].addTo(map);
 map.on('baselayerchange', e => { try { localStorage.setItem('visor-base-layer', e.name); } catch {} });
@@ -217,9 +223,11 @@ let geoFilter = null;   // {lat, lon, radius, name}
 let gMineOnly = false;   // chip "Mis rutas": solo las del usuario en sesión
 let geoCircle = null;
 let idSet = new Set();   // filter to specific IDs (from ?ids= URL param)
-let sortMode = 'name';
-try { sortMode = localStorage.getItem('visor-sort') || 'name'; } catch {}
-if (!SORT_KEYS.includes(sortMode)) sortMode = 'name';
+// Default order: newest first. «Nombre A–Z» was the old default: a value saved before v2 is not a real choice
+let sortMode = 'date';
+try { const v = localStorage.getItem('visor-sort'); if (v && (v !== 'name' || localStorage.getItem('visor-sort-v2'))) sortMode = v; } catch {}
+if (!SORT_KEYS.includes(sortMode) || sortMode === 'near') sortMode = 'date';
+let sortBeforeNear = null;   // «Cerca de» switches to «Más cerca»; removing the place goes back to this
 
 // ── Data held in memory ──────────────────────────────────────────────
 // known: id → item (from /api/search or /api/tracks/:id/preview), small cache so hovering is instant
@@ -319,8 +327,7 @@ function showMapCard(track) {
   const act = track.activity || 'Otro';
   const photo = track.cover || actConfig[act]?.image || ACT_PHOTOS[act];
   const loc = [track.sierra, track.ccaa].filter(Boolean)[0] || '';
-  const li = gradeIdxV(track);
-  const ibp = li >= 0 ? IBP_LEVELS[li] : null;
+  const ibp = gradeBadgeV(track);
   const time = fmtMovingTime(track.movingTime);
 
   mpcEl.innerHTML = `
@@ -468,8 +475,16 @@ function geoRadius() {
   const a = document.querySelector('#geo-radius .cat-pill.active');
   return a ? parseInt(a.dataset.r) : 25;
 }
+function setNearSort(on) {
+  const opt = document.querySelector('#sort-select option[value="near"]');
+  if (opt) opt.hidden = !on;
+  if (on && sortMode !== 'near') { sortBeforeNear = sortMode; sortMode = 'near'; }
+  if (!on && sortMode === 'near') { sortMode = sortBeforeNear || 'date'; sortBeforeNear = null; }
+  $('sort-select').value = sortMode;
+}
 function setGeo(lat, lon, name) {
   geoFilter = { lat, lon, radius: geoRadius(), name };
+  setNearSort(true);
   drawGeo(true);
   applyFilters();
 }
@@ -488,6 +503,7 @@ function drawGeo(fit) {
 }
 function clearGeoFilter() {
   geoFilter = null;
+  setNearSort(false);
   if (geoCircle) { geoCircle.remove(); geoCircle = null; }
   $('chip-geo').hidden = true;
   closePopover();
@@ -522,6 +538,8 @@ function initDualSlider(minId, maxId, fillId, labelId, lo, hi, step, unit, onCha
     getMax:   () => +maxR.value >= hi ? Infinity : +maxR.value,
     isActive: () => +minR.value > lo || +maxR.value < hi,
     reset:    () => { minR.value = lo; maxR.value = hi; sync(); },
+    set:      (mn, mx) => { minR.value = Math.max(lo, Math.min(hi, mn ?? lo)); maxR.value = mx == null || !Number.isFinite(+mx) ? hi : Math.max(+minR.value, Math.min(hi, mx)); sync(); },
+    hi,
     summary,
   };
 }
@@ -808,6 +826,26 @@ function readFilters() {
     ibpMin, ibpMax, ibpActive: ibpMin > 0 || ibpMax < 5,
     mineOnly: gMineOnly && !!gCurrentUser,
     users:   new Set($$('#user-filters .cat-pill.active').map(el => +el.dataset.owner)),
+    ...extraFilters(ibpMin, ibpMax),
+  };
+}
+// Filters added in v2: duration, ferrata grade, photos, several days, rating, the viewer's lists
+function extraFilters(ibpMin, ibpMax) {
+  const acts = $$('#cat-filters .cat-pill.active').map(el => el.dataset.activity);
+  const ferMode = acts.length === 1 && !!window.gpxFerrata && gpxFerrata.is(acts[0]);
+  const fer = $$('#fer-filters .cat-pill.active').map(el => +el.dataset.g);
+  const t = document.querySelector('#time-filters .cat-pill.active');
+  const [tmin, tmax] = t ? t.dataset.t.split('-').map(v => (v === '' ? null : +v)) : [null, null];
+  const flag = k => !!document.querySelector(`#flag-filters .cat-pill.active[data-flag="${k}"]`);
+  const r = document.querySelector('#rating-filters .cat-pill.active');
+  const my = document.querySelector('#my-filters .cat-pill.active');
+  return {
+    ferMode, ferMin: ferMode && fer.length ? Math.min(...fer) : null, ferMax: ferMode && fer.length ? Math.max(...fer) : null,
+    // A ferrata selection replaces the IBP range
+    ...(ferMode ? { ibpActive: false } : {}),
+    timeMin: tmin, timeMax: tmax, timeLabel: t ? t.textContent : '',
+    photos: flag('photos'), multi: flag('multi'),
+    ratingMin: r ? +r.dataset.r : null, my: my ? my.dataset.my : null, myLabel: my ? my.textContent : '',
   };
 }
 
@@ -832,6 +870,13 @@ function buildQuery(f, { starts, bbox = true } = {}) {
   if (f.eleMin > 0) sp.set('emin', f.eleMin);
   if (Number.isFinite(f.eleMax)) sp.set('emax', f.eleMax);
   if (f.ibpActive) { sp.set('gmin', f.ibpMin); sp.set('gmax', f.ibpMax); }
+  if (f.ferMin != null) { sp.set('fgmin', f.ferMin); sp.set('fgmax', f.ferMax); }
+  if (f.timeMin != null) sp.set('tmin', f.timeMin);
+  if (f.timeMax != null) sp.set('tmax', f.timeMax);
+  if (f.photos) sp.set('photos', '1');
+  if (f.multi) sp.set('multi', '1');
+  if (f.ratingMin != null) sp.set('rmin', f.ratingMin);
+  if (f.my && gCurrentUser) sp.set('my', f.my);
   if (f.year) sp.set('year', f.year);
   if (f.q) sp.set('q', f.q);
   if (geoFilter) sp.set('near', [geoFilter.lat, geoFilter.lon, geoFilter.radius].join(','));
@@ -853,6 +898,7 @@ function applyFilters(opts = {}) {
   clearTimeout(searchTimer);
   const f = readFilters();
   updateChips(f);
+  writeUrlState(f);
   if (opts.delay) searchTimer = setTimeout(() => runQuery(), opts.delay);
   else runQuery();
 }
@@ -930,10 +976,9 @@ const ACT_PHOTOS = {
 function trackItemHtml(track) {
   const c = getTrackColor(track);
   const act = track.activity || 'Otro';
-  const ibp = ibpForTrackV(track), li = gradeIdxV(track);
-  const gradeTitle = (ibp != null ? `IBP ${Math.round(ibp)} · ` : '') + IBP_LEVELS[li]?.label + (track.difficulty != null ? ' (indicada por el autor)' : '');
-  const ibpHtml = li >= 0
-    ? `<span class="ti-ibp" style="color:${IBP_LEVELS[li].color};background:${IBP_LEVELS[li].bg};border-color:${IBP_LEVELS[li].border}" title="${escHtml(gradeTitle)}">${IBP_LEVELS[li].label}</span>`
+  const gb = gradeBadgeV(track);
+  const ibpHtml = gb
+    ? `<span class="ti-ibp" style="color:${gb.color};background:${gb.bg};border-color:${gb.border}" title="${escHtml(gb.title)}">${escHtml(gb.label)}</span>`
     : '';
   const photo = track.cover || actConfig[act]?.image || ACT_PHOTOS[act];
   const ownerName = track.owner_username || '';
@@ -957,7 +1002,7 @@ function trackItemHtml(track) {
           <div class="ti-datum-lbl">Desnivel +</div>
           <div class="ti-datum-val">${nf0.format(track.elevationGain)} m</div>
         </div>
-        ${li >= 0 ? `<div class="ti-datum">
+        ${gb ? `<div class="ti-datum">
           <div class="ti-datum-lbl">Dificultad</div>
           <div class="ti-datum-val">${ibpHtml}</div>
         </div>` : ''}
@@ -1068,7 +1113,7 @@ tracklistEl.addEventListener('mouseleave', () => {
 $('sort-select').value = sortMode;
 $('sort-select').addEventListener('change', e => {
   sortMode = e.target.value;
-  try { localStorage.setItem('visor-sort', sortMode); } catch {}
+  if (sortMode !== 'near') { sortBeforeNear = null; try { localStorage.setItem('visor-sort', sortMode); localStorage.setItem('visor-sort-v2', '1'); } catch {} }
   applyFilters();
 });
 
@@ -1082,6 +1127,26 @@ function updateFilterCounts(f, facets) {
   upd('#cat-filters .cat-pill', 'activity', facets.activity, f.acts);
   upd('#sierra-filters .cat-pill', 'sierra', facets.sierra, f.sierras);
   upd('#tag-filters .cat-pill', 'tag', facets.tags, f.tags);
+  limitPills('sierra-filters', 'sierra-q', 'sierra-more', 'sierra-scope', 'zonas');
+}
+
+// Long pill lists (zones, users): the most used first, at most PILL_MAX unless searching; chosen ones always show
+const PILL_MAX = 16;
+function limitPills(boxId, qId, moreId, scopeId, noun) {
+  const q = norm($(qId).value.trim());
+  const pills = $$(`#${boxId} .cat-pill`);
+  const cnt = p => +(p.querySelector('.cat-count')?.textContent || 0);
+  const avail = pills.filter(p => !p.classList.contains('pill-empty') || p.classList.contains('active'));
+  const ranked = avail.sort((a, b) => b.classList.contains('active') - a.classList.contains('active') || cnt(b) - cnt(a) ||
+    a.textContent.localeCompare(b.textContent, 'es'));
+  const hits = q ? ranked.filter(p => norm(p.textContent).includes(q)) : ranked;
+  const shown = new Set(hits.slice(0, PILL_MAX));
+  pills.forEach(p => { p.hidden = !shown.has(p); });
+  ranked.forEach((p, i) => { p.style.order = i; });
+  const rest = hits.length - shown.size;
+  $(moreId).textContent = rest > 0 ? `Y ${rest} ${noun} más: escribe para buscarlas.` : q && !hits.length ? 'Ninguna coincide.' : '';
+  $(qId).hidden = avail.length <= PILL_MAX && !q;
+  if (scopeId) $(scopeId).textContent = avail.length ? `${avail.length} con rutas` : '';
 }
 
 // ── Chip labels ──────────────────────────────────────────────────────
@@ -1101,23 +1166,45 @@ function updateChips(f) {
   setChip('sierra', multiLabel(f.sierras, 'Zonas', v => v), f.sierras.size);
   setChip('dist',   sliders.dist?.summary(), sliders.dist?.isActive());
   setChip('ele',    sliders.ele?.summary() && `↑ ${sliders.ele.summary()}`, sliders.ele?.isActive());
-  setChip('ibp',    f.ibpActive ? $('ibp-rs-label').textContent : '', f.ibpActive);
+  syncDifficultyMode(f);
+  setChip('ibp',    f.ferMode ? (f.ferMin != null ? ferLabel(f) : '') : f.ibpActive ? $('ibp-rs-label').textContent : '', f.ferMode ? f.ferMin != null : f.ibpActive);
+  setChip('time',   f.timeLabel, f.timeMin != null || f.timeMax != null);
   const more = [];
   if (f.rtype.has('circular')) more.push('Circular');
   if (f.rtype.has('lineal'))   more.push('Lineal');
   if (f.year) more.push(f.year);
+  if (f.photos) more.push('Con fotos');
+  if (f.multi) more.push('Varios días');
+  if (f.ratingMin != null) more.push(`★ ${f.ratingMin}+`);
+  if (f.my) more.push(f.myLabel);
   if (f.tags.size) more.push(f.tags.size === 1 ? '#' + [...f.tags][0] : `${f.tags.size} etiquetas`);
   setChip('more', more.join(' · '), more.length);
   const userName = id => META.owners.find(o => o.id === id)?.username || 'Usuario';
   setChip('users', multiLabel(f.users, 'Usuarios', userName), f.users.size);
   $('chip-my-tracks').classList.toggle('active', f.mineOnly);
-  $('clear-filters-btn').hidden = countActiveFilters(f) === 0;
+  const n = countActiveFilters(f);
+  $('clear-filters-btn').hidden = n === 0;
+  $('chip-filters-lbl').textContent = n ? `Filtros · ${n}` : 'Filtros';
+  $('chip-filters').classList.toggle('active', n > 0);
+}
+const ferLabel = f => {
+  const g = gpxFerrata.grades;
+  return f.ferMin === f.ferMax ? `Ferrata ${g[f.ferMin].label}` : `Ferrata ${g[f.ferMin].label}–${g[f.ferMax].label}`;
+};
+// Dificultad: the IBP slider, or the ferrata grades when the chosen activity is Ferratas
+function syncDifficultyMode(f) {
+  $('fer-box').hidden = !f.ferMode;
+  $('ibp-box').hidden = f.ferMode;
+  $('ibp-title').textContent = f.ferMode ? 'Grado de la ferrata' : 'Dificultad IBP';
+  $('ibp-rs-label').hidden = f.ferMode;
 }
 function countActiveFilters(f) {
   return f.acts.size + f.sierras.size + f.tags.size + f.rtype.size +
     (f.ibpActive ? 1 : 0) + (geoFilter ? 1 : 0) +
     (sliders.dist?.isActive() ? 1 : 0) + (sliders.ele?.isActive() ? 1 : 0) +
-    (f.year ? 1 : 0) + (f.q ? 1 : 0) + (f.mineOnly ? 1 : 0) + f.users.size;
+    (f.year ? 1 : 0) + (f.q ? 1 : 0) + (f.mineOnly ? 1 : 0) + f.users.size +
+    (f.ferMin != null ? 1 : 0) + (f.timeMin != null || f.timeMax != null ? 1 : 0) + (f.photos ? 1 : 0) + (f.multi ? 1 : 0) +
+    (f.ratingMin != null ? 1 : 0) + (f.my ? 1 : 0);
 }
 
 // ── Build filter UI ──────────────────────────────────────────────────
@@ -1161,6 +1248,35 @@ function buildFilters() {
       pill.classList.toggle('active'); applyFilters();
     });
   }
+
+  // Searchable long lists
+  $('sierra-q').addEventListener('input', () => limitPills('sierra-filters', 'sierra-q', 'sierra-more', 'sierra-scope', 'zonas'));
+  $('user-q').addEventListener('input', () => limitPills('user-filters', 'user-q', 'user-more', null, 'usuarios'));
+  limitPills('user-filters', 'user-q', 'user-more', null, 'usuarios');
+
+  // Ferrata grades (several = a range); duration, rating and «mis rutas» are single-choice; flags toggle
+  if (window.gpxFerrata) $('fer-filters').innerHTML = gpxFerrata.grades.map((g, i) =>
+    `<div class="cat-pill" data-g="${i}" title="${escHtml(g.name)}"><span class="cat-dot" style="background:${gpxFerrata.colors[i]}"></span>${g.label} · ${escHtml(g.name)}</div>`).join('');
+  const single = id => $(id).addEventListener('click', e => {
+    const pill = e.target.closest('.cat-pill'); if (!pill) return;
+    const on = !pill.classList.contains('active');
+    $$(`#${id} .cat-pill`).forEach(p => p.classList.remove('active'));
+    pill.classList.toggle('active', on); applyFilters();
+  });
+  ['time-filters', 'rating-filters', 'my-filters'].forEach(single);
+  ['fer-filters', 'flag-filters'].forEach(id => $(id).addEventListener('click', e => {
+    const pill = e.target.closest('.cat-pill'); if (!pill) return;
+    pill.classList.toggle('active'); applyFilters();
+  }));
+  if (gCurrentUser) $('my-section').hidden = false;
+  // Distance / ascent presets set the slider
+  $$('.preset-pills').forEach(box => box.addEventListener('click', e => {
+    const pill = e.target.closest('.cat-pill'); if (!pill) return;
+    sliders[box.dataset.slider].set(+pill.dataset.min, pill.dataset.max === '' ? null : +pill.dataset.max);
+    applyFilters();
+  }));
+  // Phones: the «Filtros» button opens / closes the chips panel
+  $('chip-filters').addEventListener('click', () => { $('chips').classList.toggle('expanded'); closePopover(); });
 
   const tagMap = UNIVERSE.tags;
   if (Object.keys(tagMap).length) {
@@ -1219,13 +1335,14 @@ function updateIbpSlider() {
 // ── Reset helpers ────────────────────────────────────────────────────
 const RESETS = {
   act:    () => $$('#cat-filters .cat-pill.active').forEach(p => p.classList.remove('active')),
-  sierra: () => $$('#sierra-filters .cat-pill.active').forEach(p => p.classList.remove('active')),
+  sierra: () => { $$('#sierra-filters .cat-pill.active').forEach(p => p.classList.remove('active')); $('sierra-q').value = ''; },
   tags:   () => $$('#tag-filters .cat-pill.active').forEach(p => p.classList.remove('active')),
   dist:   () => sliders.dist.reset(),
   ele:    () => sliders.ele.reset(),
-  ibp:    () => { $('ibp-rs-min').value = 0; $('ibp-rs-max').value = 5; updateIbpSlider(); },
-  more:   () => { $$('#route-type-filters .cat-pill.active, #tag-filters .cat-pill.active').forEach(p => p.classList.remove('active')); $('year-filter').value = ''; },
-  users:  () => $$('#user-filters .cat-pill.active').forEach(p => p.classList.remove('active')),
+  ibp:    () => { $('ibp-rs-min').value = 0; $('ibp-rs-max').value = 5; updateIbpSlider(); $$('#fer-filters .cat-pill.active').forEach(p => p.classList.remove('active')); },
+  time:   () => $$('#time-filters .cat-pill.active').forEach(p => p.classList.remove('active')),
+  more:   () => { $$('#route-type-filters .cat-pill.active, #tag-filters .cat-pill.active, #flag-filters .cat-pill.active, #rating-filters .cat-pill.active, #my-filters .cat-pill.active').forEach(p => p.classList.remove('active')); $('year-filter').value = ''; },
+  users:  () => { $$('#user-filters .cat-pill.active').forEach(p => p.classList.remove('active')); $('user-q').value = ''; limitPills('user-filters', 'user-q', 'user-more', null, 'usuarios'); },
   mine:   () => { gMineOnly = false; },
   geo:    () => clearGeoFilter(),
 };
@@ -1457,8 +1574,51 @@ window.addEventListener('resize', () => {
   }, 200);
 });
 
+// ── Filters in the URL (shareable searches) ──────────────────────────
+// Same names as /api/search, without the box, page and drawing hints. ?id= (open route) and ?ids= are kept.
+function writeUrlState(f) {
+  const sp = new URLSearchParams(buildQuery(f, { bbox: false }));
+  ['page', 'size', 'line', 'starts', 'ids'].forEach(k => sp.delete(k));
+  if (sp.get('sort') === 'date') sp.delete('sort');
+  if (geoFilter) sp.set('nearname', geoFilter.name || '');
+  const cur = new URLSearchParams(location.search);
+  for (const k of ['id', 'ids']) if (cur.get(k)) sp.set(k, cur.get(k));
+  const qs = sp.toString();
+  if (qs !== location.search.slice(1)) history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+}
+function readUrlState(sp) {
+  const on = (sel, attr, vals) => { const set = new Set(vals); $$(sel).forEach(p => p.classList.toggle('active', set.has(p.dataset[attr]))); };
+  on('#cat-filters .cat-pill', 'activity', sp.getAll('act'));
+  on('#sierra-filters .cat-pill', 'sierra', sp.getAll('sierra'));
+  on('#tag-filters .cat-pill', 'tag', sp.getAll('tag'));
+  on('#route-type-filters .cat-pill', 'rtype', sp.getAll('rtype'));
+  on('#user-filters .cat-pill', 'owner', sp.getAll('user'));
+  const n = k => (sp.get(k) === null || sp.get(k) === '' ? null : +sp.get(k));
+  if (n('dmin') != null || n('dmax') != null) sliders.dist.set(n('dmin') ?? 0, n('dmax'));
+  if (n('emin') != null || n('emax') != null) sliders.ele.set(n('emin') ?? 0, n('emax'));
+  if (n('gmin') != null) { $('ibp-rs-min').value = n('gmin'); $('ibp-rs-max').value = n('gmax') ?? 5; updateIbpSlider(); }
+  if (n('fgmin') != null) $$('#fer-filters .cat-pill').forEach(p => p.classList.toggle('active', +p.dataset.g >= n('fgmin') && +p.dataset.g <= (n('fgmax') ?? 5)));
+  if (n('tmin') != null || n('tmax') != null) { const t = `${n('tmin') ?? 0}-${n('tmax') ?? ''}`; on('#time-filters .cat-pill', 't', [t]); }
+  on('#flag-filters .cat-pill', 'flag', ['photos', 'multi'].filter(k => sp.get(k) === '1'));
+  if (n('rmin') != null) on('#rating-filters .cat-pill', 'r', [String(n('rmin'))]);
+  if (sp.get('my') && gCurrentUser) on('#my-filters .cat-pill', 'my', [sp.get('my')]);
+  if (sp.get('year')) $('year-filter').value = sp.get('year');
+  if (sp.get('q')) { $('text-search').value = sp.get('q'); $('search-clear').hidden = false; }
+  if (sp.get('mine') === '1' && gCurrentUser) gMineOnly = true;
+  if (sp.get('sort') && SORT_KEYS.includes(sp.get('sort')) && sp.get('sort') !== 'near') { sortMode = sp.get('sort'); $('sort-select').value = sortMode; }
+  const near = (sp.get('near') || '').split(',').map(Number);
+  if (near.length === 3 && near.every(Number.isFinite)) {
+    $$('#geo-radius .cat-pill').forEach(p => p.classList.toggle('active', +p.dataset.r === near[2]));
+    geoFilter = { lat: near[0], lon: near[1], radius: near[2], name: sp.get('nearname') || 'Lugar' };
+    setNearSort(true);
+    drawGeo(false);
+  }
+  return near.length === 3 && near.every(Number.isFinite);
+}
+
 // ── Init ─────────────────────────────────────────────────────────────
 buildFilters();
+const _urlHasNear = readUrlState(new URLSearchParams(location.search));
 const _qp = new URLSearchParams(location.search);
 (_qp.get('ids') || '').split(',').map(Number).filter(Boolean).forEach(id => idSet.add(id));
 const fitNow = (b, z) => map.fitBounds(b, { ...fitPadding(), maxZoom: z, animate: false });
@@ -1469,6 +1629,8 @@ if (idSet.size) {
     const bs = d.items.flatMap(it => it.bounds);
     if (bs.length) fitNow(L.latLngBounds(bs), 12);
   } catch {}
+} else if (_urlHasNear) {
+  fitNow(geoCircle.getBounds(), 13);
 } else if (META.core) {
   // Where most routes are, so a few far-away outliers don't zoom the map out to a continent
   fitNow(L.latLngBounds(META.core), 12);

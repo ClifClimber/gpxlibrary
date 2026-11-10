@@ -128,6 +128,14 @@
     .cb { accent-color:var(--text); }
     .empty-td { padding:40px 20px; text-align:center; color:var(--muted); font-size:13px; }
 
+    /* Grouped filter popovers (Ubicación, Más filtros) */
+    .pop-sec + .pop-sec { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+    .pop-sub { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 7px; }
+    .pop-scroll-s { max-height: 132px; overflow-y: auto; padding-right: 2px; }
+    .pop-loc .pill-empty { display: none; }      /* only the places that fit what is already chosen */
+    .pop-loc .loc-search { width: 100%; height: 32px; font-size: 13px; margin-bottom: 8px; }
+    .pop-loc .loc-more { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .pop-sub span { font-weight: 500; text-transform: none; letter-spacing: 0; }
     /* ── Inline edit row ───────────────────── */
     tr.inline-edit-row td { background:color-mix(in srgb,#0ea5e9 14%,transparent); padding:12px 16px; }
     .edit-form { display:flex; flex-direction:column; gap:10px; }
@@ -320,12 +328,12 @@
     </div>
     <div id="chips">
       <button class="chip" data-pop="f-activity"><span class="chip-lbl" data-default="Actividad">Actividad</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-      <button class="chip" data-pop="f-sierra"><span class="chip-lbl" data-default="Zona">Zona</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-      <button class="chip" data-pop="f-province"><span class="chip-lbl" data-default="Provincia">Provincia</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-      <button class="chip" data-pop="f-ccaa"><span class="chip-lbl" data-default="CCAA">CCAA</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-      <button class="chip" data-pop="f-ibp"><span class="chip-lbl" data-default="Dificultad">Dificultad</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
-      <button class="chip" data-pop="f-circular"><span class="chip-lbl" data-default="Recorrido">Recorrido</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" data-pop="f-loc"><span class="chip-lbl" data-default="Ubicación">Ubicación</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" data-pop="f-vis"><span class="chip-lbl" data-default="Visibilidad">Visibilidad</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" data-pop="f-fix"><span class="chip-lbl" data-default="Revisar">Revisar</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" data-pop="f-anom"><span class="chip-lbl" data-default="Anomalías">Anomalías</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip admin-only" data-pop="f-owner"><span class="chip-lbl" data-default="Dueño">Dueño</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="chip" data-pop="f-more"><span class="chip-lbl" data-default="Más filtros">Más filtros</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
       <button class="chip chip-toggle" id="btn-last-import" title="Mostrar solo la última importación" style="display:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Última importación
@@ -367,15 +375,17 @@
     <option value="0">↔ Lineal</option>
   </select>
   <select class="tb-select" id="f-owner"><option value="">Todos los dueños</option></select>
+  <select class="tb-select" id="f-vis"><option value="">Todas</option></select>
+  <select class="tb-select" id="f-anom"><option value="">Todas</option></select>
 </div>
 
 <!-- Chip popovers -->
 <div class="popover" id="pop-f-activity"><div class="pop-title">Actividad</div><div class="cat-pills pop-scroll" data-for="f-activity"></div><div class="pop-foot"><button class="pop-reset" data-for="f-activity">Borrar</button></div></div>
-<div class="popover pop-wide" id="pop-f-sierra"><div class="pop-title">Sierra / Zona</div><div class="cat-pills pop-scroll" data-for="f-sierra"></div><div class="pop-foot"><button class="pop-reset" data-for="f-sierra">Borrar</button></div></div>
-<div class="popover pop-wide" id="pop-f-province"><div class="pop-title">Provincia</div><div class="cat-pills pop-scroll" data-for="f-province"></div><div class="pop-foot"><button class="pop-reset" data-for="f-province">Borrar</button></div></div>
-<div class="popover pop-wide" id="pop-f-ccaa"><div class="pop-title">Comunidad autónoma</div><div class="cat-pills pop-scroll" data-for="f-ccaa"></div><div class="pop-foot"><button class="pop-reset" data-for="f-ccaa">Borrar</button></div></div>
-<div class="popover" id="pop-f-ibp"><div class="pop-title">Dificultad IBP</div><div class="cat-pills" data-for="f-ibp"></div><div class="pop-foot"><button class="pop-reset" data-for="f-ibp">Borrar</button></div></div>
-<div class="popover" id="pop-f-circular"><div class="pop-title">Tipo de recorrido</div><div class="cat-pills" data-for="f-circular"></div><div class="pop-foot"><button class="pop-reset" data-for="f-circular">Borrar</button></div></div>
+<div class="popover pop-wide pop-loc" id="pop-f-loc"><div class="pop-title">Ubicación</div><div class="pop-sec"><div class="pop-sub">1 · Comunidad autónoma</div><div class="cat-pills pop-scroll-s" data-for="f-ccaa"></div></div><div class="pop-sec"><div class="pop-sub">2 · Sierra o zona <span id="loc-zone-scope"></span></div><input type="search" class="input loc-search" id="loc-zone-q" placeholder="Buscar zona…" autocomplete="off"><div class="cat-pills" data-for="f-sierra"></div><div class="loc-more" id="loc-zone-more"></div></div><div class="pop-foot"><button class="pop-reset" data-for="f-ccaa,f-sierra">Borrar</button></div></div>
+<div class="popover" id="pop-f-vis"><div class="pop-title">Visibilidad</div><div class="cat-pills" data-for="f-vis"></div><div class="pop-foot"><button class="pop-reset" data-for="f-vis">Borrar</button></div></div>
+<div class="popover pop-wide" id="pop-f-fix"><div class="pop-title">Rutas con datos que arreglar <span style="font-weight:400;color:var(--muted);font-size:12px">(cualquiera de los marcados)</span></div><div class="cat-pills fix-pills"></div><div class="pop-foot"><button class="pop-reset" data-for="f-fix">Borrar</button></div></div>
+<div class="popover" id="pop-f-anom"><div class="pop-title">Puntos GPS anómalos</div><div class="cat-pills" data-for="f-anom"></div><div class="pop-foot"><button class="pop-reset" data-for="f-anom">Borrar</button></div></div>
+<div class="popover" id="pop-f-more"><div class="pop-title">Más filtros</div><div class="pop-sec"><div class="pop-sub">Dificultad</div><div class="cat-pills" data-for="f-ibp"></div></div><div class="pop-sec"><div class="pop-sub">Recorrido</div><div class="cat-pills" data-for="f-circular"></div></div><div class="pop-foot"><button class="pop-reset" data-for="f-ibp,f-circular">Borrar</button></div></div>
 <div class="popover" id="pop-f-owner"><div class="pop-title">Dueño de la ruta</div><div class="cat-pills pop-scroll" data-for="f-owner"></div><div class="pop-foot"><button class="pop-reset" data-for="f-owner">Borrar</button></div></div>
 
 <!-- Selection bar -->
@@ -1048,21 +1058,27 @@ function applyFilters() {
   const fCirc = document.getElementById('f-circular').value;
   const fOwn = document.getElementById('f-owner').value;
 
+  const fVis = document.getElementById('f-vis').value;
+  const fAnom = document.getElementById('f-anom').value;
   const qn = normTxt(q);
-  function matchRow(t, skipAct, skipPro, skipCCA, skipSie, skipOwn) {
+  // skip: the filter whose own options are being counted (its pills show what choosing them would give)
+  function matchRow(t, skip) {
     if (qn && !normTxt(`${t.name} ${t.sierra||''} ${t.zone||''} ${t.tags||''} ${t.owner||''}`).includes(qn)) return false;
-    if (!skipOwn && fOwn && t.owner !== fOwn) return false;
-    if (!skipAct && fAct && t.activity !== fAct) return false;
-    if (!skipPro && fPro && t.province !== fPro) return false;
-    if (!skipCCA && fCCA && t.ccaa     !== fCCA) return false;
-    if (!skipSie && fSie && t.sierra   !== fSie) return false;
-    if (fIbp !== '') { if (gradeIdx(t) !== parseInt(fIbp)) return false; }
-    if (fCirc !== '' && String(t.circular ? 1 : 0) !== fCirc) return false;
+    if (skip !== 'own' && fOwn && t.owner !== fOwn) return false;
+    if (skip !== 'act' && fAct && t.activity !== fAct) return false;
+    if (skip !== 'pro' && fPro && t.province !== fPro) return false;
+    if (skip !== 'cca' && fCCA && t.ccaa     !== fCCA) return false;
+    if (skip !== 'sie' && fSie && t.sierra   !== fSie) return false;
+    if (skip !== 'vis' && fVis && visOf(t) !== fVis) return false;
+    if (skip !== 'anom' && fAnom && anomOf(t) !== fAnom) return false;
+    if (skip !== 'fix' && fixSet.size && ![...fixSet].some(k => FIX[k].test(t))) return false;
+    if (skip !== 'ibp' && fIbp !== '') { if (gradeIdx(t) !== parseInt(fIbp)) return false; }
+    if (skip !== 'circ' && fCirc !== '' && String(t.circular ? 1 : 0) !== fCirc) return false;
     if (lastImportFilter && !t.is_recent_import) return false;
     return true;
   }
 
-  filtered = allTracks.filter(t => matchRow(t, false, false, false, false));
+  filtered = allTracks.filter(t => matchRow(t));
   // Always keep the editing track visible even if filters hide it
   if (editingId !== null && !filtered.find(t => t.id === editingId)) {
     const editT = allTracks.find(t => t.id === editingId);
@@ -1075,19 +1091,15 @@ function applyFilters() {
     : `${filtered.length} rutas <small>de ${allTracks.length}</small>`;
   updateSelBar();
   updateSearchChip();
-  updateSelectOptions(matchRow, fAct, fPro, fCCA, fSie, fOwn);
+  updateSelectOptions(matchRow, fAct, fPro, fCCA, fSie, fOwn, fVis, fAnom);
   updateChips();
 }
 
-function updateSelectOptions(matchRow, fAct, fPro, fCCA, fSie, fOwn) {
+function updateSelectOptions(matchRow, fAct, fPro, fCCA, fSie, fOwn, fVis, fAnom) {
   function counts(tracks) {
     const c = {}; tracks.forEach(t => { if (t) c[t] = (c[t]||0)+1; }); return c;
   }
-  const actC  = counts(allTracks.filter(t=>matchRow(t,true, false,false,false)).map(t=>t.activity));
-  const proC  = counts(allTracks.filter(t=>matchRow(t,false,true, false,false)).map(t=>t.province));
-  const ccaaC = counts(allTracks.filter(t=>matchRow(t,false,false,true, false)).map(t=>t.ccaa));
-  const sieC  = counts(allTracks.filter(t=>matchRow(t,false,false,false,true )).map(t=>t.sierra));
-  const ownC  = counts(allTracks.filter(t=>matchRow(t,false,false,false,false,true)).map(t=>t.owner));
+  const by = (skip, f) => counts(allTracks.filter(t => matchRow(t, skip)).map(f));
 
   function rebuild(id, countMap, currentVal) {
     const sel = document.getElementById(id);
@@ -1099,13 +1111,51 @@ function updateSelectOptions(matchRow, fAct, fPro, fCCA, fSie, fOwn) {
       return `<option value="${escHtml(v)}"${v===currentVal?' selected':''}${disabled}>${escHtml(v)}${n?' ('+n+')':' (0)'}</option>`;
     }).join('');
   }
+  // Fixed lists (visibility, anomalies): our labels, counts that follow the other filters
+  function rebuildFixed(id, opts, countMap, currentVal) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = sel.options[0].outerHTML + opts.map(([v, label]) => {
+      const n = countMap[v] || 0;
+      return `<option value="${v}"${v===currentVal?' selected':''}${n===0&&v!==currentVal?' disabled':''}>${escHtml(label)} (${n})</option>`;
+    }).join('');
+  }
 
-  rebuild('f-activity', actC,  fAct);
-  rebuild('f-province', proC,  fPro);
-  rebuild('f-ccaa',     ccaaC, fCCA);
-  rebuild('f-sierra',   sieC,  fSie);
-  rebuild('f-owner',    ownC,  fOwn);
+  rebuild('f-activity', by('act', t => t.activity), fAct);
+  rebuild('f-province', by('pro', t => t.province), fPro);
+  rebuild('f-ccaa',     by('cca', t => t.ccaa),     fCCA);
+  rebuild('f-sierra',   by('sie', t => t.sierra),   fSie);
+  rebuild('f-owner',    by('own', t => t.owner),    fOwn);
+  rebuildFixed('f-vis',  VIS_OPTS,  by('vis', visOf),  fVis);
+  rebuildFixed('f-anom', ANOM_OPTS, by('anom', anomOf), fAnom);
+  // «Revisar»: how many of the routes the other filters leave have each problem
+  const base = allTracks.filter(t => matchRow(t, 'fix'));
+  fixCounts = Object.fromEntries(Object.keys(FIX).map(k => [k, base.filter(FIX[k].test).length]));
 }
+
+// ── State and data-quality filters ─────────────────────────────────
+const VIS_OPTS  = [['public', 'Públicas'], ['private', 'Privadas'], ['planned', 'Planeadas']];
+const ANOM_OPTS = [['pending', 'Pendientes de quitar'], ['applied', 'Ya quitadas'], ['dismissed', 'Ignoradas por el dueño'], ['none', 'Sin anomalías']];
+const visOf  = t => (t.planned ? 'planned' : t.visibility === 'public' ? 'public' : 'private');
+const anomOf = t => t.anomaly_state || 'none';
+const plainText = h => String(h || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
+const FIX = {
+  noact:   { label: 'Sin actividad o sin zona',  test: t => !t.activity || !(t.sierra || t.zone) },
+  revisar: { label: 'Con la etiqueta «revisar»', test: t => /"revisar"/.test(t.tags || '') },
+  nodesc:  { label: 'Sin descripción',           test: t => !plainText(t.notes) },
+  nocover: { label: 'Sin foto de portada',       test: t => !t.cover_photo_id },
+  unconf:  { label: 'Enlace a otra web sin confirmar (no se ve fuera de la app)', test: t => !!t.url && !t.source_confirmed },
+};
+const fixSet = new Set();
+let fixCounts = {};
+function renderFixPills() {
+  document.querySelector('.fix-pills').innerHTML = Object.entries(FIX).map(([k, f]) =>
+    `<div class="cat-pill${fixSet.has(k) ? ' active' : ''}${!fixCounts[k] && !fixSet.has(k) ? ' pill-empty' : ''}" data-fix="${k}">${escHtml(f.label)}<span class="cat-count">${fixCounts[k] || 0}</span></div>`).join('');
+}
+document.querySelector('.fix-pills').addEventListener('click', e => {
+  const p = e.target.closest('.cat-pill[data-fix]'); if (!p) return;
+  if (fixSet.has(p.dataset.fix)) fixSet.delete(p.dataset.fix); else fixSet.add(p.dataset.fix);
+  applyFilters();
+});
 
 function normTxt(s) {
   return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -1116,14 +1166,37 @@ function updateSearchChip() {
 }
 
 // ── Filter chips + popovers (drive the hidden selects) ─────────────
-const FILTER_IDS = ['f-activity','f-sierra','f-province','f-ccaa','f-ibp','f-circular','f-owner'];
+const FILTER_IDS = ['f-activity','f-sierra','f-ccaa','f-ibp','f-circular','f-owner','f-vis','f-anom'];
+// The chip that shows each filter: some chips group several (the most specific chosen place is shown)
+const CHIP_GROUPS = { 'f-activity': ['f-activity'], 'f-loc': ['f-sierra', 'f-ccaa'], 'f-vis': ['f-vis'], 'f-anom': ['f-anom'], 'f-owner': ['f-owner'], 'f-more': ['f-ibp', 'f-circular'] };
 
 function optParts(opt) {
   const m = opt.textContent.match(/^(.*) \((\d+)\)$/);
   return m ? { label: m[1], count: m[2] } : { label: opt.textContent, count: null };
 }
 
+const ZONE_MAX = 16;
+function renderZonePills() {
+  const sel = document.getElementById('f-sierra');
+  const box = document.querySelector('.cat-pills[data-for="f-sierra"]');
+  const q = normTxt(document.getElementById('loc-zone-q').value.trim());
+  const opts = [...sel.options].slice(1).map(o => ({ v: o.value, ...optParts(o), o }))
+    .filter(x => !x.o.disabled || x.v === sel.value)                       // only zones of the chosen community
+    .sort((a, b) => (b.v === sel.value) - (a.v === sel.value) || (+b.count || 0) - (+a.count || 0) || a.label.localeCompare(b.label, 'es'));
+  const hits = q ? opts.filter(x => normTxt(x.label).includes(q)) : opts;
+  const shown = hits.slice(0, ZONE_MAX);
+  box.innerHTML = shown.map(x => `<div class="cat-pill${x.v === sel.value ? ' active' : ''}" data-v="${escHtml(x.v)}">${escHtml(x.label)}${x.count !== null ? `<span class="cat-count">${x.count}</span>` : ''}</div>`).join('')
+    || `<span style="font-size:12px;color:var(--muted)">${q ? 'Ninguna zona con ese nombre' : 'Sin zonas'}</span>`;
+  const rest = hits.length - shown.length;
+  document.getElementById('loc-zone-more').textContent = rest > 0 ? `Y ${rest} zona${rest === 1 ? '' : 's'} más: escribe para buscarlas.` : '';
+  const ccaa = document.getElementById('f-ccaa').value;
+  document.getElementById('loc-zone-scope').textContent = ccaa ? `· en ${ccaa} (${opts.length})` : `· ${opts.length} en total`;
+  document.getElementById('loc-zone-q').hidden = opts.length <= ZONE_MAX;   // the search box only when there are many
+}
+document.getElementById('loc-zone-q').addEventListener('input', renderZonePills);
+
 function renderPopPills(selId) {
+  if (selId === 'f-sierra') return renderZonePills();
   const sel = document.getElementById(selId);
   const box = document.querySelector(`.cat-pills[data-for="${selId}"]`);
   box.innerHTML = [...sel.options].slice(1).map(o => {
@@ -1135,17 +1208,24 @@ function renderPopPills(selId) {
 }
 
 function updateChips() {
-  let any = !!document.getElementById('search-input').value.trim() || lastImportFilter;
-  FILTER_IDS.forEach(id => {
-    const sel = document.getElementById(id);
-    const chip = document.querySelector(`.chip[data-pop="${id}"]`);
+  let any = !!document.getElementById('search-input').value.trim() || lastImportFilter || fixSet.size > 0;
+  FILTER_IDS.forEach(renderPopPills);
+  for (const [chipId, ids] of Object.entries(CHIP_GROUPS)) {
+    const chip = document.querySelector(`.chip[data-pop="${chipId}"]`); if (!chip) continue;
     const lbl = chip.querySelector('.chip-lbl');
-    const on = !!sel.value;
-    lbl.textContent = on ? optParts(sel.options[sel.selectedIndex]).label : lbl.dataset.default;
+    const chosen = ids.map(id => document.getElementById(id)).filter(sel => sel.value);
+    const on = chosen.length > 0;
+    const text = sel => optParts(sel.options[sel.selectedIndex]).label;
+    lbl.textContent = !on ? lbl.dataset.default
+      : chipId === 'f-more' ? chosen.map(sel => text(sel).replace(/^[^A-Za-zÁÉÍÓÚáéíóú]+/, '').replace(/ \(.*\)$/, '')).join(' · ')
+      : text(chosen[0]);
     chip.classList.toggle('active', on);
     if (on) any = true;
-    renderPopPills(id);
-  });
+  }
+  const fixChip = document.querySelector('.chip[data-pop="f-fix"]');
+  fixChip.querySelector('.chip-lbl').textContent = fixSet.size ? `Revisar · ${fixSet.size}` : 'Revisar';
+  fixChip.classList.toggle('active', fixSet.size > 0);
+  renderFixPills();
   document.getElementById('tb-clear').hidden = !any;
   if (openPop) positionPopover(openPop.pop, openPop.chip);
 }
@@ -1154,10 +1234,11 @@ document.querySelectorAll('.cat-pills[data-for]').forEach(box => box.addEventLis
   const pill = e.target.closest('.cat-pill'); if (!pill) return;
   const sel = document.getElementById(box.dataset.for);
   sel.value = sel.value === pill.dataset.v ? '' : pill.dataset.v;
+  if (sel.id === 'f-ccaa') { document.getElementById('f-sierra').value = ''; document.getElementById('loc-zone-q').value = ''; }
   applyFilters();
 }));
 document.querySelectorAll('.pop-reset[data-for]').forEach(btn => btn.addEventListener('click', () => {
-  document.getElementById(btn.dataset.for).value = '';
+  for (const id of btn.dataset.for.split(',')) { if (id === 'f-fix') fixSet.clear(); else document.getElementById(id).value = ''; }
   applyFilters();
 }));
 
@@ -1313,11 +1394,8 @@ function renderTable() {
     });
   });
   tbody.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = parseInt(btn.dataset.id);
-      editingId = editingId === id ? null : id;
-      renderTable();
-    });
+    // The same edit form as the route page (the inline row of the catalog is no longer used)
+    btn.addEventListener('click', () => { location.href = '/subir?edit=' + parseInt(btn.dataset.id); });
   });
   tbody.querySelectorAll('.export-btn').forEach(btn => {
     btn.addEventListener('click', () => openExportModal([parseInt(btn.dataset.id)]));
@@ -1568,7 +1646,8 @@ if (initSortTh) initSortTh.classList.add(sort.dir === 'asc' ? 'sorted-asc' : 'so
 });
 document.getElementById('tb-clear').addEventListener('click', () => {
   document.getElementById('search-input').value = '';
-  ['f-activity','f-province','f-ccaa','f-sierra','f-ibp','f-circular'].forEach(id => document.getElementById(id).value = '');
+  ['f-activity','f-province','f-ccaa','f-sierra','f-ibp','f-circular','f-vis','f-anom'].forEach(id => document.getElementById(id).value = '');
+  fixSet.clear();
   lastImportFilter = false;
   document.getElementById('btn-last-import').classList.remove('active');
   closePopover();

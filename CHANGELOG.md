@@ -2,6 +2,28 @@
 
 ## Sin publicar
 
+---
+
+## v2.23.0 — 2026-11-10
+
+- **Visor: filtros nuevos y mejorados**
+  - **Duración** (tiempo en marcha: menos de 2 h, 2–4 h, 4–6 h, más de 6 h)
+  - **Atajos** en Distancia y Desnivel («10–20 km», «Más de 1500 m»…) además de los deslizadores
+  - En «Más filtros»: rutas **con fotos**, de **varios días** (la misma regla que Admin → Varios días), **valoración** (★ 4 o más, ★ 3 o más) y, con sesión, **mis rutas guardadas** (en mis listas, la he hecho, pendientes de hacer)
+  - **Dificultad de las ferratas**: si la actividad elegida es Ferratas, el filtro pasa a la escala F–ED (el grado indicado por el autor) en lugar del IBP
+  - **Zonas y usuarios** sin desbordarse: primero las más usadas (como mucho 16) y un buscador cuando hay más
+  - **Orden**: por defecto «Más recientes» (antes «Nombre A–Z»); nuevos «Mejor valoradas», «Desnivel ↑», «Duración ↑» y «Más cerca», que se elige solo al buscar un lugar y se quita al quitarlo
+  - **Los filtros quedan en la dirección** (`/?act=MTB&tmin=120&tmax=240…`): se puede compartir una búsqueda o volver a ella
+  - **Móvil**: un botón «Filtros · N» que despliega todos los filtros en un panel, en lugar de una fila que se salía de la pantalla
+  - El filtro de año ya no muestra años imposibles; la ruta con fecha «1899» (fecha cero de Excel) queda sin fecha
+  - Servidor: `/api/search` acepta `tmin`/`tmax` (minutos), `fgmin`/`fgmax`, `photos=1`, `multi=1`, `rmin`, `my=saved|done|todo` y los órdenes `near`, `rating`, `ele-asc`, `time-asc`; migración `029` (duración y dificultad en `track_search`)
+- **Filtros del catálogo renovados**: «Ubicación» en dos pasos, comunidad autónoma y luego sierra o zona (solo las de esa comunidad); las zonas salen ordenadas por número de rutas, como mucho 16, con un buscador cuando hay más (pensado para cientos de zonas). Se quita el filtro de provincia; nuevos **Visibilidad** (públicas, privadas, planeadas), **Revisar** (rutas sin actividad o zona, con la etiqueta «revisar», sin descripción, sin portada o con enlace a otra web sin confirmar; se pueden marcar varios) y **Anomalías** (pendientes, quitadas, ignoradas, sin anomalías); Dificultad y Recorrido pasan a «Más filtros». Cada opción muestra cuántas rutas saldrían
+- **Catálogo → Editar** abre el mismo formulario de edición que la ficha de la ruta (`/subir?edit=ID`) en lugar de la fila de edición en línea
+- **Vías ferratas: grado de dificultad en vez de IBP**. Al subir o editar una ruta de actividad «Ferratas», el selector de dificultad pasa a ser el grado de ferrata (F, PD, AD, D, TD, ED, o «Sin indicar») y no se muestra el IBP; en la ficha aparece «Grado de la ferrata» con su descripción y escala, y en las tarjetas del visor, la ventana del mapa y los perfiles públicos sale el grado elegido (sin grado, sin etiqueta). Se guarda en `tracks.difficulty` (0–5), sin migración. `grades.js`
+- **Mapas**: se quitan las capas de Google (sus condiciones no permiten usarlas así) y se añade el satélite del IGN (PNOA, solo España); las capas están ahora en un único fichero (`map-layers.js`) que usan todas las páginas. Nota: las capas de CARTO ya piden clave, por lo que no se ofrecen; el mapa por defecto sigue siendo OpenStreetMap (para mucho tráfico habría que usar un proveedor con clave)
+- **Móvil**: el aviso de novedades ocupa dos líneas, se quitan los botones de zoom (se pellizca) y «Crear ruta» es más pequeño, y las tarjetas de ruta son compactas (caben dos o tres en lugar de una)
+- **Rendimiento**: imágenes de actividad reducidas de 1020 KB a unos 350 KB; los ficheros de `assets/` se guardan en caché una semana y los scripts y estilos un minuto; fuente Inter con preconexión; ficha de ruta sin la hoja de estilos del editor de texto (no se usaba)
+- Ficha de ruta: al terminar de dibujar el perfil de elevación se vuelve a encuadrar el recorrido para que no quede debajo del perfil
 - **Arrastrar un GPX al visor abre Upload Trail**: al arrastrar un archivo sobre la página aparece «Suelta el GPX para subirlo» y, al soltarlo, se abre el asistente de subida ya con ese archivo en la vista previa. Si sueltas varios se usa el primero (se avisa); si no es un .gpx, se avisa. `gpx-drop.js` guarda el archivo un momento en IndexedDB (aguanta ficheros grandes) para pasarlo de una página a otra
 - **Fotos HEIC/HEIF (iPhone)** al subir o editar una ruta: se aceptan y se convierten a JPEG en el navegador antes de enviarlas (conversor heic2any, que solo se descarga cuando eliges una foto HEIC); en el servidor siempre queda un JPEG (≤1600 px más miniatura). Funciona en Chrome y Firefox, que no abren HEIC
 - **Etiquetas al subir y al editar ruta**: el campo de etiquetas se ve también al subir una ruta nueva (antes solo al editar) y, bajo el campo, se muestran las 5 etiquetas que más usas en tus rutas (con cuántas rutas las llevan); un clic la añade, y desaparecen de la lista las que la ruta ya tiene. `GET /api/profile/top-tags?limit=5` (la etiqueta interna «revisar» no cuenta)

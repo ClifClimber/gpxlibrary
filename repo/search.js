@@ -41,6 +41,15 @@ function parseSearchParams(sp) {
     distMin: num(sp.get('dmin')), distMax: num(sp.get('dmax')),
     eleMin: num(sp.get('emin')), eleMax: num(sp.get('emax')),
     gradeMin: num(sp.get('gmin')), gradeMax: num(sp.get('gmax')),
+    // Vía ferratas: the grade chosen by the author (F…ED = 0…5), not the IBP
+    ferMin: num(sp.get('fgmin')), ferMax: num(sp.get('fgmax')),
+    // Moving time, in minutes
+    timeMin: num(sp.get('tmin')), timeMax: num(sp.get('tmax')),
+    photos: sp.get('photos') === '1',
+    multi: sp.get('multi') === '1',          // several days: runSearch's caller sets multiIds
+    multiIds: null,
+    my: ['saved', 'done', 'todo'].includes(sp.get('my')) ? sp.get('my') : null,   // the viewer's lists and «la he hecho»
+    ratingMin: num(sp.get('rmin')),
     year: /^\d{4}$/.test(sp.get('year') || '') ? sp.get('year') : null,
     q: stripAccents(String(sp.get('q') || '').trim()).toLowerCase() || null,
     near: near.length === 3 && near.every(Number.isFinite) && near[2] > 0 ? near : null,   // lat,lon,km
@@ -69,6 +78,10 @@ const SORTS = {
   'dist-desc': `t.distance DESC`,
   'ele-desc':  `t.elevation_gain DESC`,
   'ibp-asc':   `t.ibp_sort ASC`,
+  'ele-asc':   `t.elevation_gain ASC`,
+  'time-asc':  `t.moving_time ASC NULLS LAST`,
+  'rating':    `t.rating_avg DESC NULLS LAST, t.rating_count DESC`,
+  // 'near' (closest to the place of the «Cerca de» filter) is built by buildSearchSql: it needs the point
 };
 // Ties keep the catalog order (newest date, byte-wise name, id), as the stable JS sort does
 const TIEBREAK = `t.date DESC NULLS LAST, t.name COLLATE "C" ASC, t.id ASC`;
@@ -130,6 +143,17 @@ function buildSearchSql(p, viewer, { nearIds = null } = {}) {
     else base.push(...nearAt());
   }
   if (p.gradeActive) base.push(`t.grade BETWEEN ${$(p.gradeMin ?? 0)} AND ${$(p.gradeMax ?? 5)}`);
+  if (p.ferMin != null || p.ferMax != null) base.push(`t.difficulty BETWEEN ${$(p.ferMin ?? 0)} AND ${$(p.ferMax ?? 5)}`);
+  if (p.timeMin != null) base.push(`t.moving_time >= ${$(Math.round(p.timeMin * 60))}`);
+  if (p.timeMax != null) base.push(`t.moving_time <= ${$(Math.round(p.timeMax * 60))}`);
+  if (p.photos) base.push('EXISTS (SELECT 1 FROM track_photos ph WHERE ph.track_id = t.id)');
+  if (p.multi) base.push(`t.id = ANY(${$(p.multiIds || [])}::int[])`);
+  if (p.ratingMin != null) base.push(`t.rating_avg >= ${$(p.ratingMin)}`);
+  if (p.my) {
+    const saved = `EXISTS (SELECT 1 FROM user_list_tracks lt JOIN user_lists l ON l.id = lt.list_id WHERE lt.track_id = t.id AND l.owner_id = ${me})`;
+    const done = `EXISTS (SELECT 1 FROM track_done d WHERE d.track_id = t.id AND d.user_id = ${me})`;
+    base.push(p.my === 'saved' ? saved : p.my === 'done' ? done : `${saved} AND NOT ${done}`);
+  }
   if (p.rtype.length === 1) base.push(p.rtype[0] === 'circular' ? `t.circular` : `NOT t.circular`);
   if (p.mine) base.push(`t.owner_id = ${me}`);
   if (p.users.length) base.push(`t.owner_id = ANY(${$(p.users)}::int[])`);
@@ -147,8 +171,10 @@ function buildSearchSql(p, viewer, { nearIds = null } = {}) {
     boxC = `t.box && ST_MakeEnvelope(${$(w)}, ${$(s)}, ${$(e)}, ${$(n)}, 4326)`;
   }
   const baseSql = base.join(' AND ');
+  // «Más cerca»: distance from the place to the route's box (cheap, and good enough to order a page)
+  const nearOrder = p.near ? `ST_Distance(t.box, ST_SetSRID(ST_MakePoint(${$(p.near[1])}, ${$(p.near[0])}), 4326))` : null;
   return {
-    args, geom, full, boxC, nearSql, rank,
+    args, geom, full, boxC, nearSql, rank, nearOrder,
     base: baseSql, actC, sierraC, tagC,
     where: `${baseSql} AND ${actC} AND ${sierraC} AND ${tagC} AND ${boxC}`,
   };
@@ -180,14 +206,16 @@ async function searchOnce(db, p, viewer, { dataVersion = null, lite = false, ser
   const get = sql => db.get(...bind(sql, s.args));
   // Fuzzy results without an explicit sort come best match first
   const byRank = p.fuzzy && s.rank && p.sort === 'name';
-  const order = `${byRank ? `(${s.rank}) DESC, ` : ''}${SORTS[p.sort] || SORTS.name}, ${TIEBREAK}`;
+  const byNear = p.sort === 'near' && s.nearOrder;
+  const sortExpr = byNear ? `(${s.nearOrder}) ASC` : (SORTS[p.sort] || SORTS.name);
+  const order = `${byRank ? `(${s.rank}) DESC, ` : ''}${sortExpr}, ${TIEBREAK}`;
 
   const totalsQ = lite ? () => ({ n: 0, km: 0, gain: 0 }) : () => get(
     `SELECT CAST(COUNT(*) AS INTEGER) AS n, COALESCE(SUM(d), 0) AS km, COALESCE(SUM(g), 0) AS gain
      FROM (SELECT t.distance AS d, t.elevation_gain AS g FROM track_search t WHERE ${s.where} LIMIT ${COUNT_CAP + 1}) x`);
   // The page is chosen on the narrow table; the full rows and geometries of its ≤60 routes come from tracks
-  const sortCols = `t.name, t.date, t.distance, t.elevation_gain, t.ibp_sort${byRank ? `, (${s.rank}) AS rank` : ''}`;
-  const outer = `${byRank ? 'pg.rank DESC, ' : ''}${(SORTS[p.sort] || SORTS.name).replace(/\bt\./g, 'pg.')}, ${TIEBREAK.replace(/\bt\./g, 'pg.')}`;
+  const sortCols = `t.name, t.date, t.distance, t.elevation_gain, t.ibp_sort, t.moving_time, t.rating_avg, t.rating_count${byRank ? `, (${s.rank}) AS rank` : ''}${byNear ? `, (${s.nearOrder}) AS near_d` : ''}`;
+  const outer = `${byRank ? 'pg.rank DESC, ' : ''}${byNear ? 'pg.near_d ASC' : (SORTS[p.sort] || SORTS.name).replace(/\bt\./g, 'pg.')}, ${TIEBREAK.replace(/\bt\./g, 'pg.')}`;
   const itemsQ = () => all(
     `WITH pg AS (SELECT t.id, ${sortCols} FROM track_search t WHERE ${s.where} ORDER BY ${order} LIMIT ${p.size} OFFSET ${p.page * p.size})
      SELECT tr.id, tr.name, tr.date, tr.activity, tr.sierra, tr.ccaa, tr.tags, tr.distance, tr.elevation_gain, tr.elevation_loss,
@@ -207,7 +235,8 @@ async function searchOnce(db, p, viewer, { dataVersion = null, lite = false, ser
     : null;
 
   const key = facetKey(p, viewer, dataVersion);
-  const cached = lite ? null : dataVersion != null ? _facetCache.get(key) : null;
+  const cacheable = dataVersion != null && !p.my;
+  const cached = lite ? null : cacheable ? _facetCache.get(key) : null;
   let facetsQ = lite ? null : cached ? () => cached : null;
   if (!facetsQ && !lite) {
     // One pass over the matches (without box/pill filters), then the three cascading counts from it
@@ -225,7 +254,7 @@ async function searchOnce(db, p, viewer, { dataVersion = null, lite = false, ser
         for (const r of rows) f[r.kind === 'a' ? 'activity' : r.kind === 's' ? 'sierra' : 'tags'][r.k] = r.n;
         return f;
       });
-    if (dataVersion != null && !serial) {
+    if (cacheable && !serial) {
       const pending = facetsQ();
       facetsQ = () => pending;
       _facetCache.set(key, pending);
@@ -300,7 +329,8 @@ async function runMeta(db, viewer, { dataVersion = null } = {}) {
     const s = buildSearchSql(parseSearchParams(new URLSearchParams()), viewer);
     const all = sql => db.all(...bind(sql, s.args));
     const [years, owners, mx, core] = await Promise.all([
-      all(`SELECT DISTINCT substr(t.date, 1, 4) AS y FROM track_search t WHERE ${s.base} AND t.date ~ '^[0-9]{4}' ORDER BY 1 DESC`),
+      all(`SELECT DISTINCT substr(t.date, 1, 4) AS y FROM track_search t WHERE ${s.base} AND t.date ~ '^(199[0-9]|20[0-9]{2})'
+           AND substr(t.date, 1, 4) <= to_char(now(), 'YYYY') ORDER BY 1 DESC`),
       all(`SELECT t.owner_id AS id, u.username, CAST(COUNT(*) AS INTEGER) AS n FROM track_search t JOIN users u ON u.id = t.owner_id
            WHERE ${s.base} GROUP BY 1, 2 ORDER BY u.username COLLATE "es-x-icu"`),
       db.get(...bind(`SELECT MAX(t.distance) AS d, MAX(t.elevation_gain) AS e FROM track_search t WHERE ${s.base}`, s.args)),

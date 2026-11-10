@@ -123,7 +123,7 @@
     $('pv-wpts').innerHTML = parsed.wpts.slice(0, 20).map(w => `<span class="pv-wpt">${esc(w.name || '·')}</span>`).join('');
     if (!map) {
       map = L.map('subir-map', { scrollWheelZoom: false });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
+      gpxBaseLayers()[gpxDefaultBase].addTo(map);
     }
     if (overlay) overlay.remove();
     overlay = L.layerGroup().addTo(map);
@@ -358,7 +358,27 @@
   const ibpFor = act => (CYCLING.includes(act) ? gIbp.bicycle : RUNNING.includes(act) ? gIbp.running : gIbp.hiking);
   const gradeOf = v => (v == null ? -1 : GRADES.findIndex(g => v <= g.max));
   // Shows the IBP for the chosen activity and its grade; the select follows it until the user picks one
+  // Vía ferratas: the author picks the ferrata grade (F…ED) and no IBP is shown
+  const FER = window.gpxFerrata, normalGradeOptions = $('f-grade').innerHTML;
+  let ferMode = false, ferVal = '';
+  function setFerrata(on, chosen) {
+    const sel = $('f-grade');
+    if (chosen != null) ferVal = String(chosen);
+    if (on !== ferMode) {
+      ferMode = on;
+      sel.innerHTML = on ? '<option value="">Sin indicar</option>' + FER.grades.map((g, i) => `<option value="${i}">${g.label} · ${g.name}</option>`).join('') : normalGradeOptions;
+      $('lbl-grade').textContent = on ? 'Grado de la ferrata' : 'Dificultad';
+    }
+    if (on) {
+      sel.value = ferVal;
+      const g = FER.grades[+ferVal];
+      $('f-ibp').innerHTML = ferVal === '' ? 'Elige el grado que indica la reseña o tu experiencia.' : `<span class="grade-dot" style="background:${FER.colors[+ferVal]}"></span><b>${g.label} · ${g.name}</b> — ${g.desc}`;
+      $('pc-grade').textContent = '';
+    }
+  }
   function updateGrade(chosen) {
+    if (FER && FER.is($('f-activity').value)) { setFerrata(true, chosen); return; }
+    if (ferMode) setFerrata(false);
     const ibp = ibpFor($('f-activity').value.trim()), calc = gradeOf(ibp);
     const g = GRADES[calc];
     $('f-ibp').innerHTML = ibp != null
@@ -370,9 +390,10 @@
     $('f-grade').dataset.calc = calc;
   }
   $('f-activity').addEventListener('input', () => updateGrade());
-  $('f-grade').addEventListener('change', () => { gradeTouched = true; updateGrade(); });
+  $('f-grade').addEventListener('change', () => { gradeTouched = true; if (ferMode) { ferVal = $('f-grade').value; setFerrata(true); } else updateGrade(); });
   // Value for tracks.difficulty: NULL keeps it tied to the IBP; a different grade is stored
   const difficultyValue = () => {
+    if (ferMode) return $('f-grade').value === '' ? null : +$('f-grade').value;
     const calc = +$('f-grade').dataset.calc, v = +$('f-grade').value;
     if (calc < 0 && !gradeTouched) return null;   // no IBP and the user didn't pick one
     return v === calc ? null : v;

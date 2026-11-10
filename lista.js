@@ -60,7 +60,7 @@
 
   // Map
   const map = L.map('lmap', { zoomControl: true });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19 }).addTo(map);
+  gpxBaseLayers()[gpxDefaultBase].addTo(map);
   const layers = new Map();
   const all = L.latLngBounds([]);
   for (const t of tracks) {

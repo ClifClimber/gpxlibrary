@@ -40,7 +40,14 @@ function createPostgresRepo({ connectionString, pool: givenPool } = {}) {
     async listTracks() {
       return rows(`SELECT ${selectCols(C.LIST_COLS)},
         (SELECT username FROM users u WHERE u.id = tracks.owner_id) AS owner_username,
-        (SELECT avatar_key FROM users u WHERE u.id = tracks.owner_id) AS owner_avatar_key
+        (SELECT avatar_key FROM users u WHERE u.id = tracks.owner_id) AS owner_avatar_key,
+        -- What the catalog filters on (state and data quality); the anomaly record is summed up, never sent whole
+        tracks.planned, tracks.cover_photo_id, tracks.source_confirmed,
+        CASE WHEN tracks.anomalies IS NULL THEN NULL
+             WHEN (tracks.anomalies::jsonb -> 'applied') IS NOT NULL THEN 'applied'
+             WHEN COALESCE((tracks.anomalies::jsonb ->> 'removable')::int, 0) = 0 THEN 'none'
+             WHEN (tracks.anomalies::jsonb ->> 'dismissed') = 'true' THEN 'dismissed'
+             ELSE 'pending' END AS anomaly_state
         FROM tracks ORDER BY tracks.imported_at DESC, ${BY_NAME}, id`);
     },
     async getTrack(id) {
