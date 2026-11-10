@@ -278,6 +278,24 @@
     panel.hidden = false;
   }
 
+  // ── Actividad: lista desplegable ──
+  function fillActivities(acts, current) {
+    const names = acts.map(a => a.name);
+    if (current && !names.includes(current)) names.unshift(current);   // an activity no longer in the list stays selectable
+    $('f-activity').innerHTML = '<option value="">Sin actividad</option>' + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    $('f-activity').value = current || '';
+  }
+
+  // ── Comunidad autónoma: lista desplegable (las españolas + las que ya hay en la biblioteca) ──
+  const SPAIN_CCAA = ['Andalucía', 'Aragón', 'Asturias', 'Illes Balears', 'Canarias', 'Cantabria', 'Castilla-La Mancha', 'Castilla y León', 'Cataluña',
+    'Ceuta', 'Comunidad de Madrid', 'Comunidad Valenciana', 'Extremadura', 'Galicia', 'La Rioja', 'Melilla', 'Navarra', 'País Vasco', 'Región de Murcia'];
+  function fillCcaa(known, current) {
+    const all = [...new Set([...SPAIN_CCAA, ...known.filter(Boolean), current].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+    $('f-ccaa').innerHTML = '<option value="">Sin asignar</option>' + all.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    $('f-ccaa').value = current || '';
+    $('pc-ccaa').textContent = current ? '✓ detectada' : '';
+  }
+
   // ── Paso 3: cargar precálculo + datalists ──
   async function loadTrackIntoForm() {
     const [t, acts, geo] = await Promise.all([
@@ -290,24 +308,20 @@
     setDescHtml(t.notes || '');
     $('f-planned').checked = !!t.planned;
     // Extra fields (edit mode only)
-    $('f-province').value = t.province || '';
-    $('f-ccaa').value = t.ccaa || '';
     $('f-url').value = t.url || '';
     $('f-own').checked = !!t.source_confirmed;
     const syncOwn = () => { const has = !!$('f-url').value.trim(); $('f-own-wrap').hidden = !has; $('f-own-hint').hidden = !has; };
     $('f-url').addEventListener('input', syncOwn); syncOwn();
     try { tags = Array.isArray(t.tags) ? t.tags : JSON.parse(t.tags || '[]'); } catch { tags = []; }
     renderTags();
-    $('dl-provinces').innerHTML = (geo.provinces || []).map(s => `<option value="${esc(s)}">`).join('');
-    $('dl-ccaa').innerHTML = (geo.ccaa || []).map(s => `<option value="${esc(s)}">`).join('');
-    $('f-activity').value = t.activity || '';
+    fillActivities(acts || [], t.activity || '');
+    fillCcaa(geo.ccaa || [], t.ccaa || '');
     $('f-sierra').value = t.sierra || '';
     $('pc-act').textContent = t.activity ? '✓ precalculada' : '';
     $('pc-sierra').textContent = t.sierra ? '✓ precalculada' : (t.province ? 'prov. ' + t.province : '');
     gIbp = { hiking: t.ibp_hiking, bicycle: t.ibp_bicycle, running: t.ibp_running };
     gradeTouched = t.difficulty != null;
     updateGrade(t.difficulty);
-    $('dl-activities').innerHTML = (acts || []).map(a => `<option value="${esc(a.name)}">`).join('');
     const sierras = (geo.zones || geo.sierras || []).concat(geo.provinces || []);
     $('dl-sierras').innerHTML = [...new Set(sierras)].map(s => `<option value="${esc(s)}">`).join('');
     // waypoints → descripción
@@ -430,9 +444,34 @@
     return c.toDataURL('image/jpeg', quality).split(',')[1];
   }
 
+  // iPhone photos (HEIC/HEIF): Chrome and Firefox cannot open them, so they are converted to JPEG in the browser
+  // (heic2any, loaded only when one is picked). What the server stores is always a JPEG.
+  const isHeic = f => /[.]hei[cf]$/i.test(f.name) || /^image\/hei[cf]/i.test(f.type);
+  let heicLib = null;
+  function loadHeic() {
+    if (window.heic2any) return Promise.resolve(window.heic2any);
+    return heicLib || (heicLib = new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js';
+      s.onload = () => res(window.heic2any);
+      s.onerror = () => { heicLib = null; rej(new Error('No se pudo cargar el conversor de fotos HEIC')); };
+      document.head.appendChild(s);
+    }));
+  }
+  async function heicToJpeg(file) {
+    const out = await (await loadHeic())({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+    return Array.isArray(out) ? out[0] : out;       // a HEIC with several images gives a list: keep the first
+  }
+
   async function uploadPhoto(file) {
     $('step3-err').textContent = '';
-    if (!/^image\//.test(file.type)) { $('step3-err').textContent = 'Solo imágenes'; return; }
+    if (!isHeic(file) && !/^image\//.test(file.type)) { $('step3-err').textContent = 'Solo imágenes'; return; }
+    if (isHeic(file)) {
+      const msg = $('step3-err'); msg.style.color = 'var(--muted)'; msg.textContent = 'Convirtiendo ' + file.name + ' de HEIC a JPEG…';
+      try { file = await heicToJpeg(file); }
+      catch (err) { msg.style.color = ''; msg.textContent = 'No se pudo convertir la foto HEIC: ' + (err.message || err); return; }
+      msg.style.color = ''; msg.textContent = '';
+    }
     let data, thumb;
     try { data = await resizeImage(file, 1600, 0.85); thumb = await resizeImage(file, 480, 0.8); }
     catch (err) { $('step3-err').textContent = err.message; return; }
@@ -467,7 +506,24 @@
   });
 
   // ── Etiquetas (modo edición) ──
+  // The five tags this user has used most: one click adds them (those already on the route are hidden)
+  let topTags = [];
+  function renderTopTags() {
+    const el = $('tag-top'), left = topTags.filter(t => !tags.includes(t.tag));
+    el.hidden = !left.length;
+    el.innerHTML = left.length ? 'Tus más usadas: ' + left.map(t => `<button type="button" data-top="${esc(t.tag)}" title="Usada en ${t.n} ruta${t.n === 1 ? '' : 's'}">#${esc(t.tag)}<small>${t.n}</small></button>`).join('') : '';
+  }
+  $('tag-top').addEventListener('click', e => {
+    const b = e.target.closest('button[data-top]');
+    if (b && !tags.includes(b.dataset.top)) { tags.push(b.dataset.top); renderTags(); }
+  });
+  fetch('/api/tags').then(r => r.json()).then(all => {
+    $('dl-tags').innerHTML = (all || []).map(x => `<option value="${esc(typeof x === 'string' ? x : x.tag || x.name || '')}">`).join('');
+  }).catch(() => {});
+  fetch('/api/profile/top-tags?limit=5').then(r => (r.ok ? r.json() : { tags: [] })).then(d => { topTags = d.tags || []; renderTopTags(); }).catch(() => {});
+
   function renderTags() {
+    renderTopTags();
     const box = $('f-tags-box'), inp = $('f-tag-input');
     box.querySelectorAll('.tag-chip').forEach(c => c.remove());
     tags.forEach(tag => {
@@ -504,17 +560,16 @@
         notes: getDescHtml(),
         activity: $('f-activity').value.trim(),
         sierra: $('f-sierra').value.trim(),
+        ccaa: $('f-ccaa').value || null,
         days_declared: daysDeclared(),
         difficulty: difficultyValue(),
       };
+      addTag();   // text typed but not confirmed yet
+      patch.tags = JSON.stringify(tags);
       if (EDIT_ID) {
-        addTag();   // text typed but not confirmed yet
         Object.assign(patch, {
-          province: $('f-province').value.trim() || null,
-          ccaa: $('f-ccaa').value.trim() || null,
           url: $('f-url').value.trim() || null,
           source_confirmed: !!$('f-url').value.trim() && $('f-own').checked,
-          tags: JSON.stringify(tags),
         });
       }
       const J = { 'Content-Type': 'application/json' };
@@ -528,6 +583,12 @@
       location.href = `/track?id=${trackId}`;
     } catch (err) { $('step3-err').textContent = 'No se pudo guardar: ' + err.message; btn.disabled = false; }
   });
+
+  // ── Venimos de arrastrar un GPX al visor: el fichero ya está elegido, pasa directo a la vista previa ──
+  if (new URLSearchParams(location.search).get('from') === 'drop' && !EDIT_ID && window.gpxDrop) {
+    history.replaceState(null, '', '/subir');
+    window.gpxDrop.take().then(file => { if (file) readFile(file); });
+  }
 
   // ── Modo edición: abre directamente el paso 3 con la ruta cargada ──
   if (EDIT_ID) {
@@ -546,9 +607,6 @@
         trackId = EDIT_ID; editingExisting = true;
         await loadTrackIntoForm();
         goStep(3);
-        fetch('/api/tags').then(r => r.json()).then(all => {
-          $('dl-tags').innerHTML = (all || []).map(x => `<option value="${esc(typeof x === 'string' ? x : x.tag || x.name || '')}">`).join('');
-        }).catch(() => {});
       } catch (err) {
         $('step-1').classList.remove('active');
         $('step-3').classList.add('active');

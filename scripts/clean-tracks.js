@@ -19,7 +19,7 @@
 
 const { openSql } = require('../repo/sql');
 
-const { cleanPoints } = require('../domain');
+const { cleanPoints, detectAnomalies, removeAnomalies } = require('../domain');
 
 // ── Ayuda ──────────────────────────────────────────────────────────
 if (process.argv.includes('--help')) {
@@ -132,7 +132,7 @@ if (!opts.reset && !opts.minDist && !opts.maxJump && !opts.rdp) {
 }
 
 // ── Construir consulta de tracks ──────────────────────────────────
-let sql = 'SELECT id,name,activity,raw_count FROM tracks';
+let sql = 'SELECT id,name,activity,raw_count,anomalies FROM tracks';
 const conds=[], params=[];
 if(opts.trackId) { conds.push('id=?'); params.push(opts.trackId); }
 if(conds.length) sql+=' WHERE '+conds.join(' AND ');
@@ -153,7 +153,7 @@ if(!opts.reset){
 console.log(`Tracks a procesar: ${tracks.length}\n`);
 
 
-let totRaw=0, totCln=0;
+let totRaw=0, totCln=0, nTracks=0, nAnomKept=0;
 
 for(const track of tracks) {
   const rawPts=await db.getPoints(track.id);
@@ -164,13 +164,20 @@ for(const track of tracks) {
     continue;
   }
 
-  const cleaned=cleanPoints(rawPts, opts);
+  // A route whose anomalous points were removed (Puntos GPS anómalos) keeps them out: the cleaning starts from the
+  // star-free points, otherwise it would bring the stars back
+  let applied = false;
+  try { applied = !!(track.anomalies && JSON.parse(track.anomalies).applied); } catch {}
+  const source = applied ? removeAnomalies(rawPts, detectAnomalies(rawPts)) : rawPts;
+  if (applied) nAnomKept++;
+  nTracks++;
+  const cleaned=cleanPoints(source, opts);
   const pct=((1-cleaned.length/rawPts.length)*100).toFixed(1);
   totRaw+=rawPts.length; totCln+=cleaned.length;
 
   console.log(
     `  ${opts.dryRun?'·':'✓'} ${track.name.substring(0,46).padEnd(46)} `+
-    `${String(rawPts.length).padStart(5)} → ${String(cleaned.length).padStart(5)} pts  (-${pct}%)`
+    `${String(rawPts.length).padStart(5)} → ${String(cleaned.length).padStart(5)} pts  (-${pct}%)${applied ? '  [sin anomalías]' : ''}`
   );
 
   if(!opts.dryRun) {
@@ -185,6 +192,8 @@ if(!opts.reset){
   const pctTot=((1-totCln/totRaw)*100).toFixed(1);
   console.log(`\n${'─'.repeat(72)}`);
   console.log(`Total: ${totRaw.toLocaleString()} → ${totCln.toLocaleString()} puntos  (reducción ${pctTot}%)`);
+  console.log(`Rutas ${opts.dryRun ? 'que se limpiarían' : 'limpiadas'}: ${nTracks}`);
+  if (nAnomKept) console.log(`Rutas con anomalías ya quitadas (se respetan): ${nAnomKept}`);
   if(opts.dryRun){
     console.log('\n(Simulación — BD NO modificada)');
     console.log('Quita --dry-run para aplicar la limpieza.\n');

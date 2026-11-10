@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+- **Arrastrar un GPX al visor abre Upload Trail**: al arrastrar un archivo sobre la página aparece «Suelta el GPX para subirlo» y, al soltarlo, se abre el asistente de subida ya con ese archivo en la vista previa. Si sueltas varios se usa el primero (se avisa); si no es un .gpx, se avisa. `gpx-drop.js` guarda el archivo un momento en IndexedDB (aguanta ficheros grandes) para pasarlo de una página a otra
+- **Fotos HEIC/HEIF (iPhone)** al subir o editar una ruta: se aceptan y se convierten a JPEG en el navegador antes de enviarlas (conversor heic2any, que solo se descarga cuando eliges una foto HEIC); en el servidor siempre queda un JPEG (≤1600 px más miniatura). Funciona en Chrome y Firefox, que no abren HEIC
+- **Etiquetas al subir y al editar ruta**: el campo de etiquetas se ve también al subir una ruta nueva (antes solo al editar) y, bajo el campo, se muestran las 5 etiquetas que más usas en tus rutas (con cuántas rutas las llevan); un clic la añade, y desaparecen de la lista las que la ruta ya tiene. `GET /api/profile/top-tags?limit=5` (la etiqueta interna «revisar» no cuenta)
+- **Subir / editar ruta**: la actividad y la comunidad autónoma se eligen con listas desplegables (en vez de cajas de texto con sugerencias) (comunidades españolas más las ya presentes en la biblioteca, o «Sin asignar»); ambas se ven también al subir una ruta nueva. Se quita el campo «Provincia» del formulario
+- **Admin → Limpiar tracks**: nuevo botón **Simular** (muestra qué pasaría con cada ruta sin cambiar nada) y **Limpiar** ahora simula primero, enseña el resumen (rutas y puntos antes → después) y pide confirmación antes de aplicar. Una simulación ya no lanza el recálculo de geometrías
+- «Limpiar tracks» respeta las rutas a las que ya se quitaron los puntos anómalos: parte de los puntos sin anomalías, así que las estrellas no vuelven
+
 ---
 
 ## v2.22.1 — 2026-11-04

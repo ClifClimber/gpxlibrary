@@ -68,6 +68,7 @@
 .dup-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .dup-actions .input { flex: 1; min-width: 180px; }
 .dup-or { font-size: 12px; color: var(--muted); }
+
 .anom-panel { margin: 0 0 16px; padding: 14px 16px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--warn) 12%, transparent); box-shadow: inset 3px 0 0 var(--warn); }
 .anom-panel.done { background: color-mix(in srgb, var(--success) 11%, transparent); box-shadow: inset 3px 0 0 var(--success); }
 .anom-panel p { font-size: 13px; color: var(--ink-2); margin: 3px 0 10px; line-height: 1.5; }
@@ -100,6 +101,11 @@ body.edit-mode a.edit-only { display: inline-flex; }
 .tag-edit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .tag-edit input { flex: 1; min-width: 120px; border: none; outline: none; background: transparent; color: var(--ink); font: inherit; font-size: 13px; padding: 3px 2px; }
 .tag-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+.tag-top[hidden] { display: none; }
+.tag-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.tag-top button { border: 1px dashed var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 2px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.tag-top button:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.tag-top button small { color: var(--muted); font-weight: 500; margin-left: 3px; }
 .tag-chip button { border: none; background: none; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; }
 .wz-foot-btns { display: flex; gap: 8px; align-items: center; }
 
@@ -209,16 +215,19 @@ body.edit-mode a.edit-only { display: inline-flex; }
         <label>Descripción <span class="precalc" id="wpt-fill" style="cursor:pointer" hidden>+ añadir puntos de paso</span></label>
         <div id="f-desc-editor" style="border-radius:9px;overflow:hidden;background:var(--surface)"></div>
       </div>
+      <div class="wz-field">
+        <label>Actividad <span class="precalc" id="pc-act"></span></label>
+        <select class="select" id="f-activity"></select>
+      </div>
       <div class="wz-row">
-        <div class="wz-field">
-          <label>Actividad <span class="precalc" id="pc-act"></span></label>
-          <input type="text" class="input" id="f-activity" list="dl-activities" autocomplete="off">
-          <datalist id="dl-activities"></datalist>
-        </div>
         <div class="wz-field">
           <label>Zona / Sierra <span class="precalc" id="pc-sierra"></span></label>
           <input type="text" class="input" id="f-sierra" list="dl-sierras" autocomplete="off">
           <datalist id="dl-sierras"></datalist>
+        </div>
+        <div class="wz-field">
+          <label>Comunidad autónoma <span class="precalc" id="pc-ccaa"></span></label>
+          <select class="select" id="f-ccaa"></select>
         </div>
       </div>
       <div class="wz-row">
@@ -261,30 +270,20 @@ body.edit-mode a.edit-only { display: inline-flex; }
         </label>
       </div>
       <div class="edit-only">
-        <div class="wz-row">
-          <div class="wz-field">
-            <label>Provincia</label>
-            <input type="text" class="input" id="f-province" list="dl-provinces" autocomplete="off">
-            <datalist id="dl-provinces"></datalist>
-          </div>
-          <div class="wz-field">
-            <label>Comunidad autónoma</label>
-            <input type="text" class="input" id="f-ccaa" list="dl-ccaa" autocomplete="off">
-            <datalist id="dl-ccaa"></datalist>
-          </div>
-        </div>
         <div class="wz-field">
           <label>Enlace de origen</label>
           <input type="url" class="input" id="f-url" placeholder="https://…">
           <label class="src-own" id="f-own-wrap" hidden><input type="checkbox" id="f-own"> Esta ruta es mía (la grabé o la tracé yo)</label>
           <div class="precalc" id="f-own-hint" hidden>Las rutas con enlace a otra web no se ven fuera de GPX Library hasta que confirmes que son tuyas.</div>
         </div>
-        <div class="wz-field">
-          <label>Etiquetas <span class="precalc">Intro o coma para añadir</span></label>
-          <div class="tag-edit" id="f-tags-box"><input type="text" id="f-tag-input" maxlength="40" list="dl-tags" autocomplete="off" placeholder="Nueva etiqueta…"></div>
-          <datalist id="dl-tags"></datalist>
-        </div>
       </div>
+      <div class="wz-field">
+        <label>Etiquetas <span class="precalc">Intro o coma para añadir</span></label>
+        <div class="tag-edit" id="f-tags-box"><input type="text" id="f-tag-input" maxlength="40" list="dl-tags" autocomplete="off" placeholder="Nueva etiqueta…"></div>
+        <datalist id="dl-tags"></datalist>
+        <div class="tag-top" id="tag-top" hidden></div>
+      </div>
+
       <div class="wz-field">
         <label>Fotos</label>
         <div class="ph-grid" id="ph-grid">
@@ -292,7 +291,7 @@ body.edit-mode a.edit-only { display: inline-flex; }
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </div>
         </div>
-        <input type="file" id="photo-file" accept="image/*" multiple>
+        <input type="file" id="photo-file" accept="image/*,.heic,.heif,image/heic,image/heif" multiple>
         <div style="font-size:12px;color:var(--muted);margin-top:6px" id="ph-hint" hidden>Pulsa ☆ en una foto para usarla como <b>portada</b> de la ruta (es la que aparece en la lista del visor).</div>
       </div>
       <div class="wz-foot">
@@ -311,6 +310,7 @@ body.edit-mode a.edit-only { display: inline-flex; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.min.js"></script>
+<script src="/gpx-drop.js"></script>
 <script src="/subir.js"></script>
 </body>
 </html>

@@ -64,7 +64,7 @@ const MIME = {
 
 // ── Archivos estáticos ─────────────────────────────────────────────
 // Public: the pages and styles at the root, the browser scripts listed here and assets/.
-const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js', 'lists-picker.js']);
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js', 'lists-picker.js', 'gpx-drop.js']);
 function isPublicFile(rel) {
   if (rel.split('/').some(s => s.startsWith('.'))) return false;
   if (rel.startsWith('assets/')) return true;
@@ -1836,6 +1836,20 @@ async function handleRequest(req, res) {
     return res.end(JSON.stringify({ ...await authorPoints(sqlDb(), req.user.sub, cfg), rules: cfg.points }));
   }
 
+  // The tags this user has used most on their own routes (for the quick picks of the edit form)
+  if (pathname === '/api/profile/top-tags' && method === 'GET') {
+    if (!requireAuth(req, res)) return;
+    const limit = Math.min(20, Math.max(1, parseInt(searchParams.get('limit')) || 5));
+    const rows = await sqlDb().all("SELECT tags FROM tracks WHERE owner_id = ? AND tags IS NOT NULL AND tags != '[]'", [req.user.sub]);
+    const count = new Map();
+    for (const r of rows) {
+      let list = []; try { list = JSON.parse(r.tags); } catch {}
+      for (const t of new Set(Array.isArray(list) ? list : [])) if (t && t !== 'revisar') count.set(t, (count.get(t) || 0) + 1);   // «revisar» is the import's own flag
+    }
+    const top = [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit).map(([tag, n]) => ({ tag, n }));
+    res.writeHead(200, J); return res.end(JSON.stringify({ tags: top }));
+  }
+
   if (pathname === '/api/profile/stats' && method === 'GET') {
     if (!requireAuth(req, res)) return;
     const db = sqlDb();
@@ -2159,6 +2173,7 @@ async function handleRequest(req, res) {
     if (opts.maxJump)  args.push('--max-jump', String(opts.maxJump));
     if (opts.rdp)      args.push('--rdp',      String(opts.rdp));
     if (!args.length)  { res.writeHead(400); res.end('No algorithms specified'); return; }
+    if (opts.dry_run)  args.push('--dry-run');          // simulation: nothing is written
     return apiRunScript(res, path.join(ROOT,'scripts','clean-tracks.js'), args, req.user);
   }
 

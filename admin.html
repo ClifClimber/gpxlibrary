@@ -506,7 +506,8 @@ tr.inactive td { opacity: .4; }
               <div class="op-btns">
                 <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px">min-dist <input type="number" class="db-num" id="inp-mindist" value="5" min="0" max="100"> m</label>
                 <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px">RDP <input type="number" class="db-num" id="inp-rdp" value="8" min="0" max="50"> m</label>
-                <button class="btn btn-ghost btn-sm" id="btn-clean">Limpiar</button>
+                <button class="btn btn-ghost btn-sm" id="btn-clean-sim" title="Muestra qué pasaría con cada ruta, sin cambiar nada">Simular</button>
+                <button class="btn btn-primary btn-sm" id="btn-clean" title="Simula primero y pide confirmación antes de aplicar">Limpiar</button>
               </div>
             </div>
             <p><b>min-dist</b>: descarta puntos GPS a menos de N metros del anterior (elimina pausas grabadas). <b>RDP</b>: aplica Douglas-Peucker con epsilon en metros, reduciendo el número de puntos sin perder la forma de la ruta. Los puntos limpios se guardan en <code>clean_points</code> y se usan al exportar el catálogo.</p>
@@ -1987,7 +1988,9 @@ function streamScript(url, title, postBody, onSuccess, method = 'POST') {
   document.getElementById('log-osm-offer').hidden = true;
   modal.hidden = false;
 
+  const collected = [];
   function addLine(text, cls) {
+    collected.push(text);
     const d = document.createElement('div');
     d.className = 'log-line' + (cls ? ' ' + cls : '');
     d.textContent = text;
@@ -2016,7 +2019,7 @@ function streamScript(url, title, postBody, onSuccess, method = 'POST') {
             if (ev.type === 'log' || ev.type === 'progress') addLine(ev.text);
             if (ev.type === 'error') addLine(ev.text, 'err');
             if (ev.type === 'warn')  addLine(ev.text, 'warn');
-            if (ev.type === 'done')  { addLine(ev.code === 0 ? '✓ Completado' : `✗ Código ${ev.code}`, ev.code === 0 ? 'ok' : 'err'); closeBtn.disabled = false; if (ev.code === 0 && onSuccess) onSuccess(); }
+            if (ev.type === 'done')  { addLine(ev.code === 0 ? '✓ Completado' : `✗ Código ${ev.code}`, ev.code === 0 ? 'ok' : 'err'); closeBtn.disabled = false; if (ev.code === 0 && onSuccess) onSuccess(collected); }
           } catch {}
         }
         return pump();
@@ -2135,14 +2138,33 @@ document.getElementById('btn-export-folders').addEventListener('click', function
   load();
 })();
 
-document.getElementById('btn-clean').addEventListener('click', function() {
-  const minDist = parseFloat(document.getElementById('inp-mindist').value) || 0;
-  const rdp     = parseFloat(document.getElementById('inp-rdp').value) || 0;
-  if (!minDist && !rdp) { alert('Introduce al menos un valor de min-dist o RDP mayor que 0.'); return; }
-  this.disabled = true;
-  streamScript('/api/db/clean', 'Limpiar tracks', { minDist, rdp })
-    .finally(() => { this.disabled = false; loadStats(); });
-});
+// Limpiar tracks: «Simular» solo enseña el resultado; «Limpiar» simula primero y pide confirmación antes de aplicar
+(function () {
+  const params = () => ({ minDist: parseFloat(document.getElementById('inp-mindist').value) || 0, rdp: parseFloat(document.getElementById('inp-rdp').value) || 0 });
+  const valid = p => { if (!p.minDist && !p.rdp) { alert('Introduce al menos un valor de min-dist o RDP mayor que 0.'); return false; } return true; };
+  const field = (lines, re) => { const l = lines.find(x => re.test(x)); return l ? l.trim() : ''; };
+  function simulate(p, then) {
+    return streamScript('/api/db/clean', 'Simulación: limpiar tracks (no se cambia nada)', { ...p, dry_run: true }, lines => then && then(lines));
+  }
+  document.getElementById('btn-clean-sim').addEventListener('click', function () {
+    const p = params(); if (!valid(p)) return;
+    this.disabled = true;
+    simulate(p).finally(() => { this.disabled = false; });
+  });
+  document.getElementById('btn-clean').addEventListener('click', function () {
+    const p = params(); if (!valid(p)) return;
+    const btn = this; btn.disabled = true;
+    simulate(p, lines => {
+      const total = field(lines, /^Total:/), n = field(lines, /^Rutas que se limpiar/), kept = field(lines, /^Rutas con anomal/);
+      setTimeout(() => {
+        const msg = ['Simulación terminada: no se ha cambiado nada.', '', ...[n, total, kept].filter(Boolean), '',
+          '¿Aplicar ahora la limpieza (min-dist ' + p.minDist + ' m, RDP ' + p.rdp + ' m) a TODAS las rutas? Sustituye la geometría limpia actual; los GPX originales no se tocan.'].join('\n');
+        if (confirm(msg)) streamScript('/api/db/clean', 'Limpiar tracks', p).finally(() => { btn.disabled = false; loadStats(); });
+        else btn.disabled = false;
+      }, 50);
+    }).catch(() => { btn.disabled = false; });
+  });
+})();
 
 document.getElementById('btn-enrich').addEventListener('click', function() {
   this.disabled = true;

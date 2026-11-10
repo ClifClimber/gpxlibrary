@@ -1479,4 +1479,35 @@ applyFilters();
 const _openId = +_qp.get('id');
 if (_openId) activateTrack(_openId, true);
 
+// ── Arrastrar un GPX a la página abre Upload Trail con ese fichero ───────────────────────────────────
+(function () {
+  const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+  let depth = 0, ovl = null;
+  function overlay(on) {
+    if (!ovl) {
+      ovl = document.createElement('div');
+      ovl.id = 'gpx-drop-ovl';
+      ovl.innerHTML = '<div class="gdo-card"><div class="gdo-ico">' + '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>' + '</div>' +
+        '<b>Suelta el GPX para subirlo</b><span>Se abrirá Upload Trail con este archivo</span></div>';
+      document.body.appendChild(ovl);
+    }
+    ovl.classList.toggle('show', on);
+  }
+  document.addEventListener('dragenter', e => { if (hasFiles(e)) { depth++; overlay(true); } });
+  document.addEventListener('dragleave', e => { if (hasFiles(e)) { depth--; if (depth <= 0) { depth = 0; overlay(false); } } });
+  document.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });   // otherwise the browser opens the file
+  document.addEventListener('drop', async e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); depth = 0; overlay(false);
+    if (!window.gpxMe) { showToast('Inicia sesión para subir rutas', 'error'); return; }
+    const files = [...e.dataTransfer.files], gpx = files.filter(f => /[.]gpx$/i.test(f.name));
+    if (!gpx.length) { showToast('Solo se pueden subir archivos .gpx', 'error'); return; }
+    if (gpx.length > 1) showToast('Se sube de uno en uno: abro «' + gpx[0].name + '»', 'info');
+    try {
+      await window.gpxDrop.stash(gpx[0]);
+      location.href = '/subir?from=drop';
+    } catch (err) { showToast('No se pudo preparar el archivo: ' + (err.message || err), 'error'); }
+  });
+})();
+
 })();

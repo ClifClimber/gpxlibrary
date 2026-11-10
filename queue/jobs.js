@@ -70,6 +70,7 @@ function deriveArgsAfter(job, lines) {
   }
   if (job.type === 'clean-tracks') {
     const a = (job.payload && job.payload.args) || [];
+    if (a.includes('--dry-run')) return null;           // a simulation changes nothing
     const i = a.indexOf('--ids');
     return i >= 0 && a[i + 1] ? ['--ids', a[i + 1]] : ['--all'];
   }

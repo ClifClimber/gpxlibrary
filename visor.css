@@ -396,3 +396,13 @@ img.ti-avatar { object-fit: cover; background: var(--soft); box-shadow: 0 0 0 1p
   width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;
   box-shadow: 0 1px 3px rgba(0,0,0,.35); opacity: .9;
 }
+
+/* Arrastrar un GPX a la página */
+#gpx-drop-ovl { position: fixed; inset: 0; z-index: 5000; display: none; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent) 22%, transparent); backdrop-filter: blur(2px); pointer-events: none; }
+#gpx-drop-ovl.show { display: flex; }
+#gpx-drop-ovl .gdo-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 34px 54px; border-radius: 18px;
+  background: var(--surface); border: 2px dashed var(--accent); box-shadow: var(--shadow); color: var(--ink); text-align: center; }
+#gpx-drop-ovl .gdo-ico { color: var(--accent); display: flex; }
+#gpx-drop-ovl b { font-size: 17px; }
+#gpx-drop-ovl span { font-size: 13px; color: var(--muted); }
