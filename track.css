@@ -296,22 +296,71 @@ body.lb-open { overflow: hidden; }
 .endpoint-pin { width: 28px; height: 28px; border-radius: 50%; color: #fff; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.35); border: 2px solid rgba(255,255,255,0.7); }
 
 /* ── Weather ─────────────────────────────────────────────────────── */
-#weather-wrap { display: flex; flex-direction: column; gap: 12px; }
-#weather-main { display: flex; align-items: center; gap: 16px; }
-.wx-icon { font-size: 52px; line-height: 1; }
-.wx-temp { font-size: 40px; font-weight: 700; letter-spacing: -.02em; }
-.wx-desc { font-size: 15px; color: var(--ink-2); }
-#weather-details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.wx-detail { background: var(--soft); border-radius: 10px; padding: 10px 12px; }
-.wx-detail-val { font-size: 16px; font-weight: 700; }
-.wx-detail-lbl { font-size: 11px; color: var(--muted); }
-#weather-location { font-size: 11px; color: var(--muted); }
-#weather-forecast { display: flex; gap: 6px; overflow-x: auto; }
-.wx-day { flex: 1; min-width: 66px; background: var(--soft); border-radius: 10px; padding: 8px 6px; text-align: center; }
-.wx-day-name { font-size: 11px; font-weight: 600; color: var(--ink-2); margin-bottom: 4px; }
-.wx-day-icon { font-size: 22px; line-height: 1.2; }
-.wx-day-range { font-size: 11px; font-weight: 600; margin-top: 4px; }
-.wx-day-prec { font-size: 10px; color: var(--muted); margin-top: 2px; }
+/* Ride forecast (track-weather.js) */
+.wx { display: flex; flex-direction: column; gap: 10px; }
+.wx-sec-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 8px; }
+.wx-note, .wx-hint { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.wx-hint { margin-top: -4px; }
+.wx-days { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; padding-bottom: 4px; }
+.wx-daybtn { flex: 0 0 auto; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 7px 6px;
+  border: none; border-radius: 10px; background: var(--soft); color: var(--ink); font: inherit; cursor: pointer; transition: background .12s; }
+.wx-daybtn:hover { background: var(--line); }
+.wx-daybtn.active { background: var(--solid); color: var(--on-solid); }
+.wx-daybtn.active small, .wx-daybtn.active .wx-dd, .wx-daybtn.active .wx-dp { color: inherit; opacity: .8; }
+.wx-dn { font-size: 11px; font-weight: 700; text-transform: capitalize; }
+.wx-dd, .wx-dp { font-size: 10px; color: var(--muted); }
+.wx-di { font-size: 20px; line-height: 1.25; }
+.wx-dt { font-size: 11px; font-weight: 600; }
+.wx-dt small { font-weight: 400; color: var(--muted); }
+.wx-form { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items: end; }
+.wx-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.wx-form .input { width: 100%; min-width: 0; }
+.wx-arrive { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.wx-arrive b { font-size: 14px; color: var(--ink); line-height: 34px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-windbtn { align-self: flex-start; }
+.wx-windbtn.active { background: var(--solid); color: var(--on-solid); }
+.wx-alerts { display: flex; flex-direction: column; gap: 6px; }
+.wx-alerts > div { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-radius: 10px; background: var(--soft); font-size: 13px; }
+.wx-gauges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.wx-gauge { text-align: center; min-width: 0; }
+.wx-gauge svg { display: block; max-width: 130px; margin: 0 auto; }
+.wx-gtrack { stroke: var(--line); }
+.wx-gv { font-size: 15px; font-weight: 700; fill: var(--ink); }
+.wx-gl { font-size: 12px; font-weight: 600; margin-top: -6px; }
+.wx-gs { font-size: 11px; color: var(--muted); }
+.wx-hours { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: thin; padding-bottom: 4px; }
+.wx-h { flex: 0 0 auto; min-width: 46px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; border-radius: 10px; background: var(--soft); font-size: 11px; }
+.wx-hh { font-weight: 600; color: var(--muted); }
+.wx-hi { font-size: 18px; line-height: 1.3; }
+.wx-ht { font-weight: 700; }
+.wx-hw { display: inline-flex; align-items: center; gap: 2px; color: var(--ink-2); }
+.wx-arrow { flex-shrink: 0; }
+.wx-relbar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; gap: 2px; }
+.wx-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--ink-2); }
+.wx-legend i, .wx-tip i, .wx-map-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.wx-chart { position: relative; display: flex; flex-direction: column; gap: 4px; }
+.wx-chart svg { display: block; touch-action: pan-y; }
+.wx-grid { stroke: var(--line); stroke-width: 1; }
+.wx-ax { font-size: 9px; fill: var(--muted); }
+.wx-unit { font-weight: 700; }
+.wx-band { font-size: 9px; font-weight: 600; }
+.wx-arr { fill: var(--ink-2); }
+.wx-cursor { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 2; }
+.wx-tip { position: absolute; top: 0; z-index: 2; padding: 6px 9px; border-radius: var(--radius-sm); background: var(--solid); color: var(--on-solid);
+  font-size: 11px; line-height: 1.5; white-space: nowrap; pointer-events: none; box-shadow: var(--shadow); }
+.wx-aq-top { display: grid; grid-template-columns: 130px 1fr; gap: 12px; align-items: center; }
+.wx-aq-cat { font-size: 13px; font-weight: 700; }
+.wx-aq-info { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.wx-aq-val { font-size: 22px; font-weight: 700; }
+.wx-aq-pills { flex-wrap: wrap; }
+.wx-src { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.wx-src a { color: var(--accent); text-decoration: none; }
+/* Map layer «Viento en la ruta» */
+.wx-map-arrow svg { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
+.wx-map-arrow path { fill: #fff; stroke: #0f172a; stroke-width: 1.5; stroke-linejoin: round; }
+.wx-map-legend { background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 7px 10px; font-size: 11px; line-height: 1.6; }
+.wx-map-legend > div { display: flex; flex-wrap: wrap; gap: 0 10px; }
+@media (max-width: 900px) { .wx-map-legend { font-size: 10px; padding: 5px 8px; max-width: calc(100vw - 90px); } }
 
 /* ── Loading ─────────────────────────────────────────────────────── */
 #loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 80px 0; color: var(--muted); }
@@ -356,7 +405,6 @@ body.lb-open { overflow: hidden; }
   .stats-strip { grid-template-columns: repeat(2, 1fr); }
   .stats-strip > div:nth-child(3) { border-left: none; }
   .stats-strip > div:nth-child(n+3) { border-top: 1px solid var(--border); }
-  #weather-details { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ── Phones: action buttons wrap and the hero numbers shrink so nothing overflows ── */

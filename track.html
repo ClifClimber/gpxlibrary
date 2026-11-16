@@ -12,6 +12,7 @@
   <script src="/grades.js"></script>
   <script src="/icons.js"></script>
   <script src="/lists-picker.js"></script>
+  <script src="/track-weather.js"></script>
   <link rel="stylesheet" href="/track.css">
 </head>
 <body>
@@ -637,7 +638,7 @@ function initMap(t, color) {
   try { const s = localStorage.getItem('visor-base-layer'); if (tileLayers[s]) baseName = s; } catch {}
   tileLayers[baseName].addTo(map);
   map.on('baselayerchange', e => { try { localStorage.setItem('visor-base-layer', e.name); } catch {} });
-  L.control.layers(tileLayers, null, { position:'topright', collapsed:true }).addTo(map);
+  gLayersCtl = L.control.layers(tileLayers, null, { position:'topright', collapsed:true }).addTo(map);
   L.control.zoom({ position:'topright' }).addTo(map);
 
   if (!t.points || t.points.length < 2) {
@@ -662,7 +663,7 @@ function initMap(t, color) {
 }
 
 // ── Module-level state ────────────────────────────────────────────
-let gMap = null, gLine = null, gHoverMk = null, gTrack = null;
+let gMap = null, gLine = null, gHoverMk = null, gTrack = null, gLayersCtl = null;
 let gLbPhotos = [], gLbIdx = 0;
 let gElePts = null;   // elevation-filtered points, set by drawProfile
 let gEleDists = null; // cumulative distances for gElePts, set by drawProfile
@@ -1323,7 +1324,7 @@ function buildContent(t, color, icon) {
   }).join('') : '<p style="color:var(--ink-3);font-size:13px">No se han detectado subidas significativas.</p>');
 
   // ── Tab: Tiempo ───────────────────────────────────────────────
-  const tabTiempo = `<div id="weather-panel" style="color:var(--ink-3);font-size:13px">Cargando datos meteorológicos…</div>`;
+  const tabTiempo = `<div id="weather-panel"><p class="wx-note">Cargando la previsión…</p></div>`;
 
   const tabs = [
     ['resumen',   'Resumen'],
@@ -1596,75 +1597,18 @@ function switchTab(name) {
   if (name === 'tiempo') loadWeather();
 }
 
-// ── Weather ───────────────────────────────────────────────────────
-const WMO = {
-  0:['☀️','Despejado'], 1:['🌤️','Mayormente despejado'], 2:['⛅','Parcialmente nublado'],
-  3:['☁️','Nublado'], 45:['🌫️','Niebla'], 48:['🌫️','Niebla con escarcha'],
-  51:['🌦️','Llovizna ligera'], 53:['🌦️','Llovizna'], 55:['🌧️','Llovizna intensa'],
-  61:['🌧️','Lluvia ligera'], 63:['🌧️','Lluvia'], 65:['🌧️','Lluvia intensa'],
-  71:['❄️','Nieve ligera'], 73:['❄️','Nieve'], 75:['❄️','Nevada intensa'],
-  80:['🌦️','Chubascos'], 81:['🌦️','Chubascos fuertes'], 82:['⛈️','Chubascos muy fuertes'],
-  85:['❄️','Chubascos de nieve'], 86:['❄️','Chubascos de nieve fuertes'],
-  95:['⛈️','Tormenta'], 96:['⛈️','Tormenta con granizo'], 99:['⛈️','Tormenta fuerte'],
-};
-
-let gWeatherLoaded = false;
-async function loadWeather() {
-  if (gWeatherLoaded || !gTrack) return;
+// ── Weather (track-weather.js): forecast for a ride along the route + «Viento en la ruta» layer ──
+function loadWeather() {
   const panel = document.getElementById('weather-panel');
-  if (!panel) return;
-  const lat = gTrack.points?.[0]?.[0] ?? gTrack.center_lat;
-  const lon = gTrack.points?.[0]?.[1] ?? gTrack.center_lon;
-  if (!lat || !lon) { panel.textContent = 'Sin coordenadas de origen.'; return; }
-  try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,precipitation&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&wind_speed_unit=kmh&forecast_days=5`;
-    const r = await fetch(url);
-    const d = await r.json();
-    const c = d.current;
-    const [emoji, desc] = WMO[c.weather_code] ?? ['🌡️', `Código ${c.weather_code}`];
-
-    const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-    const forecastHTML = (d.daily?.time || []).map((dateStr, i) => {
-      const dt   = new Date(dateStr + 'T12:00:00');
-      const name = i === 0 ? 'Hoy' : DAYS[dt.getDay()];
-      const [de] = WMO[d.daily.weather_code[i]] ?? ['🌡️',''];
-      const mn   = Math.round(d.daily.temperature_2m_min[i]);
-      const mx   = Math.round(d.daily.temperature_2m_max[i]);
-      const pr   = d.daily.precipitation_sum[i];
-      return `<div class="wx-day">
-        <div class="wx-day-name">${name}</div>
-        <div class="wx-day-icon">${de}</div>
-        <div class="wx-day-range">${mx}° <span style="font-weight:400;color:var(--ink-3)">${mn}°</span></div>
-        ${pr > 0 ? `<div class="wx-day-prec">💧${pr}mm</div>` : '<div class="wx-day-prec">&nbsp;</div>'}
-      </div>`;
-    }).join('');
-
-    const windyUrl = `https://www.windy.com/?${lat.toFixed(4)},${lon.toFixed(4)},10`;
-    gWeatherLoaded = true;
-    panel.innerHTML = `
-      <div id="weather-wrap">
-        <div id="weather-main">
-          <div class="wx-icon">${emoji}</div>
-          <div>
-            <div class="wx-temp">${Math.round(c.temperature_2m)}°C</div>
-            <div class="wx-desc">${desc}</div>
-          </div>
-        </div>
-        <div id="weather-details">
-          <div class="wx-detail"><div class="wx-detail-val">${c.wind_speed_10m} km/h</div><div class="wx-detail-lbl">Viento</div></div>
-          <div class="wx-detail"><div class="wx-detail-val">${c.relative_humidity_2m}%</div><div class="wx-detail-lbl">Humedad</div></div>
-          <div class="wx-detail"><div class="wx-detail-val">${c.precipitation} mm</div><div class="wx-detail-lbl">Precipitación</div></div>
-        </div>
-        <div class="section-head" style="margin:16px 0 8px">Próximos 5 días</div>
-        <div id="weather-forecast">${forecastHTML}</div>
-        <div id="weather-location" style="margin-top:10px">
-          📍 ${lat.toFixed(4)}, ${lon.toFixed(4)} · Fuente: Open-Meteo ·
-          <a href="${windyUrl}" target="_blank" rel="noopener" style="color:#3b82f6;text-decoration:none">Ver detalle en Windy →</a>
-        </div>
-      </div>`;
-  } catch(e) {
-    panel.textContent = 'No se pudieron obtener datos meteorológicos.';
-  }
+  if (!panel || !gTrack || !window.gpxRideWeather) return;
+  gpxRideWeather.init(panel, { track: gTrack, map: gMap, layersCtl: gLayersCtl, fitOpts: mapPadding, onHover: wxHover });
+}
+// Point of the route under the cursor of a weather chart
+function wxHover(i) {
+  const p = i == null ? null : gTrack?.points?.[i];
+  if (!p || !gMap) { if (gHoverMk) { gHoverMk.remove(); gHoverMk = null; } return; }
+  if (!gHoverMk) gHoverMk = L.circleMarker([p[0], p[1]], { radius: 7, color: gColor, weight: 2.5, fillColor: '#fff', fillOpacity: 1 }).addTo(gMap);
+  else gHoverMk.setLatLng([p[0], p[1]]);
 }
 
 // ── Tags ─────────────────────────────────────────────────────────

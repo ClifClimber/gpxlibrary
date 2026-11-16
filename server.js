@@ -64,7 +64,7 @@ const MIME = {
 
 // ── Archivos estáticos ─────────────────────────────────────────────
 // Public: the pages and styles at the root, the browser scripts listed here and assets/.
-const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js', 'lists-picker.js', 'gpx-drop.js', 'map-layers.js', 'grades.js']);
+const PUBLIC_JS = new Set(['visor.js', 'theme.js', 'import-ui.js', 'shared.css', 'perfil.js', 'subir.js', 'icons.js', 'lista.js', 'lists-picker.js', 'gpx-drop.js', 'map-layers.js', 'track-weather.js', 'grades.js']);
 function isPublicFile(rel) {
   if (rel.split('/').some(s => s.startsWith('.'))) return false;
   if (rel.startsWith('assets/')) return true;
