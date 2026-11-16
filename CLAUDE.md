@@ -118,6 +118,7 @@ Pure Node.js HTTP server. No framework. Routes:
 - `GET /api/geo` — returns `{provinces, ccaa, zones}` distinct values from DB
 - `GET /api/config/activities` — activity list with colors
 - `GET /api/admin/version` — `{version, name, db}` (`db` is always `'postgres'`)
+- `GET /api/health` — `{ok}` (200, or 503 if the database does not answer); no session, used by the Docker healthcheck
 - `POST /api/db/import-temp` (SSE) — enqueues `import-from-temp` job, streams output
 - `POST /api/db/enrich-road-types?ids=1,2,3` (SSE) — enqueues `enrich-road-types` job
 - `POST /api/db/clean?ids=…` (SSE) — enqueues `clean-tracks` job

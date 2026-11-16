@@ -1280,6 +1280,11 @@ async function handleRequest(req, res) {
       res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
       return res.end(xml);
     }
+    // Liveness for the Docker healthcheck: no session needed, says nothing beyond "the app and its database answer"
+    if (pathname === '/api/health') {
+      try { await sqlDb().get('SELECT 1 AS ok'); res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end('{"ok":true}'); }
+      catch { res.writeHead(503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end('{"ok":false}'); }
+    }
     if (pathname === '/robots.txt') {
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
       return res.end(publicPages.renderRobots({ base: baseUrl(req) }));

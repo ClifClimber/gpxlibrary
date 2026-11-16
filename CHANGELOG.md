@@ -4,6 +4,19 @@
 
 ---
 
+## v2.24.0 — 2026-11-16
+
+- **Ficha de ruta: previsión de la salida**. La pestaña Tiempo deja de ser el tiempo de hoy en el punto de salida y pasa a ser la previsión de una salida por la ruta:
+  - Se elige el **día** (tira con los próximos 16 días, con icono, máxima/mínima y probabilidad de lluvia) y la **hora de salida**; la **llegada** sale de la duración del track (el tiempo registrado o, si no hay, una estimación por distancia y desnivel según la actividad), que se puede cambiar a mano
+  - Se pide a Open-Meteo la previsión horaria en 6–20 puntos repartidos por la ruta (una sola petición) y cada uno se lee a la hora en que se pasaría por él, a ritmo constante
+  - **Avisos** (lluvia probable desde una hora, rachas fuertes, sensación térmica bajo cero, calor) o «Condiciones estables durante toda la salida»; **indicadores** de temperatura y sensación, precipitación (probabilidad e intensidad) y viento (medio y rachas); **hora a hora** con cielo, temperatura y viento; **viento respecto a la marcha** (a favor, lateral, en contra)
+  - **Gráficas** de temperatura y sensación térmica, precipitación y nubosidad, viento y rachas (con flechas de dirección) y humedad y punto de rocío; al pasar el ratón o el dedo se ven los valores y el punto de la ruta en el mapa
+  - **Calidad del aire** (API de calidad del aire de Open-Meteo, índice europeo con las categorías del ICA): valor máximo con su hora y categoría, contaminante principal y gráfica por ICA general, PM2.5, PM10, ozono y NO₂ con las franjas de color; cubre los próximos 5 días
+  - Unidades métricas; funciona también en las páginas públicas sin sesión. `track-weather.js`
+- **Capa «Viento en la ruta»** en el mapa de la ficha: botón «Ver viento en el mapa» en la pestaña Tiempo, y también en el selector de capas. Colorea la ruta según el viento respecto a la marcha (verde a favor, naranja lateral, rojo en contra, gris en calma), pone flechas de dirección con tamaño según la velocidad (más o menos según el zoom; al pasar el ratón: hora, velocidad, rachas y de dónde viene) y una leyenda con el día y el horario; se actualiza al cambiar el día o la hora
+- **Navegación en el móvil**: por debajo de 720 px los enlaces del menú y el cambio de tema pasan a un desplegable; ya no hay scroll horizontal a 320 px
+- **Docker**: la comprobación de salud usa el nuevo `GET /api/health` (sin sesión; comprueba la base de datos), porque `/api/admin/version` pide sesión y el contenedor salía siempre «unhealthy»
+
 ## v2.23.0 — 2026-11-10
 
 - **Visor: filtros nuevos y mejorados**
