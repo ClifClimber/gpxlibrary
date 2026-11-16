@@ -89,7 +89,7 @@
     try {
       const p0 = S.pts[0];
       const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p0[0].toFixed(4)}&longitude=${p0[1].toFixed(4)}` +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max&timezone=auto&forecast_days=16&wind_speed_unit=kmh');
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max&timezone=auto&forecast_days=7&wind_speed_unit=kmh');
       if (!r.ok) throw new Error('HTTP ' + r.status);
       S.daily = await r.json();
     } catch {
@@ -163,7 +163,7 @@
     catch { if (seq === S.seq) body.innerHTML = '<p class="wx-note">No se pudo obtener la previsión meteorológica.</p>'; return; }
     if (seq !== S.seq) return;
     S.ride = alongRide(wx, WX_VARS);
-    if (!S.ride.ok) { body.innerHTML = '<p class="wx-note">No hay previsión para ese horario (Open-Meteo llega a 16 días).</p>'; drawWind(); return; }
+    if (!S.ride.ok) { body.innerHTML = '<p class="wx-note">No hay previsión para ese horario (la previsión llega a 7 días).</p>'; drawWind(); return; }
     S.charts = {};
     body.innerHTML = renderWeather();
     bindCharts(body);

@@ -355,6 +355,10 @@ body.lb-open { overflow: hidden; }
 .wx-aq-pills { flex-wrap: wrap; }
 .wx-src { font-size: 11px; color: var(--muted); margin-top: 6px; }
 .wx-src a { color: var(--accent); text-decoration: none; }
+/* Map layer «Sentido de la ruta» (track.html#addDirectionArrows) */
+.dir-arrow svg { display: block; overflow: visible; }
+.dir-arrow path { fill: none; stroke: #fff; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
+.dir-arrow path.o { stroke: #0f172a; stroke-width: 5.5; opacity: .85; }
 /* Map layer «Viento en la ruta» */
 .wx-map-arrow svg { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
 .wx-map-arrow path { fill: #fff; stroke: #0f172a; stroke-width: 1.5; stroke-linejoin: round; }
