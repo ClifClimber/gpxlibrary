@@ -361,9 +361,9 @@ body.lb-open { overflow: hidden; }
 .dir-arrow rect { fill: #fff; stroke: #0f172a; stroke-width: 1.4; }
 .dir-arrow path { fill: none; stroke: #0f172a; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 /* Map layer «Viento en la ruta» */
-.wx-map-arrow svg { display: block; overflow: visible; filter: drop-shadow(0 0 1.5px rgba(255,255,255,.9)) drop-shadow(0 1px 2px rgba(15,23,42,.35)); }
+.wx-map-arrow svg { display: block; overflow: visible; filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 1px 2px rgba(15,23,42,.4)); }
 .wx-map-arrow .t { fill: none; stroke-width: 6; stroke-linecap: round; }
-.wx-map-arrow .h { fill: #0ea5e9; stroke: #0ea5e9; stroke-width: 1.5; stroke-linejoin: round; }
+.wx-map-arrow .h { fill: #075985; stroke: #075985; stroke-width: 1.5; stroke-linejoin: round; }
 .wx-map-legend { background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 7px 10px; font-size: 11px; line-height: 1.6; }
 .wx-map-legend > div { display: flex; flex-wrap: wrap; gap: 0 10px; }
 @media (max-width: 900px) { .wx-map-legend { font-size: 10px; padding: 5px 8px; max-width: calc(100vw - 90px); } }

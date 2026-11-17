@@ -563,7 +563,7 @@
       const wl = Math.round(34 + Math.min(1, (w.speed || 0) / 40) * 22);   // 34–56 px
       const icon = L.divIcon({ className: 'wx-map-arrow', iconSize: [wl, wl], iconAnchor: [wl / 2, wl / 2],
         html: `<svg width="${wl}" height="${wl}" viewBox="0 0 48 48" style="transform:rotate(${Math.round((w.dir + 90) % 360)}deg)">
-          <defs><linearGradient id="wxg${k}" gradientUnits="userSpaceOnUse" x1="2" y1="0" x2="36" y2="0"><stop offset="0" stop-color="#7dd3fc" stop-opacity=".1"/><stop offset=".55" stop-color="#38bdf8" stop-opacity=".75"/><stop offset="1" stop-color="#0ea5e9"/></linearGradient></defs>
+          <defs><linearGradient id="wxg${k}" gradientUnits="userSpaceOnUse" x1="2" y1="0" x2="36" y2="0"><stop offset="0" stop-color="#0369a1" stop-opacity=".25"/><stop offset=".5" stop-color="#0369a1" stop-opacity=".85"/><stop offset="1" stop-color="#075985"/></linearGradient></defs>
           <path class="t" style="stroke:url(#wxg${k})" d="M2 30 Q18 15 37 22"/><path class="h" d="M33 15.5 L45 23.5 L32.5 29.5 Z"/></svg>` });
       L.marker(pos, { icon, keyboard: false })
         .bindTooltip(`<b>${fmtT(w.t)}</b> · km ${num(d, 1)}<br>Viento ${num(w.speed)} km/h del ${cardinal(w.dir)}<br>Rachas ${num(w.gust)} km/h · ${REL[relWind(d, bearingAt(d))]}`, { direction: 'top' })

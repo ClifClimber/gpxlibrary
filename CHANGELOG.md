@@ -2,7 +2,7 @@
 
 ## Sin publicar
 
-- **Flechas del mapa más fáciles de distinguir**: las de sentido de la ruta son pequeñas cápsulas blancas con una flecha, encajadas en el track; las del viento son flechas curvas azules con la cola difuminada, a unos 34 px a un lado y otro del track, más largas cuanto más viento
+- **Flechas del mapa más fáciles de distinguir**: las de sentido de la ruta son pequeñas cápsulas blancas con una flecha, encajadas en el track; las del viento son flechas curvas azul oscuro con la cola difuminada y un halo blanco, a unos 34 px a un lado y otro del track, más largas cuanto más viento
 
 ---
 
