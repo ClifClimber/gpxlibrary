@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+---
+
+## v2.24.1 — 2026-11-17
+
 - **Sentido de la ruta** en el mapa de la ficha: flechas sobre el track cada ~100 px en pantalla (se recalculan al hacer zoom) que indican el sentido de la marcha; se pueden ocultar en el selector de capas («Sentido de la ruta») y el navegador lo recuerda
 - La pestaña «Subidas» ya no lleva el número de subidas en el título
 - La previsión de la salida se limita a los próximos 7 días
