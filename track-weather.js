@@ -40,6 +40,7 @@
   const C = { blue: '#3b82f6', orange: '#f59e0b', grey: '#94a3b8', favor: '#22c55e', lateral: '#f59e0b', contra: '#ef4444', calma: '#94a3b8' };
   const REL = { favor: 'A favor', lateral: 'Lateral', contra: 'En contra', calma: 'Calma' };
   const STEPS = 60;   // moments along the ride used for charts and the map
+  const PRE = 2 * H, POST = 4 * H;   // the charts also show the weather before the start and after the end
 
   const S = {};       // module state (one route per page)
   const $ = sel => S.panel.querySelector(sel);
@@ -164,6 +165,7 @@
     if (seq !== S.seq) return;
     S.ride = alongRide(wx, WX_VARS);
     if (!S.ride.ok) { body.innerHTML = '<p class="wx-note">No hay previsión para ese horario (la previsión llega a 7 días).</p>'; drawWind(); return; }
+    S.wc = withMargins(wx, WX_VARS, S.ride);
     S.charts = {};
     body.innerHTML = renderWeather();
     bindCharts(body);
@@ -173,12 +175,13 @@
     const aq = await S.aq;
     if (seq !== S.seq || !$('#wx-aq')) return;
     S.aqRide = aq ? alongRide(aq, AQ_FETCH) : null;
+    S.aqc = aq ? withMargins(aq, AQ_FETCH, S.aqRide) : null;
     renderAq();
   }
 
   function weatherFor(start, end) {
     const lastDay = S.daily.daily.time[S.daily.daily.time.length - 1];
-    const from = [isoDay(start - H), lastDay].sort()[0], to = [isoDay(end + H), lastDay].sort()[0];
+    const from = [isoDay(start - PRE - H), lastDay].sort()[0], to = [isoDay(end + POST + H), lastDay].sort()[0];
     const key = from + '_' + to;
     if (!S.wxCache[key]) {
       const lat = S.samples.map(s => s.p[0].toFixed(4)).join(','), lon = S.samples.map(s => s.p[1].toFixed(4)).join(',');
@@ -224,6 +227,30 @@
     return a == null ? b : b == null ? a : a + (b - a) * f;
   }
 
+  // Series for the charts: 2 h before the start at the starting point, the ride itself, 4 h after the end at the
+  // finishing point (every 10 min outside the ride). `d` is the distance on the route at each moment.
+  function withMargins(locs, vars, ride) {
+    const out = { t: [], d: [], dir: [] };
+    vars.forEach(v => { out[v] = []; });
+    const at = (Lc, t, d) => {
+      out.t.push(t); out.d.push(d);
+      vars.forEach(v => out[v].push(hourVal(Lc, Lc.h[v], t, v === 'weather_code')));
+      if (Lc.u) {
+        const u = hourVal(Lc, Lc.u, t), w = hourVal(Lc, Lc.v, t);
+        out.dir.push(u == null || w == null ? null : (deg(Math.atan2(u, w)) + 360) % 360);
+      }
+    };
+    const step = H / 6, first = locs[0], last = locs[locs.length - 1];
+    for (let t = S.start - PRE; t < S.start - 1000; t += step) at(first, t, 0);
+    ride.t.forEach((t, k) => {
+      out.t.push(t); out.d.push(S.total * k / STEPS);
+      vars.forEach(v => out[v].push(ride[v][k]));
+      if (first.u) out.dir.push(ride.dir[k]);
+    });
+    for (let t = S.end + step; t <= S.end + POST + 1000; t += step) at(last, t, S.total);
+    return out;
+  }
+
   // Values at STEPS+1 moments of the ride, each one at its place on the route (between two sample points)
   function alongRide(locs, vars) {
     const out = { t: [], ok: false, dir: [] };
@@ -251,7 +278,7 @@
 
   // ── Weather section ─────────────────────────────────────────────
   function renderWeather() {
-    const R = S.ride;
+    const R = S.ride, Wc = S.wc;
     const T = stat(R.temperature_2m), AT = stat(R.apparent_temperature), PP = stat(R.precipitation_probability),
           PR = stat(R.precipitation), WS = stat(R.wind_speed_10m), WG = stat(R.wind_gusts_10m);
     // Notices for the ride
@@ -299,17 +326,17 @@
       <div class="wx-relbar">${keys.map(k => `<span style="flex:${rel[k]};background:${C[k]}" title="${REL[k]} ${pct(k)} %"></span>`).join('')}</div>
       <div class="wx-legend">${keys.map(k => `<span><i style="background:${C[k]}"></i>${REL[k]} ${pct(k)} %</span>`).join('')}</div>
       <div class="wx-sec-head">Temperatura</div>
-      ${chart({ yl: { u: '°C' }, series: [{ v: R.apparent_temperature, c: C.orange, fill: true, name: 'Sensación térmica', u: '°C' }, { v: R.temperature_2m, c: C.blue, name: 'Temperatura', u: '°C' }] })}
+      ${chart({ data: Wc, yl: { u: '°C' }, series: [{ v: Wc.apparent_temperature, c: C.orange, fill: true, name: 'Sensación térmica', u: '°C' }, { v: Wc.temperature_2m, c: C.blue, name: 'Temperatura', u: '°C' }] })}
       <div class="wx-sec-head">Precipitación y nubosidad</div>
-      ${chart({ yl: { min: 0, max: 100, u: '%' }, yr: { min: 0, max: Math.max(2, Math.ceil((PR?.max || 0) * 1.2)), u: 'mm/h' },
-        series: [{ v: R.cloud_cover, c: C.grey, fill: true, name: 'Nubosidad', u: '%' }, { v: R.precipitation_probability, c: C.blue, name: 'Probabilidad', u: '%' },
-                 { v: R.precipitation, c: C.orange, fill: true, axis: 'r', name: 'Intensidad', u: 'mm/h', dec: 1 }] })}
+      ${chart({ data: Wc, yl: { min: 0, max: 100, u: '%' }, yr: { min: 0, max: ((m) => m <= 2 ? 2 : Math.ceil(m / 4) * 4)(((stat(Wc.precipitation) || {}).max || 0) * 1.2), u: 'mm/h' },
+        series: [{ v: Wc.cloud_cover, c: C.grey, fill: true, name: 'Nubosidad', u: '%' }, { v: Wc.precipitation_probability, c: C.blue, name: 'Probabilidad', u: '%' },
+                 { v: Wc.precipitation, c: C.orange, fill: true, axis: 'r', name: 'Intensidad', u: 'mm/h', dec: 1 }] })}
       <div class="wx-sec-head">Viento</div>
-      ${chart({ yl: { min: 0, u: 'km/h' }, arrows: R.dir,
-        series: [{ v: R.wind_gusts_10m, c: C.orange, fill: true, name: 'Rachas', u: 'km/h' }, { v: R.wind_speed_10m, c: C.blue, name: 'Viento', u: 'km/h' }] })}
+      ${chart({ data: Wc, yl: { min: 0, u: 'km/h' }, arrows: Wc.dir,
+        series: [{ v: Wc.wind_gusts_10m, c: C.orange, fill: true, name: 'Rachas', u: 'km/h' }, { v: Wc.wind_speed_10m, c: C.blue, name: 'Viento', u: 'km/h' }] })}
       <div class="wx-sec-head">Humedad y punto de rocío</div>
-      ${chart({ yl: { min: 0, max: 100, u: '%' }, yr: { u: '°C' },
-        series: [{ v: R.relative_humidity_2m, c: C.blue, fill: true, name: 'Humedad', u: '%' }, { v: R.dew_point_2m, c: C.orange, axis: 'r', name: 'Punto de rocío', u: '°C' }] })}
+      ${chart({ data: Wc, yl: { min: 0, max: 100, u: '%' }, yr: { u: '°C' },
+        series: [{ v: Wc.relative_humidity_2m, c: C.blue, fill: true, name: 'Humedad', u: '%' }, { v: Wc.dew_point_2m, c: C.orange, axis: 'r', name: 'Punto de rocío', u: '°C' }] })}
       <div class="wx-sec-head">Calidad del aire</div>
       <div id="wx-aq"><p class="wx-note">Cargando la calidad del aire…</p></div>`;
   }
@@ -341,7 +368,7 @@
         </div>
       </div>
       <div class="cat-pills wx-aq-pills">${AQ_VARS.map(v => `<button type="button" class="cat-pill${v[0] === sel[0] ? ' active' : ''}" data-aq="${v[0]}">${v[1]}</button>`).join('')}</div>
-      ${chart({ yl: { min: 0, max: top, u: 'ICA' }, bands: AQI_BANDS, tArr: A.t, series: [{ v: A[sel[0]], c: 'var(--ink)', name: sel[1], u: '' }] })}
+      ${chart({ data: S.aqc, yl: { min: 0, max: top, u: 'ICA' }, bands: AQI_BANDS, series: [{ v: S.aqc[sel[0]], c: 'var(--ink)', name: sel[1], u: '' }] })}
       ${conc ? `<div class="wx-note">${sel[1]}: entre ${num(conc.min)} y ${num(conc.max)} µg/m³ durante la salida</div>` : ''}
       <div class="wx-note">Índice europeo de calidad del aire (CAMS), con resolución de unos 10 km.</div>`;
     box.querySelectorAll('[data-aq]').forEach(b => b.addEventListener('click', () => { S.aqTab = b.dataset.aq; renderAq(); }));
@@ -380,11 +407,12 @@
       <div class="wx-gl">${esc(label)}</div><div class="wx-gs">${esc(sub)}</div>${extra}</div>`;
   }
 
-  // Line/area chart over the ride time. series: [{v, c, fill, axis:'l'|'r', name, u, dec}]
+  // Line/area chart over time (data from withMargins: before the start, the ride, after the end).
+  // series: [{v, c, fill, axis:'l'|'r', name, u, dec}]
   let chartN = 0;
-  function chart({ series, yl = {}, yr = null, bands = null, arrows = null, tArr = null }) {
-    const W = 360, Hh = 150, Lm = 34, Rm = yr ? 34 : 10, T = arrows ? 24 : 12, B = 20;
-    tArr = tArr || S.ride.t;
+  function chart({ data, series, yl = {}, yr = null, bands = null, arrows = null }) {
+    const W = 360, Hh = 158, Lm = 34, Rm = yr ? 34 : 10, T = arrows ? 32 : 20, B = 20;
+    const tArr = data.t, t0 = tArr[0], t1 = tArr[tArr.length - 1];
     const scale = (ax, list) => {
       const vals = list.flatMap(s => s.v.filter(x => x != null));
       let lo = ax.min ?? Math.min(...vals), hi = ax.max ?? Math.max(...vals);
@@ -399,9 +427,15 @@
       return { lo, hi: Math.max(hi, lo + 1) };
     };
     const sl = scale(yl, series.filter(s => s.axis !== 'r')), sr = yr ? scale(yr, series.filter(s => s.axis === 'r')) : null;
-    const x = i => Lm + (W - Lm - Rm) * i / (tArr.length - 1);
+    const xt = t => Lm + (W - Lm - Rm) * (t - t0) / (t1 - t0 || 1);
+    const x = i => xt(tArr[i]);
+    const near = t => { let b = 0; tArr.forEach((v, i) => { if (Math.abs(v - t) < Math.abs(tArr[b] - t)) b = i; }); return b; };
     const y = (v, s) => T + (Hh - T - B) * (1 - (v - s.lo) / (s.hi - s.lo));
     let g = '';
+    // Before the start and after the end: shaded, with a dashed line and a label at the start and the end
+    const xs = xt(S.start), xe = xt(S.end);
+    if (xs > Lm) g += `<rect x="${Lm}" y="${T}" width="${(xs - Lm).toFixed(1)}" height="${Hh - T - B}" class="wx-out"/>`;
+    if (xe < W - Rm) g += `<rect x="${xe.toFixed(1)}" y="${T}" width="${(W - Rm - xe).toFixed(1)}" height="${Hh - T - B}" class="wx-out"/>`;
     if (bands) bands.forEach(([lo, hi, name, col]) => {
       if (lo >= sl.hi) return;
       const y1 = y(Math.min(hi, sl.hi), sl), y2 = y(Math.max(lo, sl.lo), sl);
@@ -416,14 +450,16 @@
       if (sr) g += `<text x="${W - Rm + 4}" y="${yy + 3}" class="wx-ax">${num(sr.hi - (sr.hi - sr.lo) * k / 4, decs(sr))}</text>`;
     }
     for (let k = 0; k <= 4; k++) {
-      const i = Math.round((tArr.length - 1) * k / 4), xx = x(i);
+      const t = t0 + (t1 - t0) * k / 4, xx = xt(t);
       g += `<line x1="${xx}" x2="${xx}" y1="${T}" y2="${Hh - B}" class="wx-grid"/>`;
-      g += `<text x="${xx}" y="${Hh - 6}" text-anchor="${k === 0 ? 'start' : k === 4 ? 'end' : 'middle'}" class="wx-ax">${fmtT(tArr[i])}</text>`;
+      g += `<text x="${xx}" y="${Hh - 6}" text-anchor="${k === 0 ? 'start' : k === 4 ? 'end' : 'middle'}" class="wx-ax">${fmtT(t)}</text>`;
     }
-    if (!arrows) {
-      if (yl.u) g += `<text x="${Lm - 4}" y="8" text-anchor="end" class="wx-ax wx-unit">${yl.u}</text>`;
-      if (sr && yr.u) g += `<text x="${W - Rm + 4}" y="8" class="wx-ax wx-unit">${yr.u}</text>`;
-    }
+    [[xs, 'Salida'], [xe, 'Llegada']].forEach(([xx, label], k) => {
+      g += `<line x1="${xx.toFixed(1)}" x2="${xx.toFixed(1)}" y1="${T - 2}" y2="${Hh - B}" class="wx-mark"/>`;
+      g += `<text x="${(xx + (k ? -3 : 3)).toFixed(1)}" y="${T - 4}" text-anchor="${k ? 'end' : 'start'}" class="wx-ax wx-markl">${label}</text>`;
+    });
+    if (yl.u) g += `<text x="${Lm - 4}" y="${T - 4}" text-anchor="end" class="wx-ax wx-unit">${yl.u}</text>`;
+    if (sr && yr.u) g += `<text x="${W - Rm + 4}" y="${T - 4}" class="wx-ax wx-unit">${yr.u}</text>`;
     series.forEach(s => {
       const sc = s.axis === 'r' ? sr : sl;
       const runs = []; let cur = [];
@@ -438,12 +474,12 @@
     });
     // Wind direction arrows along the top (pointing where the wind blows to)
     if (arrows) for (let k = 0; k <= 8; k++) {
-      const i = Math.round((arrows.length - 1) * k / 8), dir = arrows[i];
+      const i = near(t0 + (t1 - t0) * k / 8), dir = arrows[i];
       if (dir == null) continue;
-      g += `<g transform="translate(${x(i).toFixed(1)} 11) rotate(${Math.round((dir + 180) % 360)})"><path d="M0 -7 L5 6 L0 3 L-5 6 Z" class="wx-arr"/></g>`;
+      g += `<g transform="translate(${x(i).toFixed(1)} 9) rotate(${Math.round((dir + 180) % 360)})"><path d="M0 -7 L5 6 L0 3 L-5 6 Z" class="wx-arr"/></g>`;
     }
     const id = 'wxc' + (++chartN);
-    S.charts[id] = { series, tArr, x, Lm, W, Rm, arrows };
+    S.charts[id] = { series, data, x, near, t0, t1, Lm, W, Rm, arrows };
     const legend = series.length > 1 ? `<div class="wx-legend">${series.map(s => `<span><i style="background:${s.c}"></i>${esc(s.name)}${s.u ? ' (' + esc(s.u) + ')' : ''}</span>`).join('')}</div>` : '';
     return `<div class="wx-chart" data-chart="${id}"><svg viewBox="0 0 ${W} ${Hh}" width="100%">${g}
       <line class="wx-cursor" x1="0" x2="0" y1="${T}" y2="${Hh - B}" style="display:none"/></svg>
@@ -459,15 +495,16 @@
         const r = svg.getBoundingClientRect();
         const sx = (e.clientX - r.left) / r.width * c.W;
         const f = Math.max(0, Math.min(1, (sx - c.Lm) / (c.W - c.Lm - c.Rm)));
-        const i = Math.round(f * (c.tArr.length - 1)), xx = c.x(i);
+        const i = c.near(c.t0 + (c.t1 - c.t0) * f), xx = c.x(i), t = c.data.t[i];
         cur.setAttribute('x1', xx); cur.setAttribute('x2', xx); cur.style.display = '';
         const dir = c.arrows ? c.arrows[i] : null;
-        tip.innerHTML = `<div><b>${fmtT(c.tArr[i])}</b> · km ${num(S.total * i / (c.tArr.length - 1), 1)}${dir == null ? '' : ' · del ' + cardinal(dir)}</div>` +
+        const where = t < S.start - 1000 ? 'antes de salir' : t > S.end + 1000 ? 'tras llegar' : 'km ' + num(c.data.d[i], 1);
+        tip.innerHTML = `<div><b>${fmtT(t)}</b> · ${where}${dir == null ? '' : ' · del ' + cardinal(dir)}</div>` +
           c.series.map(s => `<div><i style="background:${s.c}"></i>${esc(s.name)} <b>${num(s.v[i], s.dec || 0)}${s.u ? ' ' + esc(s.u) : ''}</b></div>`).join('');
         tip.hidden = false;
         const px = xx / c.W * r.width;
         tip.style.left = Math.max(0, Math.min(r.width - tip.offsetWidth, px - tip.offsetWidth / 2)) + 'px';
-        if (S.onHover) S.onHover(pointAt(S.total * i / (c.tArr.length - 1)));
+        if (S.onHover) S.onHover(pointAt(c.data.d[i]));
       };
       const leave = () => { cur.style.display = 'none'; tip.hidden = true; if (S.onHover) S.onHover(null); };
       svg.addEventListener('mousemove', move);
