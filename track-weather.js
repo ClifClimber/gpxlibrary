@@ -547,17 +547,25 @@
       cls = c; run.push(S.pts[i]);
     }
     flush();
-    // Arrows along the route (one every ~60 px on screen), sized by wind speed, pointing where the wind blows to
+    // Wind arrows (one every ~90 px of route on screen): curved blue arrows with a fading tail, pointing where the
+    // wind blows to, longer with more wind, and set ~34 px beside the track (alternating sides) so they are not
+    // confused with the direction-of-travel arrows drawn on the track itself
+    const lp = ll => S.map.latLngToLayerPoint([ll[0], ll[1]]);
     let px = 0;
-    for (let i = 10; i < S.pts.length; i += 10) px += S.map.latLngToLayerPoint(S.pts[i - 10]).distanceTo(S.map.latLngToLayerPoint(S.pts[i]));
-    const n = Math.max(6, Math.min(40, Math.round(px / 60)));
+    for (let i = 10; i < S.pts.length; i += 10) px += lp(S.pts[i - 10]).distanceTo(lp(S.pts[i]));
+    const n = Math.max(5, Math.min(30, Math.round(px / 90)));
     for (let k = 0; k < n; k++) {
       const d = S.total * (k + 0.5) / n, w = windAt(d);
       if (w.dir == null) continue;
-      const p = S.pts[pointAt(d)], sz = Math.round(18 + Math.min(1, (w.speed || 0) / 40) * 14);
-      const icon = L.divIcon({ className: 'wx-map-arrow', iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2],
-        html: `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" style="transform:rotate(${Math.round((w.dir + 180) % 360)}deg)"><path d="M12 2 L19 20 L12 15.5 L5 20 Z"/></svg>` });
-      L.marker([p[0], p[1]], { icon, keyboard: false })
+      const j = pointAt(d), a = lp(S.pts[Math.max(0, j - 3)]), b = lp(S.pts[Math.min(S.pts.length - 1, j + 3)]), c = lp(S.pts[j]);
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1, side = k % 2 ? 1 : -1;
+      const pos = S.map.layerPointToLatLng(L.point(c.x - (b.y - a.y) / len * 34 * side, c.y + (b.x - a.x) / len * 34 * side));
+      const wl = Math.round(34 + Math.min(1, (w.speed || 0) / 40) * 22);   // 34–56 px
+      const icon = L.divIcon({ className: 'wx-map-arrow', iconSize: [wl, wl], iconAnchor: [wl / 2, wl / 2],
+        html: `<svg width="${wl}" height="${wl}" viewBox="0 0 48 48" style="transform:rotate(${Math.round((w.dir + 90) % 360)}deg)">
+          <defs><linearGradient id="wxg${k}" gradientUnits="userSpaceOnUse" x1="2" y1="0" x2="36" y2="0"><stop offset="0" stop-color="#7dd3fc" stop-opacity=".1"/><stop offset=".55" stop-color="#38bdf8" stop-opacity=".75"/><stop offset="1" stop-color="#0ea5e9"/></linearGradient></defs>
+          <path class="t" style="stroke:url(#wxg${k})" d="M2 30 Q18 15 37 22"/><path class="h" d="M33 15.5 L45 23.5 L32.5 29.5 Z"/></svg>` });
+      L.marker(pos, { icon, keyboard: false })
         .bindTooltip(`<b>${fmtT(w.t)}</b> · km ${num(d, 1)}<br>Viento ${num(w.speed)} km/h del ${cardinal(w.dir)}<br>Rachas ${num(w.gust)} km/h · ${REL[relWind(d, bearingAt(d))]}`, { direction: 'top' })
         .addTo(S.layer);
     }
