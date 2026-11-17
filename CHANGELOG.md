@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+---
+
+## v2.24.2 — 2026-11-17
+
 - **Gráficas del tiempo con margen**: muestran desde 2 h antes de la salida (tiempo en el punto de inicio) hasta 4 h después de la llegada (en el punto final), con esas zonas sombreadas y la salida y la llegada marcadas con una línea; al pasar el ratón se indica «antes de salir» o «tras llegar». Más separación entre las partes de la pestaña Tiempo
 - **Flechas del mapa más fáciles de distinguir**: las de sentido de la ruta son pequeñas cápsulas blancas con una flecha, encajadas en el track; las del viento son flechas curvas azul oscuro con la cola difuminada y un halo blanco, a unos 34 px a un lado y otro del track, más largas cuanto más viento
 
